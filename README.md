@@ -12,7 +12,7 @@ The concept is closely connected to the “forgetting curve,” first studied by
 
 ## What are Kanji?
 
-Kanji, 漢字, are one of the three main writing systems used in Japanese, along with hiragana and katakana. Kanji originally came from China in the 5th century and were adapted into Japanese over many centuries.
+Kanji, 漢字, are one of the three main writing systems used in Japanese, along with hiragana and katakana. Kanji originally came to Japan from China in the 5th century and were adapted into the Japanese language over many centuries.
 
 Hiragana and katakana are phonetic scripts, meaning each character represents a sound, but no meaning all on its own. This can be likened to a letter in the latin script such as 'A.' Kanji, however, usually represent meaning as well as pronunciation. For example, the word 行く means “to go,” and the kanji 行 carries meaning beyond just its sound.
 
@@ -22,7 +22,7 @@ Kanji are also commonly used in names, which allows names with the same pronunci
 
 ## Why Build This App?
 
-After studying Japanese for five years, including a year abroad in Japan, we noticed a gap in the resources available for learners who want to practice writing kanji.
+After studying Japanese since 2020 and including a year studying abroad in Japan, we noticed a gap in the resources available for learners who want to practice writing kanji.
 
 In the digital age, many people rely on computers and phones to convert typed kana into kanji automatically with a system called 自動変換 (jidōhenkan). As a result, even native speakers may sometimes forget how to write certain characters by hand, even if they can still read and recognize them without issue.
 
