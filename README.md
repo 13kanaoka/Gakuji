@@ -12,7 +12,7 @@ The concept is closely connected to the “forgetting curve,” first studied by
 
 ## What are Kanji?
 
-Kanji, 漢字, are one of the three main writing systems used in Japanese, along with hiragana and katakana. Kanji originally came from China and were adapted into Japanese over many centuries.
+Kanji, 漢字, are one of the three main writing systems used in Japanese, along with hiragana and katakana. Kanji originally came from China in the 5th century and were adapted into Japanese over many centuries.
 
 Hiragana and katakana are phonetic scripts, meaning each character represents a sound, but no meaning all on its own. This can be likened to a letter in the latin script such as 'A.' Kanji, however, usually represent meaning as well as pronunciation. For example, the word 行く means “to go,” and the kanji 行 carries meaning beyond just its sound.
 
