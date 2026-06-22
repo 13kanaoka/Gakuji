@@ -14,7 +14,7 @@ The concept is closely connected to the “forgetting curve,” first studied by
 
 Kanji, 漢字, are one of the three main writing systems used in Japanese, along with hiragana and katakana. Kanji originally came from China and were adapted into Japanese over many centuries.
 
-Hiragana and katakana are phonetic scripts, meaning each character represents a sound. Kanji, however, usually represent meaning as well as pronunciation. For example, the word 行く means “to go,” and the kanji 行 carries meaning beyond just its sound.
+Hiragana and katakana are phonetic scripts, meaning each character represents a sound, but no meaning all on its own, just like a letter in the latin script such as 'A'. Hiragana and Katakana functionally produce the exact same list of sounds, but serve other purposes such as the difference between lower case and UPPER CASE characters, or _italic_ and non-italic characters. Kanji, however, usually represent meaning as well as pronunciation. For example, the word 行く means “to go,” and the kanji 行 carries meaning beyond just its sound.
 
 Although there are tens of thousands of kanji, the Japanese Ministry of Education designates 2,136 characters as 常用漢字, or “daily-use kanji.” These cover most kanji commonly seen in newspapers, signs, books, official documents, and everyday life. Many adults can recognize more than this, especially depending on their education, reading habits, and personal exposure.
 
