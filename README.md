@@ -18,7 +18,7 @@ Hiragana and katakana are phonetic scripts, meaning each character represents a 
 
 Although there are tens of thousands of kanji, the Japanese Ministry of Education designates 2,136 characters as 常用漢字, or “daily-use kanji.” These cover most kanji commonly seen in newspapers, signs, books, official documents, and everyday life. Many adults can recognize more than this, especially depending on their education, reading habits, and personal exposure.
 
-Kanji are also commonly used in names, which allows names with the same pronunciation to have different meanings. For example, the name Miyu can be written as 実祐 (bear fruit and help others), 美憂 (beautiful and kind), and many other combinations, each giving the name a different nuance while keeping the same pronunciation.
+Kanji are also commonly used in names, which allows names with the same pronunciation to have different meanings. For example, the name Miyū can be written as 実祐 (bear fruit and help others), 美憂 (beautiful and kind), and many other combinations, each giving the name a different nuance while keeping the same pronunciation.
 
 ## Why Build This App?
 
