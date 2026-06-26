@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../data/deck_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
+import '../widgets/gakuji_top_bar.dart';
 
 class DictionaryDetailPage extends StatefulWidget {
   final Term word;
@@ -17,22 +19,35 @@ class DictionaryDetailPage extends StatefulWidget {
 
 class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   Deck get defaultDeck =>
-      decks.firstWhere((d) => d.name == 'Gakuji test deck');
+      decks.firstWhere((deck) => deck.name == 'Gakuji test deck');
+
+  String get sourceId => widget.word.sourceId ?? widget.word.id;
+
+  bool deckContainsWord(Deck deck) {
+    return deck.terms.any((term) => term.sourceId == sourceId);
+  }
+
+  Term copiedWordForDeck(Deck deck) {
+    return Term.deckCopyFrom(
+      widget.word,
+      id: '${deck.id}_${sourceId}_${DateTime.now().microsecondsSinceEpoch}',
+    );
+  }
 
   bool get isSaved {
-    return defaultDeck.termIds.contains(widget.word.id);
+    return deckContainsWord(defaultDeck);
   }
 
   void toggleDefaultDeck() {
     setState(() {
       if (isSaved) {
-        defaultDeck.termIds.remove(widget.word.id);
+        defaultDeck.terms.removeWhere((term) => term.sourceId == sourceId);
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Removed from deck')),
         );
       } else {
-        defaultDeck.termIds.add(widget.word.id);
+        defaultDeck.terms.add(copiedWordForDeck(defaultDeck));
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Added to Gakuji test deck')),
@@ -47,7 +62,9 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(20),
+        ),
       ),
       builder: (context) {
         return ListView(
@@ -63,9 +80,8 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
               ),
             ),
             const Divider(),
-
             ...decks.map((deck) {
-              final exists = deck.termIds.contains(widget.word.id);
+              final exists = deckContainsWord(deck);
 
               return ListTile(
                 title: Text(deck.name),
@@ -76,14 +92,20 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                 onTap: () {
                   setState(() {
                     if (!exists) {
-                      deck.termIds.add(widget.word.id);
+                      deck.terms.add(copiedWordForDeck(deck));
                     }
                   });
 
                   Navigator.pop(context);
 
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Saved to ${deck.name}')),
+                    SnackBar(
+                      content: Text(
+                        exists
+                            ? 'Already saved to ${deck.name}'
+                            : 'Saved to ${deck.name}',
+                      ),
+                    ),
                   );
                 },
               );
@@ -103,75 +125,97 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            /// BACK BUTTON
-            Positioned(
-              top: 20,
-              left: 20,
-              child: CircleAvatar(
-                backgroundColor: Colors.white,
-                child: IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back_ios_new),
-                ),
-              ),
-            ),
-
-            /// ❤️ HEART (dictionary favorite system)
-            Positioned(
-              top: 28,
-              right: 70,
-              child: IconButton(
-                icon: Icon(
-                  isSaved ? Icons.favorite : Icons.favorite_border,
-                  color: isSaved ? Colors.red : Colors.grey,
-                  size: 30,
-                ),
-                onPressed: toggleDefaultDeck,
-              ),
-            ),
-
-            /// 📄 DECK PICKER
-            Positioned(
-              top: 28,
-              right: 20,
-              child: IconButton(
-                icon: const Icon(Icons.menu_book_outlined, size: 30),
-                onPressed: openDeckPicker,
-              ),
-            ),
-
-            /// MAIN KANJI
-            Positioned(
-              top: 70,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Text(
-                  kanji,
-                  style: const TextStyle(
-                    fontSize: 78,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-            ),
-
-            /// READING + MEANING
-            Positioned(
-              top: 200,
-              left: 58,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            GakujiTopBar(
+              leftIcon: Icons.arrow_back_ios_new,
+              onLeftTap: () => Navigator.pop(context),
+              title: '',
+              rightWidget: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(reading, style: const TextStyle(fontSize: 26)),
-                  const SizedBox(height: 18),
-                  Text(meaning, style: const TextStyle(fontSize: 24)),
+                  _topActionButton(
+                    icon: isSaved ? Icons.favorite : Icons.favorite_border,
+                    iconColor: isSaved ? Colors.red : Colors.grey,
+                    onTap: toggleDefaultDeck,
+                  ),
+                  const SizedBox(width: GakujiTopBar.actionGap),
+                  _topActionButton(
+                    icon: Icons.menu_book_outlined,
+                    iconColor: Colors.black,
+                    onTap: openDeckPicker,
+                  ),
                 ],
               ),
             ),
+
+            const SizedBox(height: 10),
+
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: Column(
+                  children: [
+                    Text(
+                      kanji,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 78,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+
+                    const SizedBox(height: 36),
+
+                    Padding(
+                      padding: const EdgeInsets.only(left: 36),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              reading,
+                              style: const TextStyle(fontSize: 26),
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              meaning,
+                              style: const TextStyle(fontSize: 24),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _topActionButton({
+    required IconData icon,
+    required Color iconColor,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: GakujiTopBar.buttonSize,
+      height: GakujiTopBar.buttonSize,
+      child: Material(
+        color: Colors.white,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Icon(
+            icon,
+            size: 28,
+            color: iconColor,
+          ),
         ),
       ),
     );

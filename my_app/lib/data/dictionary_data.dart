@@ -1,7 +1,11 @@
 import '../models/term.dart';
 
-/// 📚 GLOBAL DICTIONARY (single source of truth)
-/// All terms exist here once and are referenced by Decks via termIds
+/// 📚 GLOBAL DICTIONARY
+///
+/// These are the original dictionary entries.
+/// Decks should not store references to these objects directly.
+/// When a term is saved to a deck, the term should be copied into that deck
+/// with its own unique card ID and a sourceId pointing back to the dictionary ID.
 final List<Term> dictionaryWords = [
   Term(
     id: 't1',
@@ -38,18 +42,13 @@ final List<Term> dictionaryWords = [
     kanji: '火曜日',
     reading: 'かようび',
     meaning: 'Tuesday',
- ),
+  ),
 ];
 
-/// 🔍 FAST LOOKUP (IMPORTANT FOR PERFORMANCE)
+/// Looks up an original dictionary term by dictionary ID.
 Term getTermById(String id) {
   return dictionaryWords.firstWhere(
-    (t) => t.id == id,
+    (term) => term.id == id,
     orElse: () => throw Exception('Term not found: $id'),
   );
-}
-
-/// 📦 Convert deck termIds → actual Term objects
-List<Term> getTermsFromIds(List<String> ids) {
-  return ids.map(getTermById).toList();
 }

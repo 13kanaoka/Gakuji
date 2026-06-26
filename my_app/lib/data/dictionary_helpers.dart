@@ -1,15 +1,15 @@
-import 'dictionary_data.dart';
 import '../models/term.dart';
+import 'dictionary_data.dart' as dictionary;
 
-/// 🔍 Get a single Term from global dictionary
+/// Looks up a term from the global dictionary by dictionary term ID.
+///
+/// Decks now store copied Term objects directly, so this should only be used
+/// when looking up original dictionary entries.
 Term getTermById(String id) {
-  return dictionaryWords.firstWhere(
-    (t) => t.id == id,
-    orElse: () => throw Exception('Term not found: $id'),
-  );
+  return dictionary.getTermById(id);
 }
 
-/// 📦 Convert Deck termIds → actual Term objects
-List<Term> getTermsFromDeck(List<String> ids) {
-  return ids.map(getTermById).toList();
+/// Checks whether the global dictionary contains a term with this ID.
+bool dictionaryContainsTerm(String id) {
+  return dictionary.dictionaryWords.any((term) => term.id == id);
 }

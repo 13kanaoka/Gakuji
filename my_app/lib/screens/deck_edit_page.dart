@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../models/deck.dart';
 import '../models/term.dart';
-import '../data/dictionary_helpers.dart';
+import '../widgets/gakuji_top_bar.dart';
 
 class DeckEditPage extends StatefulWidget {
   final Deck deck;
@@ -18,18 +19,24 @@ class DeckEditPage extends StatefulWidget {
 class _DeckEditPageState extends State<DeckEditPage> {
   bool showMarkedOnly = false;
 
-  String searchQuery = "";
+  String searchQuery = '';
 
-  /// 🔥 SWIPE STATE
+  /// Swipe state
   String? revealedTermId;
   double dragDistance = 0;
 
-  /// ✋ MULTI SELECT STATE
+  /// Multi-select state
   bool selectionMode = false;
   final Set<String> selectedTerms = {};
 
-  /// 🔍 SEARCH FOCUS
+  /// Search focus
   final FocusNode searchFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    searchFocusNode.dispose();
+    super.dispose();
+  }
 
   // -----------------------------
   // HELPERS
@@ -41,10 +48,22 @@ class _DeckEditPageState extends State<DeckEditPage> {
     });
   }
 
+  void clearSelection() {
+    setState(() {
+      selectionMode = false;
+      selectedTerms.clear();
+    });
+  }
+
   void removeTermFromDeck(Term term) {
     setState(() {
-      widget.deck.termIds.remove(term.id);
+      widget.deck.terms.removeWhere((deckTerm) => deckTerm.id == term.id);
       revealedTermId = null;
+      selectedTerms.remove(term.id);
+
+      if (selectedTerms.isEmpty) {
+        selectionMode = false;
+      }
     });
   }
 
@@ -66,8 +85,8 @@ class _DeckEditPageState extends State<DeckEditPage> {
 
   void deleteSelected() {
     setState(() {
-      widget.deck.termIds.removeWhere(
-        (id) => selectedTerms.contains(id),
+      widget.deck.terms.removeWhere(
+        (term) => selectedTerms.contains(term.id),
       );
 
       selectedTerms.clear();
@@ -77,11 +96,11 @@ class _DeckEditPageState extends State<DeckEditPage> {
   }
 
   // -----------------------------
-  // SWIPE SYSTEM (UNCHANGED)
+  // SWIPE SYSTEM
   // -----------------------------
 
   void handleSwipeEnd(Term term) {
-    if (selectionMode) return; // 🚨 prevents conflicts
+    if (selectionMode) return;
 
     const swipeThreshold = 40.0;
     final isRevealed = revealedTermId == term.id;
@@ -105,12 +124,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
     dragDistance = 0;
   }
 
-  @override
-  void dispose() {
-    searchFocusNode.dispose();
-    super.dispose();
-  }
-
   // -----------------------------
   // BUILD
   // -----------------------------
@@ -119,149 +132,130 @@ class _DeckEditPageState extends State<DeckEditPage> {
   Widget build(BuildContext context) {
     final deck = widget.deck;
 
-    final List<Term> cards = getTermsFromDeck(deck.termIds);
+    final List<Term> cards = deck.terms;
 
-    final visibleCards = cards.where((t) {
-      final matchesSearch =
-          searchQuery.isEmpty ||
-          t.kanji.contains(searchQuery) ||
-          t.reading.contains(searchQuery) ||
-          t.meaning.toLowerCase().contains(searchQuery.toLowerCase());
+    final visibleCards = cards.where((term) {
+      final normalizedSearch = searchQuery.toLowerCase();
 
-      final matchesMarked = !showMarkedOnly || t.marked;
+      final matchesSearch = searchQuery.isEmpty ||
+          term.kanji.contains(searchQuery) ||
+          term.reading.contains(searchQuery) ||
+          term.meaning.toLowerCase().contains(normalizedSearch);
+
+      final matchesMarked = !showMarkedOnly || term.marked;
 
       return matchesSearch && matchesMarked;
     }).toList();
 
     return Scaffold(
       backgroundColor: Colors.white,
-
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () {
           searchFocusNode.unfocus();
           closeRevealedTerm();
-
-          setState(() {
-            selectionMode = false;
-            selectedTerms.clear();
-          });
+          clearSelection();
         },
-
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(28, 24, 28, 0),
-            child: Column(
-              children: [
-                // -----------------------------
-                // TOP BAR
-                // -----------------------------
-                Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 18,
-                      backgroundColor: const Color(0xFFEDEDED),
-                      child: IconButton(
-                        padding: EdgeInsets.zero,
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.arrow_back_ios_new),
-                      ),
-                    ),
+          child: Column(
+            children: [
+              GakujiTopBar(
+                leftIcon: Icons.arrow_back_ios_new,
+                onLeftTap: () => Navigator.pop(context),
+                title: 'Deck Edit',
+                titleStyle: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.black,
+                ),
+                rightIcon: selectionMode ? Icons.delete : null,
+                onRightTap: selectionMode ? deleteSelected : null,
+                rightIconColor: Colors.red,
+              ),
 
-                    const Expanded(
-                      child: Center(
-                        child: Text(
-                          'Deck Edit',
-                          style: TextStyle(fontSize: 18),
+              const SizedBox(height: 26),
+
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
+                  child: Column(
+                    children: [
+                      // -----------------------------
+                      // SEARCH
+                      // -----------------------------
+                      Container(
+                        height: 38,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEDEDED),
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                      ),
-                    ),
-
-                    /// 🗑 DELETE SELECTED
-                    if (selectionMode)
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: deleteSelected,
-                      )
-                    else
-                      const SizedBox(width: 48),
-                  ],
-                ),
-
-                const SizedBox(height: 26),
-
-                // -----------------------------
-                // SEARCH
-                // -----------------------------
-                Container(
-                  height: 38,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEDEDED),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: TextField(
-                    focusNode: searchFocusNode,
-                    onChanged: (value) {
-                      setState(() {
-                        searchQuery = value;
-                      });
-                    },
-                    decoration: const InputDecoration(
-                      hintText: 'Search',
-                      border: InputBorder.none,
-                      isCollapsed: true,
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 18),
-
-                // -----------------------------
-                // TOGGLE
-                // -----------------------------
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFAFAFAF),
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _toggleButton('All', !showMarkedOnly, () {
-                          setState(() => showMarkedOnly = false);
-                        }),
-                        _toggleButton('Marked', showMarkedOnly, () {
-                          setState(() => showMarkedOnly = true);
-                        }),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // -----------------------------
-                // LIST
-                // -----------------------------
-                Expanded(
-                  child: visibleCards.isEmpty
-                      ? const Center(child: Text('No cards yet'))
-                      : ListView.builder(
-                          itemCount: visibleCards.length,
-                          itemBuilder: (context, index) {
-                            final term = visibleCards[index];
-                            final isSelected =
-                                selectedTerms.contains(term.id);
-
-                            return _termRow(term, isSelected);
+                        child: TextField(
+                          focusNode: searchFocusNode,
+                          onChanged: (value) {
+                            setState(() {
+                              searchQuery = value;
+                            });
                           },
+                          decoration: const InputDecoration(
+                            hintText: 'Search',
+                            border: InputBorder.none,
+                            isCollapsed: true,
+                            contentPadding: EdgeInsets.only(top: 10),
+                          ),
                         ),
+                      ),
+
+                      const SizedBox(height: 18),
+
+                      // -----------------------------
+                      // TOGGLE
+                      // -----------------------------
+                      Center(
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFAFAFAF),
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _toggleButton('All', !showMarkedOnly, () {
+                                setState(() => showMarkedOnly = false);
+                              }),
+                              _toggleButton('Marked', showMarkedOnly, () {
+                                setState(() => showMarkedOnly = true);
+                              }),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // -----------------------------
+                      // LIST
+                      // -----------------------------
+                      Expanded(
+                        child: visibleCards.isEmpty
+                            ? const Center(child: Text('No cards yet'))
+                            : ListView.builder(
+                                itemCount: visibleCards.length,
+                                itemBuilder: (context, index) {
+                                  final term = visibleCards[index];
+                                  final isSelected =
+                                      selectedTerms.contains(term.id);
+
+                                  return _termRow(term, isSelected);
+                                },
+                              ),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -285,19 +279,15 @@ class _DeckEditPageState extends State<DeckEditPage> {
           closeRevealedTerm();
         }
       },
-
       onHorizontalDragStart: (_) {
         if (!selectionMode) dragDistance = 0;
       },
-
-      onHorizontalDragUpdate: (d) {
-        if (!selectionMode) dragDistance += d.delta.dx;
+      onHorizontalDragUpdate: (details) {
+        if (!selectionMode) dragDistance += details.delta.dx;
       },
-
       onHorizontalDragEnd: (_) {
         if (!selectionMode) handleSwipeEnd(term);
       },
-
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         child: ClipRRect(
@@ -331,33 +321,28 @@ class _DeckEditPageState extends State<DeckEditPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
-                    mainAxisAlignment:
-                        MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            term.kanji,
-                            style: TextStyle(
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              term.kanji,
+                              style: TextStyle(
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
                             ),
-                          ),
-                          Text(term.reading),
-                          Text(term.meaning),
-                        ],
+                            Text(term.reading),
+                            Text(term.meaning),
+                          ],
+                        ),
                       ),
-
                       Icon(
-                        term.marked
-                            ? Icons.star
-                            : Icons.star_border,
-                        color: term.marked
-                            ? Colors.blue
-                            : Colors.grey,
+                        term.marked ? Icons.star : Icons.star_border,
+                        color: term.marked ? Colors.blue : Colors.grey,
                       ),
                     ],
                   ),
@@ -374,13 +359,11 @@ class _DeckEditPageState extends State<DeckEditPage> {
   // TOGGLE BUTTON
   // -----------------------------
 
-  Widget _toggleButton(
-      String label, bool selected, VoidCallback onTap) {
+  Widget _toggleButton(String label, bool selected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
         decoration: BoxDecoration(
           color: selected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(16),

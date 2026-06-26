@@ -1,10 +1,10 @@
-import '../models/term.dart';
-import '../data/dictionary_data.dart';
 import '../models/deck.dart';
+import '../models/term.dart';
+import 'dictionary_data.dart';
 
 class DefaultDecks {
-  /// 📚 SAME TERM SET USED FOR BOTH MODES
-  static final List<String> termIds = [
+  /// 📚 SAME DICTIONARY SOURCE SET USED FOR BOTH MODES
+  static final List<String> sourceIds = [
     't1',
     't2',
     't3',
@@ -12,12 +12,23 @@ class DefaultDecks {
     't5',
   ];
 
+  static List<Term> _deckCopies(String deckId) {
+    return sourceIds.map((sourceId) {
+      final dictionaryTerm = getTermById(sourceId);
+
+      return Term.deckCopyFrom(
+        dictionaryTerm,
+        id: '${deckId}_$sourceId',
+      );
+    }).toList();
+  }
+
   /// 📚 READING DEFAULT DECK
   static final Deck reading = Deck(
     id: 'default_reading',
     name: 'Gakuji Test Deck (Reading)',
     type: DeckType.reading,
-    termIds: termIds,
+    terms: _deckCopies('default_reading'),
   );
 
   /// ✍️ WRITING DEFAULT DECK
@@ -25,11 +36,11 @@ class DefaultDecks {
     id: 'default_writing',
     name: 'Gakuji Test Deck (Writing)',
     type: DeckType.writing,
-    termIds: termIds,
+    terms: _deckCopies('default_writing'),
   );
 
-  /// 🧠 Helper: shared term objects
-  static List<Term> get cards {
-    return termIds.map(getTermById).toList();
+  /// 🧠 Helper: original dictionary terms
+  static List<Term> get dictionaryTerms {
+    return sourceIds.map(getTermById).toList();
   }
 }

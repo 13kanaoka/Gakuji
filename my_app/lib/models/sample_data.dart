@@ -1,4 +1,4 @@
-import 'models/term.dart';
+import 'term.dart';
 
 final List<Term> sampleTerms = [
   Term(

@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+
 import '../models/deck.dart';
 import '../models/term.dart';
 import '../services/deck_storage.dart';
+import '../widgets/gakuji_top_bar.dart';
 import 'deck_edit_page.dart';
 
 class StudyPage extends StatefulWidget {
@@ -19,8 +21,7 @@ class StudyPage extends StatefulWidget {
   State<StudyPage> createState() => _StudyPageState();
 }
 
-class _StudyPageState extends State<StudyPage>
-    with TickerProviderStateMixin {
+class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   late List<Term> terms;
 
   int currentIndex = 0;
@@ -64,12 +65,23 @@ class _StudyPageState extends State<StudyPage>
     _loadProgress();
   }
 
+  @override
+  void dispose() {
+    _flipController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadProgress() async {
-    final saved =
-        await DeckStorage.loadProgress(widget.deck.id);
+    final saved = await DeckStorage.loadProgress(widget.deck.id);
+
+    if (!mounted) return;
 
     setState(() {
-      currentIndex = saved.clamp(0, terms.length - 1);
+      if (terms.isEmpty) {
+        currentIndex = 0;
+      } else {
+        currentIndex = saved.clamp(0, terms.length - 1).toInt();
+      }
     });
   }
 
@@ -87,6 +99,7 @@ class _StudyPageState extends State<StudyPage>
       history.clear();
       dragOffset = Offset.zero;
       isDragging = false;
+      showMenu = false;
       _flipController.value = 0;
       hasCompletedDeck = false;
     });
@@ -108,7 +121,9 @@ class _StudyPageState extends State<StudyPage>
 
       currentIndex--;
       dragOffset = Offset.zero;
+      isDragging = false;
       _flipController.value = 0;
+      showMenu = false;
     });
 
     _saveProgress();
@@ -174,6 +189,9 @@ class _StudyPageState extends State<StudyPage>
     if (hasCompletedDeck) {
       await DeckStorage.saveProgress(widget.deck.id, 0);
     }
+
+    if (!mounted) return;
+
     Navigator.pop(context);
   }
 
@@ -186,6 +204,45 @@ class _StudyPageState extends State<StudyPage>
       } else {
         terms = List.from(widget.terms);
       }
+
+      showMenu = false;
+      currentIndex = currentIndex.clamp(0, terms.length - 1).toInt();
+      dragOffset = Offset.zero;
+      isDragging = false;
+      _flipController.value = 0;
+    });
+  }
+
+  Future<void> openDeckEdit() async {
+    setState(() {
+      showMenu = false;
+    });
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DeckEditPage(deck: widget.deck),
+      ),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      terms = List.from(widget.terms);
+
+      if (isShuffled) {
+        terms.shuffle();
+      }
+
+      if (terms.isEmpty) {
+        currentIndex = 0;
+      } else {
+        currentIndex = currentIndex.clamp(0, terms.length - 1).toInt();
+      }
+
+      dragOffset = Offset.zero;
+      isDragging = false;
+      _flipController.value = 0;
     });
   }
 
@@ -193,114 +250,59 @@ class _StudyPageState extends State<StudyPage>
   Widget build(BuildContext context) {
     if (terms.isEmpty) {
       return const Scaffold(
-        body: Center(child: Text("No terms")),
+        body: Center(child: Text('No terms')),
       );
     }
 
     if (isComplete) {
-      return Scaffold(
-        backgroundColor: Colors.white,
-        body: SafeArea(
-          child: Stack(
-            children: [
-              Positioned(
-                top: 20,
-                left: 20,
-                child: _circle(Icons.close, handleExit),
-              ),
-              Positioned(
-                top: 20,
-                right: 20,
-                child: _circle(Icons.more_horiz, () {
-                  setState(() => showMenu = !showMenu);
-                }),
-              ),
-
-              const Center(
-                child: Text(
-                  "Complete!",
-                  style: TextStyle(fontSize: 42),
-                ),
-              ),
-
-              Positioned(
-                top: 300,
-                left: 0,
-                right: 0,
-                child: Column(
-                  children: [
-                    _resultBox("Correct", correctCount, const Color(0xFFC7F3B5)),
-                    const SizedBox(height: 12),
-                    _resultBox("Incorrect", incorrectCount, const Color(0xFFFF5A6A)),
-                  ],
-                ),
-              ),
-
-              Positioned(
-                bottom: 120,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: ElevatedButton(
-                    onPressed: restart,
-                    child: const Text("Restart"),
-                  ),
-                ),
-              ),
-
-              Positioned(
-                bottom: 20,
-                left: 20,
-                child: _circle(Icons.arrow_back_ios_new, goBack),
-              ),
-            ],
-          ),
-        ),
-      );
+      return _completeScreen();
     }
 
     final currentTerm = terms[currentIndex];
-    final nextTerm = currentIndex < terms.length - 1
-        ? terms[currentIndex + 1]
-        : null;
+    final nextTerm =
+        currentIndex < terms.length - 1 ? terms[currentIndex + 1] : null;
 
     final rotation = dragOffset.dx / 700;
 
     return Scaffold(
+      backgroundColor: Colors.white,
       body: GestureDetector(
-        onTap: () => setState(() => showMenu = false),
+        onTap: () {
+          if (showMenu) {
+            setState(() => showMenu = false);
+          }
+        },
         child: SafeArea(
           child: Stack(
             children: [
               Column(
                 children: [
-                  const SizedBox(height: 16),
+                  GakujiTopBar(
+                    leftIcon: Icons.close,
+                    onLeftTap: handleExit,
+                    title: '${currentIndex + 1}/${terms.length}',
+                    titleStyle: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.black,
+                    ),
+                    rightIcon: Icons.more_horiz,
+                    onRightTap: () {
+                      setState(() => showMenu = !showMenu);
+                    },
+                  ),
+
+                  const SizedBox(height: 20),
 
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 22),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _circle(Icons.close, handleExit),
-                        Text(
-                          '${currentIndex + 1}/${terms.length}',
-                          style: const TextStyle(fontSize: 28),
-                        ),
-                        _circle(Icons.more_horiz, () {
-                          setState(() => showMenu = !showMenu);
-                        }),
+                        _pill(incorrectCount, const Color(0xFFFF5A6A)),
+                        _pill(correctCount, const Color(0xFFC7F3B5)),
                       ],
                     ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _pill(incorrectCount, const Color(0xFFFF5A6A)),
-                      _pill(correctCount, const Color(0xFFC7F3B5)),
-                    ],
                   ),
 
                   const SizedBox(height: 30),
@@ -316,7 +318,6 @@ class _StudyPageState extends State<StudyPage>
                               child: _card(nextTerm),
                             ),
                           ),
-
                         AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           transform: Matrix4.identity()
@@ -342,7 +343,10 @@ class _StudyPageState extends State<StudyPage>
                                           alignment: Alignment.center,
                                           transform: Matrix4.identity()
                                             ..rotateY(math.pi),
-                                          child: _card(currentTerm, showMeaning: true),
+                                          child: _card(
+                                            currentTerm,
+                                            showMeaning: true,
+                                          ),
                                         )
                                       : _card(currentTerm),
                                 );
@@ -378,8 +382,10 @@ class _StudyPageState extends State<StudyPage>
                         children: [
                           Icon(Icons.shuffle, color: Colors.grey),
                           SizedBox(width: 10),
-                          Text("Shuffle",
-                              style: TextStyle(color: Colors.grey)),
+                          Text(
+                            'Shuffle',
+                            style: TextStyle(color: Colors.grey),
+                          ),
                         ],
                       ),
                     ),
@@ -387,62 +393,7 @@ class _StudyPageState extends State<StudyPage>
                 ],
               ),
 
-              if (showMenu)
-                Positioned.fill(
-                  child: GestureDetector(
-                    onTap: () => setState(() => showMenu = false),
-                    child: Container(
-                      color: Colors.black.withOpacity(0.2),
-                      child: Center(
-                        child: Container(
-                          width: 220,
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit),
-                                    SizedBox(width: 10),
-                                    Text("Edit Deck"),
-                                  ],
-                                ),
-                              ),
-                              const Divider(),
-                              const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.shuffle, color: Colors.grey),
-                                    SizedBox(width: 10),
-                                    Text("Shuffle"),
-                                  ],
-                                ),
-                              ),
-                              const Divider(),
-                              const Padding(
-                                padding: EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.refresh, color: Colors.grey),
-                                    SizedBox(width: 10),
-                                    Text("Reset Deck"),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              if (showMenu) _menuOverlay(),
             ],
           ),
         ),
@@ -450,7 +401,155 @@ class _StudyPageState extends State<StudyPage>
     );
   }
 
-  Widget _card(Term t, {bool showMeaning = false}) {
+  Widget _completeScreen() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                GakujiTopBar(
+                  leftIcon: Icons.close,
+                  onLeftTap: handleExit,
+                  title: '',
+                  rightIcon: Icons.more_horiz,
+                  onRightTap: () {
+                    setState(() => showMenu = !showMenu);
+                  },
+                ),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      const Center(
+                        child: Text(
+                          'Complete!',
+                          style: TextStyle(fontSize: 42),
+                        ),
+                      ),
+
+                      Positioned(
+                        top: 230,
+                        left: 0,
+                        right: 0,
+                        child: Column(
+                          children: [
+                            _resultBox(
+                              'Correct',
+                              correctCount,
+                              const Color(0xFFC7F3B5),
+                            ),
+                            const SizedBox(height: 12),
+                            _resultBox(
+                              'Incorrect',
+                              incorrectCount,
+                              const Color(0xFFFF5A6A),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      Positioned(
+                        bottom: 100,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: ElevatedButton(
+                            onPressed: restart,
+                            child: const Text('Restart'),
+                          ),
+                        ),
+                      ),
+
+                      Positioned(
+                        bottom: 20,
+                        left: 20,
+                        child: _circle(Icons.arrow_back_ios_new, goBack),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            if (showMenu) _menuOverlay(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _menuOverlay() {
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: () => setState(() => showMenu = false),
+        child: Container(
+          color: Colors.black.withOpacity(0.2),
+          child: Center(
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  InkWell(
+                    onTap: openDeckEdit,
+                    child: const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit),
+                          SizedBox(width: 10),
+                          Text('Edit Deck'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  InkWell(
+                    onTap: toggleShuffle,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.shuffle,
+                            color: isShuffled ? Colors.black : Colors.grey,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(isShuffled ? 'Unshuffle' : 'Shuffle'),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  InkWell(
+                    onTap: restart,
+                    child: const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.refresh, color: Colors.grey),
+                          SizedBox(width: 10),
+                          Text('Reset Deck'),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _card(Term term, {bool showMeaning = false}) {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 28),
@@ -460,12 +559,21 @@ class _StudyPageState extends State<StudyPage>
       ),
       child: Center(
         child: showMeaning
-            ? Text(t.meaning, style: const TextStyle(fontSize: 52))
+            ? Text(
+                term.meaning,
+                style: const TextStyle(fontSize: 52),
+              )
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(t.reading, style: const TextStyle(fontSize: 22)),
-                  Text(t.kanji, style: const TextStyle(fontSize: 82)),
+                  Text(
+                    term.reading,
+                    style: const TextStyle(fontSize: 22),
+                  ),
+                  Text(
+                    term.kanji,
+                    style: const TextStyle(fontSize: 82),
+                  ),
                 ],
               ),
       ),
@@ -484,7 +592,7 @@ class _StudyPageState extends State<StudyPage>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label),
-          Text("$value"),
+          Text('$value'),
         ],
       ),
     );
@@ -499,7 +607,7 @@ class _StudyPageState extends State<StudyPage>
         borderRadius: BorderRadius.circular(30),
       ),
       child: Text(
-        "$count",
+        '$count',
         textAlign: TextAlign.center,
       ),
     );
