@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../data/dictionary_data.dart';
 import '../data/recent_searches.dart';
 import '../models/term.dart';
 import '../models/writing_point.dart';
+import '../services/dictionary_service.dart';
 import '../services/writing_recognition_service.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'dictionary_detail_page.dart';
@@ -14,7 +14,12 @@ enum DictionaryInputMode {
 }
 
 class DictionaryPage extends StatefulWidget {
-  const DictionaryPage({super.key});
+  final ValueChanged<bool>? onHandwritingInputActive;
+
+  const DictionaryPage({
+    super.key,
+    this.onHandwritingInputActive,
+  });
 
   @override
   State<DictionaryPage> createState() => _DictionaryPageState();
@@ -33,15 +38,41 @@ class _DictionaryPageState extends State<DictionaryPage> {
   final List<List<WritingPoint>> handwritingStrokes = [];
 
   bool isRecognizingHandwriting = false;
+  bool isDictionaryLoading = true;
+  bool isHandwritingInputActive = false;
 
   bool get hasHandwritingInput {
     return handwritingStrokes.any((stroke) => stroke.isNotEmpty);
   }
 
   @override
+  void initState() {
+    super.initState();
+    loadDictionary();
+  }
+
+  @override
   void dispose() {
+    setHandwritingInputActive(false);
     searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> loadDictionary() async {
+    await DictionaryService.loadDictionary();
+
+    if (!mounted) return;
+
+    setState(() {
+      isDictionaryLoading = false;
+    });
+  }
+
+  void setHandwritingInputActive(bool active) {
+    if (isHandwritingInputActive == active) return;
+
+    isHandwritingInputActive = active;
+    widget.onHandwritingInputActive?.call(active);
   }
 
   void addToRecentSearches(Term word) {
@@ -59,6 +90,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 
   void openDictionaryDetail(Term word) {
+    setHandwritingInputActive(false);
     addToRecentSearches(word);
 
     Navigator.push(
@@ -73,6 +105,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
     setState(() {
       inputMode = mode;
     });
+
+    if (mode == DictionaryInputMode.keyboard) {
+      setHandwritingInputActive(false);
+    }
 
     if (mode == DictionaryInputMode.writing) {
       FocusScope.of(context).unfocus();
@@ -105,6 +141,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 
   void clearHandwritingBox() {
+    setHandwritingInputActive(false);
+
     setState(() {
       handwritingStrokes.clear();
       handwritingResult = '';
@@ -152,6 +190,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
       return;
     }
 
+    setHandwritingInputActive(false);
+
     setState(() {
       handwritingResult = recognizedCharacter;
       searchText = recognizedCharacter;
@@ -169,19 +209,11 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
   @override
   Widget build(BuildContext context) {
-    final query = searchText.trim().toLowerCase();
+    final query = searchText.trim();
 
     final searchResults = query.isEmpty
         ? <Term>[]
-        : dictionaryWords.where((word) {
-            final kanji = word.kanji;
-            final reading = word.reading;
-            final meaning = word.meaning.toLowerCase();
-
-            return kanji.contains(query) ||
-                reading.contains(query) ||
-                meaning.contains(query);
-          }).toList();
+        : DictionaryService.search(query);
 
     final wordsToShow = query.isEmpty ? recentSearches : searchResults;
 
@@ -223,11 +255,13 @@ class _DictionaryPageState extends State<DictionaryPage> {
                         ),
                       ),
                     if (query.isEmpty && recentSearches.isEmpty)
-                      const Expanded(
+                      Expanded(
                         child: Center(
                           child: Text(
-                            'Search for a word',
-                            style: TextStyle(color: Colors.grey),
+                            isDictionaryLoading
+                                ? 'Loading dictionary...'
+                                : 'Search for a word',
+                            style: const TextStyle(color: Colors.grey),
                           ),
                         ),
                       )
@@ -394,7 +428,15 @@ class _DictionaryPageState extends State<DictionaryPage> {
               builder: (context, constraints) {
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  onTapDown: (_) {
+                    setHandwritingInputActive(true);
+                  },
+                  onPanDown: (_) {
+                    setHandwritingInputActive(true);
+                  },
                   onPanStart: (details) {
+                    setHandwritingInputActive(true);
+
                     final box = context.findRenderObject() as RenderBox;
                     final point = box.globalToLocal(
                       details.globalPosition,

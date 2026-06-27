@@ -8,6 +8,22 @@ class DictionaryExample {
     required this.reading,
     required this.english,
   });
+
+  factory DictionaryExample.fromJson(Map<String, dynamic> json) {
+    return DictionaryExample(
+      japanese: json['japanese']?.toString() ?? '',
+      reading: json['reading']?.toString() ?? '',
+      english: json['english']?.toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'japanese': japanese,
+      'reading': reading,
+      'english': english,
+    };
+  }
 }
 
 class KanjiCompound {
@@ -27,6 +43,24 @@ class KanjiCompound {
     required this.meaning,
     this.termId,
   });
+
+  factory KanjiCompound.fromJson(Map<String, dynamic> json) {
+    return KanjiCompound(
+      kanji: json['kanji']?.toString() ?? '',
+      reading: json['reading']?.toString() ?? '',
+      meaning: json['meaning']?.toString() ?? '',
+      termId: _nullableString(json['termId']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'kanji': kanji,
+      'reading': reading,
+      'meaning': meaning,
+      if (termId != null) 'termId': termId,
+    };
+  }
 }
 
 class Term {
@@ -111,6 +145,62 @@ class Term {
         similarKanji = similarKanji ?? const [],
         compounds = compounds ?? const [];
 
+  factory Term.fromJson(Map<String, dynamic> json) {
+    return Term(
+      id: json['id']?.toString() ?? '',
+      sourceId: _nullableString(json['sourceId']),
+      kanji: json['kanji']?.toString() ?? '',
+      reading: json['reading']?.toString() ?? '',
+      meaning: json['meaning']?.toString() ?? '',
+      partOfSpeech: json['partOfSpeech']?.toString() ?? 'noun',
+      definitions: _stringList(json['definitions']),
+      isCommon: json['isCommon'] == true,
+      relatedTerms: _stringList(json['relatedTerms']),
+      note: _nullableString(json['note']),
+      kanjiMeaning: json['kanjiMeaning']?.toString(),
+      kunyomi: _stringList(json['kunyomi']),
+      onyomi: _stringList(json['onyomi']),
+      examples: _dictionaryExamples(json['examples']),
+      nanori: _stringList(json['nanori']),
+      strokeCount: _nullableInt(json['strokeCount']),
+      grade: _nullableInt(json['grade']),
+      jlptLevel: _nullableString(json['jlptLevel']),
+      frequency: _nullableInt(json['frequency']),
+      radical: _nullableString(json['radical']),
+      similarKanji: _stringList(json['similarKanji']),
+      compounds: _kanjiCompounds(json['compounds']),
+      marked: json['marked'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      if (sourceId != null) 'sourceId': sourceId,
+      'kanji': kanji,
+      'reading': reading,
+      'meaning': meaning,
+      'partOfSpeech': partOfSpeech,
+      'definitions': definitions,
+      'isCommon': isCommon,
+      'relatedTerms': relatedTerms,
+      if (note != null) 'note': note,
+      'kanjiMeaning': kanjiMeaning,
+      'kunyomi': kunyomi,
+      'onyomi': onyomi,
+      'examples': examples.map((example) => example.toJson()).toList(),
+      'nanori': nanori,
+      if (strokeCount != null) 'strokeCount': strokeCount,
+      if (grade != null) 'grade': grade,
+      if (jlptLevel != null) 'jlptLevel': jlptLevel,
+      if (frequency != null) 'frequency': frequency,
+      if (radical != null) 'radical': radical,
+      'similarKanji': similarKanji,
+      'compounds': compounds.map((compound) => compound.toJson()).toList(),
+      'marked': marked,
+    };
+  }
+
   /// Creates an independent deck-owned copy of a dictionary term.
   ///
   /// The copied term gets its own unique ID, while sourceId keeps track of
@@ -160,11 +250,10 @@ class Term {
         .toList();
   }
 
-  /// Helps determine whether a term has enough data to open the kanji
-  /// dictionary detail page.
+  /// Helps determine whether a term has enough real kanji data to open the
+  /// kanji dictionary detail page.
   bool get hasKanjiDetails {
-    return kanjiMeaning.isNotEmpty ||
-        kunyomi.isNotEmpty ||
+    return kunyomi.isNotEmpty ||
         onyomi.isNotEmpty ||
         nanori.isNotEmpty ||
         strokeCount != null ||
@@ -237,4 +326,44 @@ class Term {
       marked: marked ?? this.marked,
     );
   }
+}
+
+String? _nullableString(dynamic value) {
+  if (value == null) return null;
+
+  final text = value.toString().trim();
+
+  return text.isEmpty ? null : text;
+}
+
+int? _nullableInt(dynamic value) {
+  if (value == null) return null;
+
+  if (value is int) return value;
+
+  return int.tryParse(value.toString());
+}
+
+List<String> _stringList(dynamic value) {
+  if (value is! List) return const [];
+
+  return value.map((item) => item.toString()).toList();
+}
+
+List<DictionaryExample> _dictionaryExamples(dynamic value) {
+  if (value is! List) return const [];
+
+  return value
+      .whereType<Map<String, dynamic>>()
+      .map(DictionaryExample.fromJson)
+      .toList();
+}
+
+List<KanjiCompound> _kanjiCompounds(dynamic value) {
+  if (value is! List) return const [];
+
+  return value
+      .whereType<Map<String, dynamic>>()
+      .map(KanjiCompound.fromJson)
+      .toList();
 }
