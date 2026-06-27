@@ -238,15 +238,29 @@ class WritingSessionController {
    PAGE
    ========================= */
 
-class _WritingStudyPageState extends State<WritingStudyPage> {
+class _WritingStudyPageState extends State<WritingStudyPage>
+    with TickerProviderStateMixin {
+  static const Duration _cardReturnDuration = Duration(milliseconds: 320);
+  static const Duration _cardExitDuration = Duration(milliseconds: 140);
+  static const Duration _cardContentFadeDuration = Duration(milliseconds: 120);
+
   late WritingSessionController controller;
+
+  late AnimationController _swipeController;
+  late Animation<Offset> _swipeAnimation;
+
+  late AnimationController _cardContentController;
+  late Animation<double> _cardContentOpacity;
 
   bool isCheckingAnswer = false;
   bool showMenu = false;
 
   bool isAnswerRevealed = false;
   WritingAnswerResult? answerResult;
-  double revealDragDistance = 0;
+
+  Offset revealDragOffset = Offset.zero;
+  bool isRevealDragging = false;
+  bool isRevealSwipingAway = false;
 
   @override
   void initState() {
@@ -257,7 +271,43 @@ class _WritingStudyPageState extends State<WritingStudyPage> {
       deckId: widget.deck.id,
     );
 
+    _swipeController = AnimationController(
+      vsync: this,
+      duration: _cardExitDuration,
+    );
+
+    _swipeAnimation = const AlwaysStoppedAnimation<Offset>(Offset.zero);
+    _swipeController.addListener(_handleSwipeAnimationTick);
+
+    _cardContentController = AnimationController(
+      vsync: this,
+      duration: _cardContentFadeDuration,
+    );
+
+    _cardContentOpacity = CurvedAnimation(
+      parent: _cardContentController,
+      curve: Curves.easeOut,
+    );
+
+    _cardContentController.value = 1;
+
     _loadProgress();
+  }
+
+  @override
+  void dispose() {
+    _swipeController.removeListener(_handleSwipeAnimationTick);
+    _cardContentController.dispose();
+    _swipeController.dispose();
+    super.dispose();
+  }
+
+  void _handleSwipeAnimationTick() {
+    if (!mounted) return;
+
+    setState(() {
+      revealDragOffset = _swipeAnimation.value;
+    });
   }
 
   Future<void> _loadProgress() async {
@@ -282,14 +332,48 @@ class _WritingStudyPageState extends State<WritingStudyPage> {
     Navigator.pop(context);
   }
 
-  void resetRevealState() {
+  String? get swipeFeedbackText {
+    if (revealDragOffset.dx > 32) return 'Know';
+    if (revealDragOffset.dx < -32) return 'Still learning';
+
+    return null;
+  }
+
+  Color? get swipeFeedbackColor {
+    if (revealDragOffset.dx > 32) return const Color(0xFF20BFA9);
+    if (revealDragOffset.dx < -32) return const Color(0xFFFFA24A);
+
+    return null;
+  }
+
+  double get swipeFeedbackOpacity {
+    final opacity =
+        ((revealDragOffset.dx.abs() - 30) / 90).clamp(0.0, 1.0);
+
+    return opacity.toDouble();
+  }
+
+  bool get hasNextPrompt {
+    return controller.currentIndex < controller.prompts.length - 1;
+  }
+
+  void resetRevealState({bool resetContentOpacity = true}) {
     isAnswerRevealed = false;
     answerResult = null;
-    revealDragDistance = 0;
+    revealDragOffset = Offset.zero;
+    isRevealDragging = false;
+    isRevealSwipingAway = false;
     isCheckingAnswer = false;
+
+    if (resetContentOpacity) {
+      _cardContentController.value = 1;
+    }
   }
 
   void restartDeck() {
+    _swipeController.stop();
+    _cardContentController.stop();
+
     setState(() {
       showMenu = false;
       controller.restartDeck();
@@ -298,6 +382,11 @@ class _WritingStudyPageState extends State<WritingStudyPage> {
   }
 
   void goBack() {
+    if (isRevealSwipingAway) return;
+
+    _swipeController.stop();
+    _cardContentController.stop();
+
     setState(() {
       controller.previousCard();
       resetRevealState();
@@ -305,6 +394,11 @@ class _WritingStudyPageState extends State<WritingStudyPage> {
   }
 
   void skipCard() {
+    if (isRevealSwipingAway) return;
+
+    _swipeController.stop();
+    _cardContentController.stop();
+
     setState(() {
       controller.skip();
       resetRevealState();
@@ -312,22 +406,126 @@ class _WritingStudyPageState extends State<WritingStudyPage> {
   }
 
   void submitRevealedAnswer(bool correct) {
+    final shouldFadeInNextPrompt =
+        controller.currentIndex + 1 < controller.prompts.length;
+
+    if (shouldFadeInNextPrompt) {
+      _cardContentController.value = 0;
+    } else {
+      _cardContentController.value = 1;
+    }
+
     setState(() {
       controller.answer(correct);
-      resetRevealState();
+      resetRevealState(resetContentOpacity: false);
+    });
+
+    if (shouldFadeInNextPrompt) {
+      _cardContentController.forward(from: 0);
+    }
+  }
+
+  void onRevealDragStart(DragStartDetails details) {
+    if (isRevealSwipingAway) return;
+
+    setState(() {
+      showMenu = false;
+      isRevealDragging = true;
     });
   }
 
-  void handleRevealSwipeEnd() {
-    const swipeThreshold = 80.0;
+  void onRevealDragUpdate(DragUpdateDetails details) {
+    if (isRevealSwipingAway) return;
 
-    if (revealDragDistance > swipeThreshold) {
-      submitRevealedAnswer(true);
-    } else if (revealDragDistance < -swipeThreshold) {
-      submitRevealedAnswer(false);
+    setState(() {
+      revealDragOffset = Offset(
+        revealDragOffset.dx + details.delta.dx,
+        revealDragOffset.dy + details.delta.dy,
+      );
+
+      isRevealDragging = true;
+    });
+  }
+
+  void onRevealDragEnd(DragEndDetails details) {
+    if (isRevealSwipingAway) return;
+
+    const swipeThreshold = 120.0;
+
+    if (revealDragOffset.dx > swipeThreshold) {
+      animateRevealCardOffscreen(correct: true);
+    } else if (revealDragOffset.dx < -swipeThreshold) {
+      animateRevealCardOffscreen(correct: false);
+    } else {
+      animateRevealCardBack();
     }
+  }
 
-    revealDragDistance = 0;
+  Future<void> animateRevealCardBack() async {
+    final startOffset = revealDragOffset;
+
+    _swipeController.duration = _cardReturnDuration;
+
+    _swipeAnimation = Tween<Offset>(
+      begin: startOffset,
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _swipeController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
+
+    _swipeController.reset();
+
+    setState(() {
+      isRevealSwipingAway = true;
+    });
+
+    await _swipeController.forward();
+
+    if (!mounted) return;
+
+    setState(() {
+      revealDragOffset = Offset.zero;
+      isRevealDragging = false;
+      isRevealSwipingAway = false;
+    });
+  }
+
+  Future<void> animateRevealCardOffscreen({
+    required bool correct,
+  }) async {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    _swipeController.duration = _cardExitDuration;
+
+    final endOffset = Offset(
+      correct ? screenWidth * 1.5 : -screenWidth * 1.5,
+      revealDragOffset.dy * 0.45,
+    );
+
+    _swipeAnimation = Tween<Offset>(
+      begin: revealDragOffset,
+      end: endOffset,
+    ).animate(
+      CurvedAnimation(
+        parent: _swipeController,
+        curve: Curves.easeOutQuad,
+      ),
+    );
+
+    _swipeController.reset();
+
+    setState(() {
+      isRevealSwipingAway = true;
+    });
+
+    await _swipeController.forward();
+
+    if (!mounted) return;
+
+    submitRevealedAnswer(correct);
   }
 
   Future<void> checkAnswer() async {
@@ -475,21 +673,7 @@ class _WritingStudyPageState extends State<WritingStudyPage> {
                             const SizedBox(height: 18),
 
                             Expanded(
-                              child: isAnswerRevealed
-                                  ? GestureDetector(
-                                      onHorizontalDragStart: (_) {
-                                        revealDragDistance = 0;
-                                      },
-                                      onHorizontalDragUpdate: (details) {
-                                        revealDragDistance +=
-                                            details.delta.dx;
-                                      },
-                                      onHorizontalDragEnd: (_) {
-                                        handleRevealSwipeEnd();
-                                      },
-                                      child: _studyCard(prompt),
-                                    )
-                                  : _studyCard(prompt),
+                              child: _studyCardArea(prompt),
                             ),
 
                             const SizedBox(height: 16),
@@ -524,16 +708,122 @@ class _WritingStudyPageState extends State<WritingStudyPage> {
     );
   }
 
-  Widget _studyCard(WritingPrompt prompt) {
+  Widget _studyCardArea(WritingPrompt prompt) {
+    if (!isAnswerRevealed) {
+      return AnimatedBuilder(
+        animation: _cardContentController,
+        builder: (context, child) {
+          return _studyCard(
+            prompt,
+            contentOpacity: _cardContentOpacity.value,
+          );
+        },
+      );
+    }
+
+    final rotation =
+        (revealDragOffset.dx / 700).clamp(-0.35, 0.35).toDouble();
+
+    final feedbackText = swipeFeedbackText;
+    final feedbackColor = swipeFeedbackColor;
+    final feedbackOpacity = swipeFeedbackOpacity;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (hasNextPrompt)
+          Transform.scale(
+            scale: 0.96,
+            child: Opacity(
+              opacity: 0.22,
+              child: _studyCardShell(),
+            ),
+          ),
+
+        Transform(
+          transform: Matrix4.identity()
+            ..translate(revealDragOffset.dx, revealDragOffset.dy)
+            ..rotateZ(rotation),
+          alignment: Alignment.center,
+          child: GestureDetector(
+            onPanStart: onRevealDragStart,
+            onPanUpdate: onRevealDragUpdate,
+            onPanEnd: onRevealDragEnd,
+            child: AnimatedBuilder(
+              animation: _cardContentController,
+              builder: (context, child) {
+                return _studyCard(
+                  prompt,
+                  swipeLabel: feedbackText,
+                  swipeColor: feedbackColor,
+                  swipeOpacity: feedbackOpacity,
+                  contentOpacity: _cardContentOpacity.value,
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _studyCardShell() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDEDED),
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
+  Widget _studyCard(
+    WritingPrompt prompt, {
+    String? swipeLabel,
+    Color? swipeColor,
+    double swipeOpacity = 0,
+    double contentOpacity = 1,
+  }) {
+    final hasSwipeFeedback =
+        swipeLabel != null && swipeColor != null && swipeOpacity > 0;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: const Color(0xFFEDEDED),
         borderRadius: BorderRadius.circular(12),
+        border: hasSwipeFeedback
+            ? Border.all(
+                color: swipeColor,
+                width: 5,
+              )
+            : null,
       ),
-      child: isAnswerRevealed
-          ? _answerRevealContent(prompt)
-          : _writingContent(prompt),
+      child: Stack(
+        children: [
+          Opacity(
+            opacity: contentOpacity,
+            child: isAnswerRevealed
+                ? _answerRevealContent(prompt)
+                : _writingContent(prompt),
+          ),
+
+          if (hasSwipeFeedback)
+            Center(
+              child: Opacity(
+                opacity: swipeOpacity,
+                child: Text(
+                  swipeLabel,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: swipeColor,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -601,29 +891,29 @@ class _WritingStudyPageState extends State<WritingStudyPage> {
               builder: (context, constraints) {
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onPanStart: (d) {
+                  onPanStart: (details) {
                     final box =
                         context.findRenderObject() as RenderBox;
-                    final p = box.globalToLocal(
-                      d.globalPosition,
+                    final point = box.globalToLocal(
+                      details.globalPosition,
                     );
 
                     setState(() {
                       controller.addStroke(
-                        p,
+                        point,
                         isStart: true,
                       );
                     });
                   },
-                  onPanUpdate: (d) {
+                  onPanUpdate: (details) {
                     final box =
                         context.findRenderObject() as RenderBox;
-                    final p = box.globalToLocal(
-                      d.globalPosition,
+                    final point = box.globalToLocal(
+                      details.globalPosition,
                     );
 
                     setState(() {
-                      controller.addStroke(p);
+                      controller.addStroke(point);
                     });
                   },
                   child: CustomPaint(
@@ -701,16 +991,16 @@ class _WritingStudyPageState extends State<WritingStudyPage> {
   Widget _answerSlotRow(WritingPrompt prompt) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(prompt.slotCount, (i) {
-        final active = i == controller.activeSlotIndex;
-        final slotAnswer = controller.slotAnswers[i];
+      children: List.generate(prompt.slotCount, (index) {
+        final active = index == controller.activeSlotIndex;
+        final slotAnswer = controller.slotAnswers[index];
 
         return GestureDetector(
           onTap: () {
             if (isAnswerRevealed) return;
 
             setState(() {
-              controller.selectSlot(i);
+              controller.selectSlot(index);
             });
           },
           child: Container(

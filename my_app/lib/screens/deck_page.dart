@@ -11,7 +11,10 @@ import 'writing_study_page.dart';
 class DeckPage extends StatefulWidget {
   final Deck deck;
 
-  const DeckPage({super.key, required this.deck});
+  const DeckPage({
+    super.key,
+    required this.deck,
+  });
 
   @override
   State<DeckPage> createState() => _DeckPageState();
@@ -22,11 +25,13 @@ class _DeckPageState extends State<DeckPage> {
   bool showStarredOnly = false;
 
   bool isShuffled = false;
+  bool showFurigana = true;
+  bool termFirst = true;
   bool dataLoaded = false;
 
   int lastIndex = 0;
 
-  List<Term> shuffledTerms = [];
+  bool get usesReadingStudyOptions => widget.deck.type != DeckType.writing;
 
   @override
   void initState() {
@@ -42,10 +47,6 @@ class _DeckPageState extends State<DeckPage> {
       lastIndex = savedIndex;
       isShuffled = savedShuffle;
       dataLoaded = true;
-
-      if (isShuffled) {
-        shuffledTerms = List<Term>.from(widget.deck.terms)..shuffle();
-      }
     });
   }
 
@@ -55,16 +56,9 @@ class _DeckPageState extends State<DeckPage> {
     });
   }
 
-  void toggleShuffle() async {
+  Future<void> toggleShuffle() async {
     setState(() {
       isShuffled = !isShuffled;
-
-      if (isShuffled) {
-        shuffledTerms = List<Term>.from(widget.deck.terms)..shuffle();
-      } else {
-        shuffledTerms = [];
-      }
-
       showMenu = false;
     });
 
@@ -81,17 +75,15 @@ class _DeckPageState extends State<DeckPage> {
   }
 
   Future<void> openStudy() async {
-    List<Term> studyTerms;
-
-    if (showStarredOnly) {
-      final starred = widget.deck.terms.where((t) => t.marked).toList();
-
-      studyTerms = isShuffled ? (List<Term>.from(starred)..shuffle()) : starred;
-    } else {
-      studyTerms = isShuffled ? shuffledTerms : widget.deck.terms;
-    }
+    final baseStudyTerms = showStarredOnly
+        ? widget.deck.terms.where((term) => term.marked).toList()
+        : List<Term>.from(widget.deck.terms);
 
     if (widget.deck.type == DeckType.writing) {
+      final studyTerms = isShuffled
+          ? (List<Term>.from(baseStudyTerms)..shuffle())
+          : baseStudyTerms;
+
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -106,8 +98,11 @@ class _DeckPageState extends State<DeckPage> {
         context,
         MaterialPageRoute(
           builder: (context) => StudyPage(
-            terms: studyTerms,
+            terms: baseStudyTerms,
             deck: widget.deck,
+            initialIsShuffled: isShuffled,
+            initialShowFurigana: showFurigana,
+            initialTermFirst: termFirst,
           ),
         ),
       );
@@ -119,6 +114,20 @@ class _DeckPageState extends State<DeckPage> {
 
     setState(() {
       lastIndex = updatedIndex;
+    });
+  }
+
+  void toggleFurigana() {
+    setState(() {
+      showFurigana = !showFurigana;
+      showMenu = false;
+    });
+  }
+
+  void toggleCardOrientation() {
+    setState(() {
+      termFirst = !termFirst;
+      showMenu = false;
     });
   }
 
@@ -136,11 +145,7 @@ class _DeckPageState extends State<DeckPage> {
 
     if (!mounted) return;
 
-    setState(() {
-      if (isShuffled) {
-        shuffledTerms = List<Term>.from(widget.deck.terms)..shuffle();
-      }
-    });
+    setState(() {});
   }
 
   @override
@@ -155,7 +160,7 @@ class _DeckPageState extends State<DeckPage> {
     final List<Term> terms = widget.deck.terms;
 
     final visibleTerms =
-        showStarredOnly ? terms.where((t) => t.marked).toList() : terms;
+        showStarredOnly ? terms.where((term) => term.marked).toList() : terms;
 
     final hasProgress = lastIndex > 0;
 
@@ -178,11 +183,10 @@ class _DeckPageState extends State<DeckPage> {
                     leftIcon: Icons.arrow_back_ios_new,
                     onLeftTap: () => Navigator.pop(context),
                     title: '',
-                    rightIcon: Icons.more_horiz,
-                    onRightTap: () {
-                      setState(() {
-                        showMenu = !showMenu;
-                      });
+                    showOptionsButton: true,
+                    optionsSelected: showMenu,
+                    onOptionsTap: () {
+                      setState(() => showMenu = !showMenu);
                     },
                   ),
 
@@ -190,7 +194,7 @@ class _DeckPageState extends State<DeckPage> {
 
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+                      padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -342,76 +346,138 @@ class _DeckPageState extends State<DeckPage> {
                 ],
               ),
 
-              /// MENU
-              if (showMenu)
-                Positioned(
-                  top: 70,
-                  right: 22,
-                  child: Container(
-                    width: 220,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 10,
-                          spreadRadius: 2,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        InkWell(
-                          onTap: openDeckEdit,
-                          child: const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                Icon(Icons.edit),
-                                SizedBox(width: 10),
-                                Text('Edit Deck'),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const Divider(),
-                        InkWell(
-                          onTap: toggleShuffle,
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.shuffle, color: Colors.grey),
-                                SizedBox(width: 10),
-                                Text('Shuffle'),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const Divider(),
-                        InkWell(
-                          onTap: resetDeck,
-                          child: const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: Row(
-                              children: [
-                                Icon(Icons.refresh, color: Colors.grey),
-                                SizedBox(width: 10),
-                                Text('Reset Deck'),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              if (showMenu) _menuOverlay(),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _menuOverlay() {
+    return Positioned(
+      top: 70,
+      right: 22,
+      child: Container(
+        width: 240,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 10,
+              spreadRadius: 2,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: openDeckEdit,
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(Icons.edit),
+                    SizedBox(width: 10),
+                    Text('Edit Deck'),
+                  ],
+                ),
+              ),
+            ),
+            if (usesReadingStudyOptions) ...[
+              const Divider(),
+              InkWell(
+                onTap: toggleFurigana,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Text(
+                        'あ',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: showFurigana ? Colors.black : Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        showFurigana ? 'Hide Furigana' : 'Show Furigana',
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Divider(),
+              InkWell(
+                onTap: toggleCardOrientation,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.swap_horiz,
+                        color: termFirst ? Colors.black : Colors.grey,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Card Orientation:'),
+                            const SizedBox(height: 2),
+                            Text(
+                              termFirst ? 'Term -> Def.' : 'Def. -> Term',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            const Divider(),
+            InkWell(
+              onTap: toggleShuffle,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.shuffle,
+                      color: isShuffled ? Colors.black : Colors.grey,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(isShuffled ? 'Unshuffle' : 'Shuffle'),
+                  ],
+                ),
+              ),
+            ),
+            const Divider(),
+            InkWell(
+              onTap: resetDeck,
+              child: const Padding(
+                padding: EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh, color: Colors.grey),
+                    SizedBox(width: 10),
+                    Text('Reset Deck'),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -423,15 +489,10 @@ class _DeckPageState extends State<DeckPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFD8D8D8) : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-          ),
-        ),
+        child: Text(label),
       ),
     );
   }

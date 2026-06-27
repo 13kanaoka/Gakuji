@@ -20,6 +20,10 @@ class GakujiTopBar extends StatelessWidget {
   final Color? rightIconColor;
   final Widget? rightWidget;
 
+  final bool showOptionsButton;
+  final VoidCallback? onOptionsTap;
+  final bool optionsSelected;
+
   const GakujiTopBar({
     super.key,
     this.leftIcon,
@@ -33,12 +37,15 @@ class GakujiTopBar extends StatelessWidget {
     this.onRightTap,
     this.rightIconColor,
     this.rightWidget,
+    this.showOptionsButton = false,
+    this.onOptionsTap,
+    this.optionsSelected = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final sideWidth =
-        leftWidget != null || rightWidget != null ? buttonSize * 2 + actionGap : buttonSize;
+    final hasCustomSide = leftWidget != null || rightWidget != null;
+    final sideWidth = hasCustomSide ? buttonSize * 2 + actionGap : buttonSize;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -86,17 +93,29 @@ class GakujiTopBar extends StatelessWidget {
               width: sideWidth,
               child: Align(
                 alignment: Alignment.centerRight,
-                child: rightWidget ??
-                    _TopBarButton(
-                      icon: rightIcon,
-                      onTap: onRightTap,
-                      iconColor: rightIconColor,
-                    ),
+                child: rightWidget ?? _rightButton(),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _rightButton() {
+    if (showOptionsButton) {
+      return _TopBarButton(
+        icon: Icons.more_horiz,
+        onTap: onOptionsTap,
+        iconColor: Colors.black,
+        selected: optionsSelected,
+      );
+    }
+
+    return _TopBarButton(
+      icon: rightIcon,
+      onTap: onRightTap,
+      iconColor: rightIconColor,
     );
   }
 }
@@ -105,11 +124,13 @@ class _TopBarButton extends StatelessWidget {
   final IconData? icon;
   final VoidCallback? onTap;
   final Color? iconColor;
+  final bool selected;
 
   const _TopBarButton({
     required this.icon,
     required this.onTap,
     this.iconColor,
+    this.selected = false,
   });
 
   @override
@@ -125,7 +146,7 @@ class _TopBarButton extends StatelessWidget {
       width: GakujiTopBar.buttonSize,
       height: GakujiTopBar.buttonSize,
       child: Material(
-        color: Colors.white,
+        color: selected ? const Color(0xFFEDEDED) : Colors.white,
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),

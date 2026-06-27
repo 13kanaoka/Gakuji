@@ -17,23 +17,36 @@ class DeckEditPage extends StatefulWidget {
 }
 
 class _DeckEditPageState extends State<DeckEditPage> {
+  static const double _revealedOffset = 88;
+  static const double _firstSwipeThreshold = 42;
+  static const double _secondSwipeThreshold = 54;
+  static const double _closeSwipeThreshold = 36;
+
+  static const Duration _snapDuration = Duration(milliseconds: 220);
+  static const Duration _deleteSlideDuration = Duration(milliseconds: 240);
+
   bool showMarkedOnly = false;
 
   String searchQuery = '';
 
   /// Swipe state
   String? revealedTermId;
+  String? draggingTermId;
   double dragDistance = 0;
+
+  final Set<String> deletingTermIds = {};
 
   /// Multi-select state
   bool selectionMode = false;
   final Set<String> selectedTerms = {};
 
-  /// Search focus
+  /// Search
+  final TextEditingController searchController = TextEditingController();
   final FocusNode searchFocusNode = FocusNode();
 
   @override
   void dispose() {
+    searchController.dispose();
     searchFocusNode.dispose();
     super.dispose();
   }
@@ -43,32 +56,56 @@ class _DeckEditPageState extends State<DeckEditPage> {
   // -----------------------------
 
   void closeRevealedTerm() {
+    if (revealedTermId == null && draggingTermId == null) return;
+
     setState(() {
       revealedTermId = null;
+      draggingTermId = null;
+      dragDistance = 0;
     });
   }
 
   void clearSelection() {
+    if (!selectionMode && selectedTerms.isEmpty) return;
+
     setState(() {
       selectionMode = false;
       selectedTerms.clear();
     });
   }
 
-  void removeTermFromDeck(Term term) {
+  Future<void> removeTermFromDeck(Term term) async {
+    if (deletingTermIds.contains(term.id)) return;
+
     setState(() {
-      widget.deck.terms.removeWhere((deckTerm) => deckTerm.id == term.id);
+      deletingTermIds.add(term.id);
       revealedTermId = null;
+      draggingTermId = null;
+      dragDistance = 0;
       selectedTerms.remove(term.id);
 
       if (selectedTerms.isEmpty) {
         selectionMode = false;
       }
     });
+
+    await Future.delayed(_deleteSlideDuration);
+
+    if (!mounted) return;
+
+    setState(() {
+      widget.deck.terms.removeWhere((deckTerm) => deckTerm.id == term.id);
+      deletingTermIds.remove(term.id);
+    });
   }
 
   void toggleSelect(Term term) {
+    if (deletingTermIds.contains(term.id)) return;
+
     setState(() {
+      revealedTermId = null;
+      draggingTermId = null;
+      dragDistance = 0;
       selectionMode = true;
 
       if (selectedTerms.contains(term.id)) {
@@ -92,6 +129,8 @@ class _DeckEditPageState extends State<DeckEditPage> {
       selectedTerms.clear();
       selectionMode = false;
       revealedTermId = null;
+      draggingTermId = null;
+      dragDistance = 0;
     });
   }
 
@@ -99,29 +138,96 @@ class _DeckEditPageState extends State<DeckEditPage> {
   // SWIPE SYSTEM
   // -----------------------------
 
+  void handleSwipeStart(Term term) {
+    if (selectionMode || deletingTermIds.contains(term.id)) return;
+
+    setState(() {
+      if (revealedTermId != null && revealedTermId != term.id) {
+        revealedTermId = null;
+      }
+
+      draggingTermId = term.id;
+      dragDistance = 0;
+    });
+  }
+
+  void handleSwipeUpdate(DragUpdateDetails details) {
+    if (selectionMode || draggingTermId == null) return;
+
+    setState(() {
+      dragDistance += details.delta.dx;
+    });
+  }
+
   void handleSwipeEnd(Term term) {
-    if (selectionMode) return;
+    if (selectionMode || draggingTermId != term.id) return;
 
-    const swipeThreshold = 40.0;
-    final isRevealed = revealedTermId == term.id;
+    final wasRevealed = revealedTermId == term.id;
 
-    if (dragDistance < -swipeThreshold) {
-      if (isRevealed) {
-        removeTermFromDeck(term);
-      } else {
-        setState(() {
-          revealedTermId = term.id;
-        });
-      }
-    } else if (dragDistance > swipeThreshold) {
-      if (isRevealed) {
-        setState(() {
-          revealedTermId = null;
-        });
-      }
+    if (wasRevealed && dragDistance < -_secondSwipeThreshold) {
+      removeTermFromDeck(term);
+      return;
     }
 
-    dragDistance = 0;
+    if (!wasRevealed && dragDistance < -_firstSwipeThreshold) {
+      setState(() {
+        revealedTermId = term.id;
+        draggingTermId = null;
+        dragDistance = 0;
+      });
+      return;
+    }
+
+    if (wasRevealed && dragDistance > _closeSwipeThreshold) {
+      setState(() {
+        revealedTermId = null;
+        draggingTermId = null;
+        dragDistance = 0;
+      });
+      return;
+    }
+
+    setState(() {
+      draggingTermId = null;
+      dragDistance = 0;
+    });
+  }
+
+  double rowOffsetFor(Term term) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    if (deletingTermIds.contains(term.id)) {
+      return -screenWidth - 120;
+    }
+
+    if (selectionMode) return 0;
+
+    final isRevealed = revealedTermId == term.id;
+    final isDragging = draggingTermId == term.id;
+
+    final baseOffset = isRevealed ? -_revealedOffset : 0.0;
+
+    if (!isDragging) return baseOffset;
+
+    final rawOffset = baseOffset + dragDistance;
+
+    if (isRevealed) {
+      return rawOffset.clamp(-220.0, 0.0).toDouble();
+    }
+
+    return rawOffset.clamp(-_revealedOffset, 24.0).toDouble();
+  }
+
+  Duration rowAnimationDurationFor(Term term) {
+    if (draggingTermId == term.id) {
+      return Duration.zero;
+    }
+
+    if (deletingTermIds.contains(term.id)) {
+      return _deleteSlideDuration;
+    }
+
+    return _snapDuration;
   }
 
   // -----------------------------
@@ -180,37 +286,10 @@ class _DeckEditPageState extends State<DeckEditPage> {
                   padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
                   child: Column(
                     children: [
-                      // -----------------------------
-                      // SEARCH
-                      // -----------------------------
-                      Container(
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEDEDED),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: TextField(
-                          focusNode: searchFocusNode,
-                          onChanged: (value) {
-                            setState(() {
-                              searchQuery = value;
-                            });
-                          },
-                          decoration: const InputDecoration(
-                            hintText: 'Search',
-                            border: InputBorder.none,
-                            isCollapsed: true,
-                            contentPadding: EdgeInsets.only(top: 10),
-                          ),
-                        ),
-                      ),
+                      _searchBar(),
 
                       const SizedBox(height: 18),
 
-                      // -----------------------------
-                      // TOGGLE
-                      // -----------------------------
                       Center(
                         child: Container(
                           padding: const EdgeInsets.all(4),
@@ -234,9 +313,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
 
                       const SizedBox(height: 20),
 
-                      // -----------------------------
-                      // LIST
-                      // -----------------------------
                       Expanded(
                         child: visibleCards.isEmpty
                             ? const Center(child: Text('No cards yet'))
@@ -263,92 +339,154 @@ class _DeckEditPageState extends State<DeckEditPage> {
   }
 
   // -----------------------------
+  // SEARCH BAR
+  // -----------------------------
+
+  Widget _searchBar() {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEDEDED),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: searchController,
+              focusNode: searchFocusNode,
+              onChanged: (value) {
+                setState(() {
+                  searchQuery = value;
+                });
+              },
+              decoration: const InputDecoration(
+                hintText: 'Search',
+                border: InputBorder.none,
+                isCollapsed: true,
+              ),
+            ),
+          ),
+          if (searchQuery.isNotEmpty)
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: 32,
+                minHeight: 32,
+              ),
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: () {
+                setState(() {
+                  searchController.clear();
+                  searchQuery = '';
+                });
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  // -----------------------------
   // TERM ROW
   // -----------------------------
 
   Widget _termRow(Term term, bool isSelected) {
-    final isRevealed = revealedTermId == term.id;
+    final offset = rowOffsetFor(term);
+    final duration = rowAnimationDurationFor(term);
+    final isDeleting = deletingTermIds.contains(term.id);
 
-    return GestureDetector(
-      onLongPress: () => toggleSelect(term),
-      onTap: () {
-        if (selectionMode) {
-          toggleSelect(term);
-        } else {
-          searchFocusNode.unfocus();
-          closeRevealedTerm();
-        }
-      },
-      onHorizontalDragStart: (_) {
-        if (!selectionMode) dragDistance = 0;
-      },
-      onHorizontalDragUpdate: (details) {
-        if (!selectionMode) dragDistance += details.delta.dx;
-      },
-      onHorizontalDragEnd: (_) {
-        if (!selectionMode) handleSwipeEnd(term);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Stack(
-            children: [
-              /// DELETE BACKGROUND
-              Positioned.fill(
-                child: Container(
-                  color: Colors.redAccent,
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 24),
-                  child: const Icon(Icons.delete, color: Colors.white),
-                ),
-              ),
+    return AnimatedOpacity(
+      key: ValueKey(term.id),
+      opacity: isDeleting ? 0 : 1,
+      duration: _deleteSlideDuration,
+      curve: Curves.easeOutCubic,
+      child: GestureDetector(
+        onLongPress: () => toggleSelect(term),
+        onTap: () {
+          if (deletingTermIds.contains(term.id)) return;
 
-              /// FRONT CARD
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                transform: Matrix4.translationValues(
-                  isRevealed ? -82 : 0,
-                  0,
-                  0,
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? Colors.blue.withOpacity(0.2)
-                        : const Color(0xFFEDEDED),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              term.kanji,
-                              style: TextStyle(
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                            Text(term.reading),
-                            Text(term.meaning),
-                          ],
+          if (selectionMode) {
+            toggleSelect(term);
+          } else {
+            searchFocusNode.unfocus();
+            closeRevealedTerm();
+          }
+        },
+        onHorizontalDragStart: (_) => handleSwipeStart(term),
+        onHorizontalDragUpdate: handleSwipeUpdate,
+        onHorizontalDragEnd: (_) => handleSwipeEnd(term),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Stack(
+              children: [
+                if (!selectionMode)
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: () => removeTermFromDeck(term),
+                      child: Container(
+                        color: Colors.redAccent,
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 24),
+                        child: const Icon(
+                          Icons.delete,
+                          color: Colors.white,
                         ),
                       ),
-                      Icon(
-                        term.marked ? Icons.star : Icons.star_border,
-                        color: term.marked ? Colors.blue : Colors.grey,
-                      ),
-                    ],
+                    ),
+                  ),
+
+                AnimatedContainer(
+                  duration: duration,
+                  curve: Curves.easeOutCubic,
+                  transform: Matrix4.translationValues(offset, 0, 0),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEDEDED),
+                      borderRadius: BorderRadius.circular(12),
+                      border: isSelected
+                          ? Border.all(
+                              color: Colors.red,
+                              width: 2,
+                            )
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                term.kanji,
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                              Text(term.reading),
+                              Text(term.meaning),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          term.marked ? Icons.star : Icons.star_border,
+                          color: term.marked ? Colors.blue : Colors.grey,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
