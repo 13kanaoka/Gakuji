@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+
 import 'screens/main_shell.dart';
+import 'services/writing_recognition_service.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Start loading/downloading the Japanese handwriting model in the background.
+  // This does not block the app from opening.
+  WritingRecognitionService.ensureJapaneseModelDownloaded();
+
   runApp(const MyApp());
 }
 

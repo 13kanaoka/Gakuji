@@ -10,25 +10,6 @@ class DictionaryExample {
   });
 }
 
-class KanjiCompound {
-  final String kanji;
-  final String reading;
-  final String meaning;
-
-  /// Optional dictionary term ID.
-  ///
-  /// If this points to a real dictionary term, the kanji detail page can
-  /// open the normal dictionary detail page for this compound later.
-  final String? termId;
-
-  const KanjiCompound({
-    required this.kanji,
-    required this.reading,
-    required this.meaning,
-    this.termId,
-  });
-}
-
 class Term {
   /// Unique ID for this specific term/card.
   ///
@@ -58,23 +39,6 @@ class Term {
   final List<String> onyomi;
   final List<DictionaryExample> examples;
 
-  /// Kanji-detail data.
-  ///
-  /// These are optional so normal word entries can still use the same Term
-  /// model without needing kanji-only data.
-  final List<String> nanori;
-  final int? strokeCount;
-  final int? grade;
-  final String? jlptLevel;
-  final int? frequency;
-  final String? radical;
-  final List<String> similarKanji;
-  final List<KanjiCompound> compounds;
-
-  /// Star/focus-study marker for copied deck terms.
-  ///
-  /// This should not control the dictionary heart. The dictionary heart is
-  /// based on whether the term has been saved to a deck.
   bool marked;
 
   Term({
@@ -92,24 +56,13 @@ class Term {
     List<String>? kunyomi,
     List<String>? onyomi,
     List<DictionaryExample>? examples,
-    List<String>? nanori,
-    this.strokeCount,
-    this.grade,
-    this.jlptLevel,
-    this.frequency,
-    this.radical,
-    List<String>? similarKanji,
-    List<KanjiCompound>? compounds,
     this.marked = false,
   })  : definitions = definitions ?? const [],
         relatedTerms = relatedTerms ?? const [],
         kanjiMeaning = kanjiMeaning ?? meaning,
         kunyomi = kunyomi ?? const [],
         onyomi = onyomi ?? const [],
-        examples = examples ?? const [],
-        nanori = nanori ?? const [],
-        similarKanji = similarKanji ?? const [],
-        compounds = compounds ?? const [];
+        examples = examples ?? const [];
 
   /// Creates an independent deck-owned copy of a dictionary term.
   ///
@@ -136,14 +89,6 @@ class Term {
       kunyomi: dictionaryTerm.kunyomi,
       onyomi: dictionaryTerm.onyomi,
       examples: dictionaryTerm.examples,
-      nanori: dictionaryTerm.nanori,
-      strokeCount: dictionaryTerm.strokeCount,
-      grade: dictionaryTerm.grade,
-      jlptLevel: dictionaryTerm.jlptLevel,
-      frequency: dictionaryTerm.frequency,
-      radical: dictionaryTerm.radical,
-      similarKanji: dictionaryTerm.similarKanji,
-      compounds: dictionaryTerm.compounds,
       marked: marked,
     );
   }
@@ -158,22 +103,6 @@ class Term {
         .map((definition) => definition.trim())
         .where((definition) => definition.isNotEmpty)
         .toList();
-  }
-
-  /// Helps determine whether a term has enough data to open the kanji
-  /// dictionary detail page.
-  bool get hasKanjiDetails {
-    return kanjiMeaning.isNotEmpty ||
-        kunyomi.isNotEmpty ||
-        onyomi.isNotEmpty ||
-        nanori.isNotEmpty ||
-        strokeCount != null ||
-        grade != null ||
-        jlptLevel != null ||
-        frequency != null ||
-        radical != null ||
-        similarKanji.isNotEmpty ||
-        compounds.isNotEmpty;
   }
 
   /// Helps distinguish copied deck terms from original dictionary terms.
@@ -201,14 +130,6 @@ class Term {
     List<String>? kunyomi,
     List<String>? onyomi,
     List<DictionaryExample>? examples,
-    List<String>? nanori,
-    int? strokeCount,
-    int? grade,
-    String? jlptLevel,
-    int? frequency,
-    String? radical,
-    List<String>? similarKanji,
-    List<KanjiCompound>? compounds,
     bool? marked,
   }) {
     return Term(
@@ -226,14 +147,6 @@ class Term {
       kunyomi: kunyomi ?? this.kunyomi,
       onyomi: onyomi ?? this.onyomi,
       examples: examples ?? this.examples,
-      nanori: nanori ?? this.nanori,
-      strokeCount: strokeCount ?? this.strokeCount,
-      grade: grade ?? this.grade,
-      jlptLevel: jlptLevel ?? this.jlptLevel,
-      frequency: frequency ?? this.frequency,
-      radical: radical ?? this.radical,
-      similarKanji: similarKanji ?? this.similarKanji,
-      compounds: compounds ?? this.compounds,
       marked: marked ?? this.marked,
     );
   }

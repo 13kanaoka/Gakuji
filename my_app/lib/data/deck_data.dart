@@ -9,6 +9,7 @@ List<Term> _deckCopies(String deckId, List<String> sourceIds) {
     return Term.deckCopyFrom(
       dictionaryTerm,
       id: '${deckId}_$sourceId',
+      marked: false,
     );
   }).toList();
 }

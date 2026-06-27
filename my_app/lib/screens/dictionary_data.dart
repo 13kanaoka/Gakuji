@@ -1,6 +1,6 @@
 import '../models/term.dart';
 
-/// 📚 GLOBAL DICTIONARY
+/// GLOBAL DICTIONARY
 ///
 /// These are the original dictionary entries.
 /// Decks should not store references to these objects directly.
@@ -24,59 +24,6 @@ final List<Term> dictionaryWords = [
     kanjiMeaning: 'month, moon',
     kunyomi: const ['つき'],
     onyomi: const ['ゲツ', 'ガツ'],
-    nanori: const ['おと', 'がつ', 'す', 'ずき', 'もり'],
-    strokeCount: 4,
-    grade: 1,
-    jlptLevel: 'N5',
-    frequency: 23,
-    radical: '月 (74)',
-    similarKanji: const [
-      '日',
-      '曰',
-      '目',
-      '用',
-      '丹',
-      '且',
-      '有',
-      '肌',
-      '肖',
-      '肘',
-      '肝',
-    ],
-    compounds: const [
-      KanjiCompound(
-        kanji: '5月',
-        reading: 'ごがつ',
-        meaning: 'May',
-      ),
-      KanjiCompound(
-        kanji: '1月',
-        reading: 'いちがつ',
-        meaning: 'January',
-      ),
-      KanjiCompound(
-        kanji: '月',
-        reading: 'つき',
-        meaning: 'Moon',
-        termId: 't1',
-      ),
-      KanjiCompound(
-        kanji: '今月',
-        reading: 'こんげつ',
-        meaning: 'this month',
-        termId: 't7',
-      ),
-      KanjiCompound(
-        kanji: '先月',
-        reading: 'せんげつ',
-        meaning: 'last month',
-      ),
-      KanjiCompound(
-        kanji: '来月',
-        reading: 'らいげつ',
-        meaning: 'next month',
-      ),
-    ],
     examples: const [
       DictionaryExample(
         japanese: 'どうして月は夜輝くのか。',
@@ -106,10 +53,6 @@ final List<Term> dictionaryWords = [
     kanjiMeaning: 'day, sun',
     kunyomi: const ['ひ', 'か'],
     onyomi: const ['ニチ', 'ジツ'],
-    strokeCount: 4,
-    grade: 1,
-    jlptLevel: 'N5',
-    radical: '日 (72)',
   ),
   Term(
     id: 't3',
@@ -122,10 +65,6 @@ final List<Term> dictionaryWords = [
     kanjiMeaning: 'water',
     kunyomi: const ['みず'],
     onyomi: const ['スイ'],
-    strokeCount: 4,
-    grade: 1,
-    jlptLevel: 'N5',
-    radical: '水 (85)',
   ),
   Term(
     id: 't4',
@@ -137,10 +76,6 @@ final List<Term> dictionaryWords = [
     kanjiMeaning: 'fire',
     kunyomi: const ['ひ'],
     onyomi: const ['カ'],
-    strokeCount: 4,
-    grade: 1,
-    jlptLevel: 'N5',
-    radical: '火 (86)',
   ),
   Term(
     id: 't5',
@@ -152,10 +87,6 @@ final List<Term> dictionaryWords = [
     kanjiMeaning: 'tree, wood',
     kunyomi: const ['き'],
     onyomi: const ['モク', 'ボク'],
-    strokeCount: 4,
-    grade: 1,
-    jlptLevel: 'N5',
-    radical: '木 (75)',
   ),
   Term(
     id: 't6',
@@ -168,15 +99,6 @@ final List<Term> dictionaryWords = [
     kanjiMeaning: 'Tuesday',
     kunyomi: const ['か', 'ひ'],
     onyomi: const ['カ', 'ヨウ'],
-  ),
-  Term(
-    id: 't7',
-    kanji: '今月',
-    reading: 'こんげつ',
-    meaning: 'this month',
-    partOfSpeech: 'noun',
-    definitions: const ['this month'],
-    isCommon: true,
   ),
 ];
 
