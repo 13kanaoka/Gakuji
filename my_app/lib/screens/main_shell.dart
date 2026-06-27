@@ -13,20 +13,24 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   late final PageController pageController;
+  late final List<Widget> pages;
 
   int selectedIndex = 0;
-
-  final List<Widget> pages = const [
-    HomePage(),
-    DictionaryPage(),
-    LibraryPage(),
-  ];
+  bool isPageSwipeLocked = false;
 
   @override
   void initState() {
     super.initState();
 
     pageController = PageController(initialPage: selectedIndex);
+
+    pages = [
+      const HomePage(),
+      DictionaryPage(
+        onHandwritingInputActive: setPageSwipeLocked,
+      ),
+      const LibraryPage(),
+    ];
   }
 
   @override
@@ -35,11 +39,28 @@ class _MainShellState extends State<MainShell> {
     super.dispose();
   }
 
+  void setPageSwipeLocked(bool locked) {
+    if (isPageSwipeLocked == locked) return;
+
+    setState(() {
+      isPageSwipeLocked = locked;
+    });
+  }
+
   void goToPage(int index) {
-    if (index == selectedIndex) return;
+    if (index == selectedIndex) {
+      if (isPageSwipeLocked) {
+        setState(() {
+          isPageSwipeLocked = false;
+        });
+      }
+
+      return;
+    }
 
     setState(() {
       selectedIndex = index;
+      isPageSwipeLocked = false;
     });
 
     pageController.animateToPage(
@@ -54,9 +75,13 @@ class _MainShellState extends State<MainShell> {
     return Scaffold(
       body: PageView(
         controller: pageController,
+        physics: isPageSwipeLocked
+            ? const NeverScrollableScrollPhysics()
+            : const PageScrollPhysics(),
         onPageChanged: (index) {
           setState(() {
             selectedIndex = index;
+            isPageSwipeLocked = false;
           });
         },
         children: pages,
@@ -101,7 +126,6 @@ class _MainShellState extends State<MainShell> {
                       ),
                     ),
                   ),
-
                   Row(
                     children: [
                       _navIcon(Icons.home, 0),
