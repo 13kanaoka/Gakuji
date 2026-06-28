@@ -91,10 +91,12 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
 
               return ListTile(
                 title: Text(deck.name),
-                trailing: Icon(
-                  exists ? Icons.check : null,
-                  color: Colors.green,
-                ),
+                trailing: exists
+                    ? const Icon(
+                        Icons.check,
+                        color: Colors.green,
+                      )
+                    : null,
                 onTap: () {
                   setState(() {
                     if (!exists) {
@@ -167,7 +169,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.only(bottom: 96),
+                padding: const EdgeInsets.only(bottom: 120),
                 children: [
                   _entryHeader(word),
                   _noteSection(word),
@@ -186,7 +188,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     final definitions = word.displayDefinitions;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 25, 18, 23),
+      padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -197,20 +199,20 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                 child: Text(
                   word.kanji,
                   style: const TextStyle(
-                    fontSize: 38,
+                    fontSize: 46,
                     height: 1,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Flexible(
                 child: Padding(
                   padding: const EdgeInsets.only(bottom: 2),
                   child: Text(
                     word.reading,
                     style: const TextStyle(
-                      fontSize: 28,
+                      fontSize: 34,
                       height: 1,
                       fontWeight: FontWeight.w500,
                     ),
@@ -221,15 +223,15 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
               if (word.isCommon) _commonBadge(),
             ],
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 34),
           Text(
             word.partOfSpeech,
             style: const TextStyle(
-              fontSize: 21,
+              fontSize: 25,
               color: Colors.grey,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 6),
           ...definitions.asMap().entries.map((entry) {
             return _definitionRow(
               index: entry.key,
@@ -252,38 +254,38 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     final letter = String.fromCharCode(65 + index);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.only(bottom: 9),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 18,
-            height: 18,
-            margin: const EdgeInsets.only(top: 4),
+            width: 22,
+            height: 22,
+            margin: const EdgeInsets.only(top: 5),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
                 color: Colors.grey,
-                width: 1.7,
+                width: 2,
               ),
             ),
             child: Center(
               child: Text(
                 letter,
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 13,
                   color: Colors.grey,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: RichText(
               text: TextSpan(
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 24,
                   height: 1.25,
                   color: Colors.black,
                 ),
@@ -305,15 +307,15 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
 
   Widget _commonBadge() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
         color: accentGreen,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: const Text(
         'Common',
         style: TextStyle(
-          fontSize: 15,
+          fontSize: 18,
           color: Colors.white,
           fontWeight: FontWeight.w500,
         ),
@@ -327,11 +329,11 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       children: [
         _sectionHeader('Note'),
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 21, 18, 25),
+          padding: const EdgeInsets.fromLTRB(22, 26, 22, 30),
           child: Text(
             word.note ?? 'Write a note',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 22,
               color: word.note == null ? accentGreen : Colors.black,
             ),
           ),
@@ -342,57 +344,56 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
 
   Widget _kanjiSection(Term word) {
     final canOpenKanjiDetails = word.hasKanjiDetails;
+    final firstCharacter = word.kanji.isEmpty ? '' : word.kanji.substring(0, 1);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionHeader('Kanji'),
-        Material(
-          color: Colors.white,
-          child: InkWell(
-            onTap: canOpenKanjiDetails ? () => openKanjiDetail(word) : null,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 13),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 59,
-                    child: Text(
-                      word.kanji.isEmpty ? '' : word.kanji.substring(0, 1),
-                      style: const TextStyle(
-                        fontSize: 39,
-                        fontWeight: FontWeight.w400,
+        InkWell(
+          onTap: canOpenKanjiDetails ? () => openKanjiDetail(word) : null,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 16),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 72,
+                  child: Text(
+                    firstCharacter,
+                    style: const TextStyle(
+                      fontSize: 48,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        word.kanjiMeaning,
+                        style: const TextStyle(fontSize: 23),
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                      if (word.kunyomi.isNotEmpty)
                         Text(
-                          word.kanjiMeaning,
-                          style: const TextStyle(fontSize: 19),
+                          word.kunyomi.join(', '),
+                          style: const TextStyle(fontSize: 21),
                         ),
-                        if (word.kunyomi.isNotEmpty)
-                          Text(
-                            word.kunyomi.join(', '),
-                            style: const TextStyle(fontSize: 17),
-                          ),
-                        if (word.onyomi.isNotEmpty)
-                          Text(
-                            word.onyomi.join(', '),
-                            style: const TextStyle(fontSize: 17),
-                          ),
-                      ],
-                    ),
+                      if (word.onyomi.isNotEmpty)
+                        Text(
+                          word.onyomi.join(', '),
+                          style: const TextStyle(fontSize: 21),
+                        ),
+                    ],
                   ),
-                  Icon(
+                ),
+                if (canOpenKanjiDetails)
+                  const Icon(
                     Icons.chevron_right,
-                    size: 30,
-                    color: canOpenKanjiDetails ? Colors.grey : dividerColor,
+                    size: 36,
+                    color: Colors.grey,
                   ),
-                ],
-              ),
+              ],
             ),
           ),
         ),
@@ -409,11 +410,11 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         _sectionHeader('Examples'),
         if (examples.isEmpty)
           const Padding(
-            padding: EdgeInsets.fromLTRB(18, 20, 18, 20),
+            padding: EdgeInsets.fromLTRB(22, 24, 22, 24),
             child: Text(
               'No examples yet',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 20,
                 color: Colors.grey,
               ),
             ),
@@ -427,11 +428,11 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             );
           }),
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 15, 18, 0),
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
           child: Text(
             'More Examples',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 22,
               color: accentGreen.withOpacity(0.65),
             ),
           ),
@@ -445,7 +446,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     required bool showDivider,
   }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 0),
+      padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -459,7 +460,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                     Text(
                       example.reading,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 15,
                         height: 1.15,
                         color: Colors.black,
                       ),
@@ -468,16 +469,16 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                     Text(
                       example.japanese,
                       style: const TextStyle(
-                        fontSize: 21,
+                        fontSize: 26,
                         height: 1.3,
                         color: Colors.black,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 4),
                     Text(
                       example.english,
                       style: const TextStyle(
-                        fontSize: 21,
+                        fontSize: 25,
                         height: 1.18,
                         color: Colors.black,
                       ),
@@ -485,17 +486,17 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               const Icon(
                 Icons.chevron_right,
-                size: 28,
+                size: 34,
                 color: Colors.grey,
               ),
             ],
           ),
           if (showDivider)
             const Padding(
-              padding: EdgeInsets.only(top: 15),
+              padding: EdgeInsets.only(top: 18),
               child: Divider(
                 height: 1,
                 thickness: 1,
@@ -511,11 +512,11 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return Container(
       width: double.infinity,
       color: sectionColor,
-      padding: const EdgeInsets.fromLTRB(18, 6, 18, 6),
+      padding: const EdgeInsets.fromLTRB(22, 7, 22, 7),
       child: Text(
         title,
         style: const TextStyle(
-          fontSize: 22,
+          fontSize: 27,
           fontWeight: FontWeight.w700,
           height: 1,
         ),

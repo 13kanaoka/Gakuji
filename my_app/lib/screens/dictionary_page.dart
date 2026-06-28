@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/recent_searches.dart';
@@ -30,16 +32,22 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
   final TextEditingController searchController = TextEditingController();
 
+  Timer? searchDebounce;
+
   String searchText = '';
   String handwritingResult = '';
 
   DictionaryInputMode inputMode = DictionaryInputMode.keyboard;
 
   final List<List<WritingPoint>> handwritingStrokes = [];
+  List<Term> searchResults = [];
 
   bool isRecognizingHandwriting = false;
   bool isDictionaryLoading = true;
+  bool isSearchingDictionary = false;
   bool isHandwritingInputActive = false;
+
+  int searchRequestNumber = 0;
 
   bool get hasHandwritingInput {
     return handwritingStrokes.any((stroke) => stroke.isNotEmpty);
@@ -53,6 +61,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
   @override
   void dispose() {
+    searchDebounce?.cancel();
     setHandwritingInputActive(false);
     searchController.dispose();
     super.dispose();
@@ -75,7 +84,88 @@ class _DictionaryPageState extends State<DictionaryPage> {
     widget.onHandwritingInputActive?.call(active);
   }
 
+  void updateSearchText(
+    String value, {
+    bool clearHandwritingResult = true,
+  }) {
+    setState(() {
+      searchText = value;
+
+      if (clearHandwritingResult) {
+        handwritingResult = '';
+      }
+    });
+
+    scheduleDictionarySearch(value);
+  }
+
+  void scheduleDictionarySearch(String rawQuery) {
+    searchDebounce?.cancel();
+
+    final query = rawQuery.trim();
+
+    searchRequestNumber++;
+
+    if (query.isEmpty) {
+      setState(() {
+        searchResults = [];
+        isSearchingDictionary = false;
+      });
+
+      return;
+    }
+
+    setState(() {
+      searchResults = [];
+      isSearchingDictionary = true;
+    });
+
+    final requestNumber = searchRequestNumber;
+
+    searchDebounce = Timer(
+      const Duration(milliseconds: 280),
+      () {
+        searchDictionary(
+          query: query,
+          requestNumber: requestNumber,
+        );
+      },
+    );
+  }
+
+  Future<void> searchDictionary({
+    required String query,
+    required int requestNumber,
+  }) async {
+    final results = await DictionaryService.search(query);
+
+    if (!mounted) return;
+    if (requestNumber != searchRequestNumber) return;
+    if (query != searchText.trim()) return;
+
+    setState(() {
+      searchResults = results;
+      isSearchingDictionary = false;
+    });
+  }
+
+  void clearSearchState() {
+    searchDebounce?.cancel();
+    searchRequestNumber++;
+
+    setState(() {
+      searchController.clear();
+      searchText = '';
+      handwritingResult = '';
+      searchResults = [];
+      isSearchingDictionary = false;
+    });
+  }
+
   void addToRecentSearches(Term word) {
+    searchDebounce?.cancel();
+    searchRequestNumber++;
+
     setState(() {
       recentSearches.removeWhere(
         (recentWord) => recentWord.id == word.id,
@@ -86,6 +176,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
       searchController.clear();
       searchText = '';
       handwritingResult = '';
+      searchResults = [];
+      isSearchingDictionary = false;
     });
   }
 
@@ -116,11 +208,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 
   void clearKeyboardSearch() {
-    setState(() {
-      searchController.clear();
-      searchText = '';
-      handwritingResult = '';
-    });
+    clearSearchState();
   }
 
   void addHandwritingPoint(
@@ -142,12 +230,16 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
   void clearHandwritingBox() {
     setHandwritingInputActive(false);
+    searchDebounce?.cancel();
+    searchRequestNumber++;
 
     setState(() {
       handwritingStrokes.clear();
       handwritingResult = '';
       searchController.clear();
       searchText = '';
+      searchResults = [];
+      isSearchingDictionary = false;
     });
   }
 
@@ -205,16 +297,13 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
       isRecognizingHandwriting = false;
     });
+
+    scheduleDictionarySearch(recognizedCharacter);
   }
 
   @override
   Widget build(BuildContext context) {
     final query = searchText.trim();
-
-    final searchResults = query.isEmpty
-        ? <Term>[]
-        : DictionaryService.search(query);
-
     final wordsToShow = query.isEmpty ? recentSearches : searchResults;
 
     return Scaffold(
@@ -265,7 +354,20 @@ class _DictionaryPageState extends State<DictionaryPage> {
                           ),
                         ),
                       )
-                    else if (query.isNotEmpty && searchResults.isEmpty)
+                    else if (query.isNotEmpty &&
+                        isSearchingDictionary &&
+                        searchResults.isEmpty)
+                      const Expanded(
+                        child: Center(
+                          child: Text(
+                            'Searching...',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        ),
+                      )
+                    else if (query.isNotEmpty &&
+                        !isSearchingDictionary &&
+                        searchResults.isEmpty)
                       const Expanded(
                         child: Center(
                           child: Text(
@@ -385,12 +487,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
           Expanded(
             child: TextField(
               controller: searchController,
-              onChanged: (value) {
-                setState(() {
-                  searchText = value;
-                  handwritingResult = '';
-                });
-              },
+              onChanged: updateSearchText,
               decoration: const InputDecoration(
                 hintText: 'Search',
                 border: InputBorder.none,
