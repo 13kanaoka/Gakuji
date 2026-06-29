@@ -2,7 +2,7 @@
 
 A spaced repetition flashcard app for learning and practicing how to write the 常用漢字 (jōyō kanji), the 2,136 kanji officially designated for daily use in Japanese.
 
-Created by Matthew Rohde (Software) and Vincenzo Escobar (Illustrations & Linguistics)
+Created by Matthew Rohde (Software Development) and Vincenzo Escobar (Illustrations & Linguistics)
 
 ## What is SRS?
 
@@ -14,11 +14,9 @@ The concept is closely connected to the “forgetting curve,” first studied by
 
 Kanji, 漢字, are one of the three main writing systems used in Japanese, along with hiragana and katakana. Kanji originally came to Japan from China in the 5th century and were adapted into the Japanese language over many centuries.
 
-Hiragana and katakana are phonetic scripts, meaning each character represents a sound, but no meaning all on its own. This can be likened to a letter in the latin script such as 'A.' Kanji, however, usually represent meaning as well as pronunciation. For example, the word 行く means “to go,” and the kanji 行 carries meaning beyond just its sound.
+Hiragana and katakana are phonetic scripts, meaning each character represents a sound, but no meaning all on its own. This can be likened to a letter in the latin script such as 'a' or 'b.' Kanji, however, usually represent meaning as well as pronunciation. For example, the word 行く means “to go,” and the kanji 行 carries meaning beyond just its sound. Kanji are also used in names, allowing each name to hold special meaning and unique properties.
 
 Although there are tens of thousands of kanji, the Japanese Ministry of Education designates 2,136 characters as 常用漢字, or “daily-use kanji.” These cover most kanji commonly seen in newspapers, signs, books, official documents, and everyday life. Many adults can recognize more than this, especially depending on their education, reading habits, and personal exposure.
-
-Kanji are also commonly used in names, which allows names with the same pronunciation to have different meanings. For example, the name Miyū can be written as 実祐 (bear fruit and help others), 美憂 (beautiful and kind), and many other combinations, each giving the name a different nuance while keeping the same pronunciation.
 
 ## Why Build This App?
 
