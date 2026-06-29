@@ -3,8 +3,8 @@
 A spaced repetition flashcard app for learning and practicing how to write the 常用漢字 (jōyō kanji), the 2,136 kanji officially designated for daily use in Japanese.
 
 Created by:  
-Matthew Rohde (Software Development)  
-Vincenzo Escobar (Illustrations & Linguistics)
+Matthew Rohde <sub>Software</sub>  
+Vincenzo Escobar <sub>Illustrations & Linguistics</sub>
 
 ## What is SRS?
 
