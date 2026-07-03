@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Dictionary database is distributed via GitHub releases, not committed
+assets/dictionary/dictionary.db
