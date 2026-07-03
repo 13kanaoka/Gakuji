@@ -29,3 +29,32 @@ In the digital age, many people rely on computers and phones to convert typed ka
 For Japanese learners, this creates an even bigger challenge. Many learners choose to focus only on reading kanji and skip handwriting altogether, and this isn't entirely their fault as many learning resources only effectively teach reading rather than writing. While this can be practical, it can also create gaps in understanding. Without writing practice, it becomes harder to notice how characters are built, how components relate to each other, and why certain kanji look the way they do.
 
 We built this app to help learners practice writing kanji in a structured, consistent, and efficient way. By combining handwriting practice with spaced repetition, the goal is to make kanji study more active, memorable, and connected to long-term understanding.
+
+# Setup and Run
+**Setup**
+1) Install Xcode to your computer. Then, in the terminal, run:
+```
+sudo sh -c 'xcode-select -s /Applications/Xcode.app/Contents/Developer && xcodebuild -runFirstLaunch'
+```
+2) Accept the license:
+```
+sudo xcodebuild -license
+```
+3) Download iOS platform / simulator support
+```
+xcodebuild -downloadPlatform iOS
+```
+4) Check for validity
+```
+flutter doctor -v
+```  
+  
+**Run**
+1) While navigated to your project directory, run:
+```
+open -a simulator
+```
+2) Then, run the following command. Depending on what simulator you intend to use, the '{device name}' may change.
+```
+flutter run -d 'iPhone 17'
+```
