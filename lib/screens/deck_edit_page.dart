@@ -19,7 +19,6 @@ class DeckEditPage extends StatefulWidget {
 
 class _DeckEditPageState extends State<DeckEditPage> {
   static const Color accentBlue = Color(0xFF4D7EF7);
-  static const Color dividerGray = Color(0xFFE1E1E1);
   static const Color rowDividerGray = Color(0xFFC8C8C8);
   static const Color softTextGray = Color(0xFF8A8A8A);
 
@@ -108,7 +107,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1400),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: const Text(
             'Reading card editing is only for reading decks right now',
             textScaler: TextScaler.noScaling,

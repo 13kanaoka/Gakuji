@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -47,7 +46,7 @@ class WritingSessionController {
   List<Term> activeTerms;
 
   final List<Term> answeredTerms = [];
-  final List<_WritingHistoryEntry> history = [];
+  final List<WritingHistoryEntry> history = [];
   final List<Term> incorrectReviewTerms = [];
 
   final String deckId;
@@ -338,7 +337,7 @@ class WritingSessionController {
     final answeredTerm = activeTerms.first;
 
     history.add(
-      _WritingHistoryEntry(
+      WritingHistoryEntry(
         term: answeredTerm,
         correct: correct,
       ),
@@ -367,7 +366,7 @@ class WritingSessionController {
     final skippedTerm = activeTerms.first;
 
     history.add(
-      _WritingHistoryEntry(
+      WritingHistoryEntry(
         term: skippedTerm,
         correct: false,
       ),
@@ -1059,7 +1058,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         else
           Transform(
             transform: Matrix4.identity()
-              ..translate(revealDragOffset.dx, revealDragOffset.dy)
+              ..translateByDouble(revealDragOffset.dx, revealDragOffset.dy, 0, 1)
               ..rotateZ(rotation),
             alignment: Alignment.center,
             child: GestureDetector(
@@ -1153,7 +1152,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Text(
@@ -1688,7 +1687,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       child: GestureDetector(
         onTap: () => setState(() => showMenu = false),
         child: Container(
-          color: Colors.black.withOpacity(0.16),
+          color: Colors.black.withValues(alpha: 0.16),
           child: Center(
             child: Container(
               width: 264,
@@ -1932,11 +1931,11 @@ class _PushableState extends State<_Pushable> {
   }
 }
 
-class _WritingHistoryEntry {
+class WritingHistoryEntry {
   final Term term;
   final bool correct;
 
-  const _WritingHistoryEntry({
+  const WritingHistoryEntry({
     required this.term,
     required this.correct,
   });

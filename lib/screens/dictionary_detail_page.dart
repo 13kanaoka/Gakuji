@@ -269,11 +269,6 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     );
   }
 
-  Future<bool> _handleSystemBack() async {
-    await _handleBackTap();
-    return false;
-  }
-
   bool deckContainsWord(Deck deck) {
     return deck.terms.any((term) => term.sourceId == sourceId);
   }
@@ -390,8 +385,12 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   Widget build(BuildContext context) {
     final word = widget.word;
 
-    return WillPopScope(
-      onWillPop: _handleSystemBack,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) return;
+        _handleBackTap();
+      },
       child: Scaffold(
         backgroundColor: Colors.white,
         body: SafeArea(
@@ -1095,7 +1094,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             style: TextStyle(
               fontSize: 16,
               height: 1,
-              color: accentBlue.withOpacity(0.72),
+              color: accentBlue.withValues(alpha: 0.72),
               fontWeight: FontWeight.w500,
             ),
           ),

@@ -117,7 +117,7 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
                   );
                 },
               );
-            }).toList(),
+            }),
           ],
         );
       },
@@ -233,7 +233,7 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
                   kanji,
                   style: TextStyle(
                     fontSize: 27,
-                    color: Colors.black.withOpacity(0.25 + (index * 0.18)),
+                    color: Colors.black.withValues(alpha: 0.25 + (index * 0.18)),
                     fontWeight: FontWeight.w400,
                   ),
                 ),

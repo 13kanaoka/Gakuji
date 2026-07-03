@@ -33,8 +33,6 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
   static const Color softBlueFill = Color(0xFFF5F7FF);
   static const Color softBlueBorder = Color(0xFFEAF0FF);
 
-  static const int maxGlosses = 5;
-
   final ImagePicker imagePicker = ImagePicker();
   final Set<String> photoPathsPendingDeletion = <String>{};
 
@@ -263,7 +261,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1300),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -598,8 +596,12 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: handleBack,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) return;
+        handleBackTap();
+      },
       child: Scaffold(
         backgroundColor: Colors.white,
         body: SafeArea(
@@ -857,7 +859,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                           child: Container(
                             padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.92),
+                              color: Colors.white.withValues(alpha: 0.92),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: const Text(
@@ -880,7 +882,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                         child: Container(
                           padding: const EdgeInsets.fromLTRB(10, 6, 10, 7),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.92),
+                            color: Colors.white.withValues(alpha: 0.92),
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: const Text(
@@ -1069,12 +1071,10 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
     });
   }
 
+  // onReorderItem already adjusts newIndex for the removed item, so no
+  // manual `newIndex -= 1` correction here (unlike the old onReorder).
   void moveGloss(int oldIndex, int newIndex) {
     setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-
       final gloss = workingSelection.removeAt(oldIndex);
       workingSelection.insert(newIndex, gloss);
     });
@@ -1109,7 +1109,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
               child: ReorderableListView.builder(
                 padding: EdgeInsets.zero,
                 itemCount: workingSelection.length,
-                onReorder: moveGloss,
+                onReorderItem: moveGloss,
                 buildDefaultDragHandles: true,
                 itemBuilder: (context, index) {
                   final gloss = workingSelection[index];

@@ -4,6 +4,7 @@
 /// ✔ Term
 /// ✔ Deck.terms
 /// ✔ dictionary_data.dart
+library;
 
 @Deprecated('Use Term instead')
 class Flashcard {

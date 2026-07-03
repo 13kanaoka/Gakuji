@@ -78,7 +78,7 @@ class _LibraryPageState extends State<LibraryPage> {
       useRootNavigator: true,
       barrierDismissible: true,
       barrierLabel: 'New Deck',
-      barrierColor: Colors.black.withOpacity(0.72),
+      barrierColor: Colors.black.withValues(alpha: 0.72),
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return StatefulBuilder(
@@ -185,7 +185,7 @@ class _LibraryPageState extends State<LibraryPage> {
       useRootNavigator: true,
       barrierDismissible: true,
       barrierLabel: 'New Folder',
-      barrierColor: Colors.black.withOpacity(0.72),
+      barrierColor: Colors.black.withValues(alpha: 0.72),
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return StatefulBuilder(
@@ -1257,8 +1257,7 @@ class _Pushable extends StatefulWidget {
     required this.child,
     required this.onTap,
     this.pressedOffset = 4,
-    this.duration = const Duration(milliseconds: 90),
-  });
+  }) : duration = const Duration(milliseconds: 90);
 
   final Widget child;
   final VoidCallback? onTap;

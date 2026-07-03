@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../screens/deck_page.dart';
-import '../models/deck.dart';
 import '../data/deck_data.dart';
 
 class SmallCard extends StatelessWidget {
@@ -36,7 +35,7 @@ class SmallCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 20,
               spreadRadius: 0,
               offset: const Offset(0, 8),

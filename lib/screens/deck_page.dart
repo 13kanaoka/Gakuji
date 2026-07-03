@@ -125,7 +125,7 @@ class _DeckPageState extends State<DeckPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: const Text(
             'You can pin up to 3 decks',
             textScaler: TextScaler.noScaling,
@@ -425,7 +425,7 @@ class _DeckPageState extends State<DeckPage> {
       width: 86,
       height: 44,
       decoration: BoxDecoration(
-        color: deckBlue.withOpacity(0.84),
+        color: deckBlue.withValues(alpha: 0.84),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: deckBlue,

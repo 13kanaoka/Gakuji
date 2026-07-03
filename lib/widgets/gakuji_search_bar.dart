@@ -28,7 +28,7 @@ class GakujiSearchBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.14),
+            color: Colors.black.withValues(alpha: 0.14),
             blurRadius: 18,
             spreadRadius: 0,
             offset: const Offset(0, 8),

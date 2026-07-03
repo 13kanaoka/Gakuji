@@ -40,7 +40,6 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
   static const Color deckBlue = Color(0xFF4D7EF7);
   static const Color cardGray = Color(0xFFEDEDED);
-  static const Color softGray = Color(0xFFF7F7F7);
   static const Color dividerGray = Color(0xFFE1E1E1);
   static const Color textGray = Color(0xFF6F6F6F);
 
@@ -48,9 +47,6 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   static const Color incorrectRedOutline = Color(0xFFFF6F6F);
   static const Color correctGreen = Color(0xFFC8F29D);
   static const Color correctGreenOutline = Color(0xFFA9E67E);
-
-  static const Color knowGreen = Color(0xFF20BFA9);
-  static const Color learningOrange = Color(0xFFFFA24A);
 
   late List<Term> allTerms;
   late List<Term> activeTerms;
@@ -935,7 +931,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                             opacity: outgoingOpacity,
                             child: Transform(
                               transform: Matrix4.identity()
-                                ..translate(outgoingOffsetX, 0.0),
+                                ..translateByDouble(outgoingOffsetX, 0, 0, 1),
                               alignment: Alignment.center,
                               child: _card(
                                 outgoingCardTerm!,
@@ -946,11 +942,13 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                           ),
                         Transform(
                           transform: Matrix4.identity()
-                            ..translate(
+                            ..translateByDouble(
                               isReturningPreviousCard
                                   ? returningOffsetX
                                   : dragOffset.dx,
                               isReturningPreviousCard ? 0.0 : dragOffset.dy,
+                              0,
+                              1,
                             )
                             ..rotateZ(
                               isReturningPreviousCard ? 0.0 : rotation,
@@ -1263,7 +1261,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       child: GestureDetector(
         onTap: () => setState(() => showMenu = false),
         child: Container(
-          color: Colors.black.withOpacity(0.16),
+          color: Colors.black.withValues(alpha: 0.16),
           child: Center(
             child: Container(
               width: 264,
@@ -1517,7 +1515,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Text(
@@ -1646,7 +1644,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
             height: 132,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.72),
+              color: Colors.white.withValues(alpha: 0.72),
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Text(
@@ -1746,7 +1744,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       width: 54,
       height: 3,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.8),
+        color: Colors.white.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(999),
       ),
     );
@@ -1800,89 +1798,6 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
           ),
         );
       }).toList(),
-    );
-  }
-
-  Widget _resultBox(String label, int value, Color color) {
-    final isIncorrect = color == incorrectRed;
-
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 14,
-      ),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1F000000),
-            blurRadius: 0,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
-            ),
-          ),
-          Text(
-            '$value',
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: isIncorrect ? Colors.white : Colors.black,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _restartButton() {
-    return Container(
-      height: 52,
-      width: 180,
-      decoration: BoxDecoration(
-        color: deckBlue,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 0,
-            offset: Offset(0, 7),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: restart,
-          child: const Center(
-            child: Text(
-              'Restart',
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 

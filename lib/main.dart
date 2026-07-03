@@ -127,7 +127,7 @@ class _ScreenSizeDebugLabel extends StatelessWidget {
       bottom: 10,
       child: IgnorePointer(
         child: Material(
-          color: Colors.black.withOpacity(0.72),
+          color: Colors.black.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(8),
           child: Padding(
             padding: const EdgeInsets.symmetric(
