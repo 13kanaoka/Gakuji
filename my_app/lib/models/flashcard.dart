@@ -1,8 +1,8 @@
 /// ⚠️ LEGACY FILE (NO LONGER USED)
 ///
 /// Flashcard system has been replaced by:
-/// ✔ Term (global dictionary system)
-/// ✔ Deck.termIds
+/// ✔ Term
+/// ✔ Deck.terms
 /// ✔ dictionary_data.dart
 
 @Deprecated('Use Term instead')
