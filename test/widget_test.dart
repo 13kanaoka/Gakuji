@@ -1,30 +1,34 @@
-// This is a basic Flutter widget test.
+// Smoke test: the app boots and the main shell renders with its navigation.
 //
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+// This intentionally pumps MyApp directly instead of calling main(), so the
+// background dictionary/handwriting-model loads never start. The dictionary
+// database asset is gitignored and may be missing on fresh checkouts; nothing
+// here may depend on it.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:my_app/main.dart';
+import 'package:my_app/screens/main_shell.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
+  setUp(() {
+    // Deck/folder storage reads SharedPreferences; back it with an empty
+    // in-memory store so no platform plugin is needed.
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('app boots into the main shell', (WidgetTester tester) async {
     await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.byType(MainShell), findsOneWidget);
+
+    // The nav icons are present. "At least one" keeps this from failing if
+    // the same icon is later also used elsewhere or more nav items are added.
+    expect(find.byIcon(Icons.home), findsAtLeastNWidgets(1));
+    expect(find.byIcon(Icons.search), findsAtLeastNWidgets(1));
+    expect(find.byIcon(Icons.folder_copy_outlined), findsAtLeastNWidgets(1));
   });
 }
