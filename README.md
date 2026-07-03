@@ -27,7 +27,7 @@ After studying Japanese since 2020 and including a year studying abroad in Japan
 
 In the digital age, many people rely on computers and phones to convert typed kana into kanji automatically with a system called 自動変換 (jidōhenkan). As a result, even native speakers may sometimes forget how to write certain characters by hand, even if they can still read and recognize them without issue.
 
-For Japanese learners, this creates an even bigger challenge. Many learners choose to focus only on reading kanji and skip handwriting altogether, and this isn't entirely their fault as many learning resources only effectively teach reading rather than writing. While this can be practical, it can also create gaps in understanding. Without writing practice, it becomes harder to notice how characters are built, how components relate to each other, and why certain kanji look the way they do.
+For Japanese learners, this creates an even bigger challenge. Many learners choose to focus only on reading kanji and skip handwriting altogether, as the return on investment may seem low at first glance. While this can be practical, it can also create gaps in understanding. Without writing practice, it becomes harder to notice how characters are built, how components relate to each other, and why certain kanji look the way they do.
 
 We built this app to help learners practice writing kanji in a structured, consistent, and efficient way. By combining handwriting practice with spaced repetition, the goal is to make kanji study more active, memorable, and connected to long-term understanding.
 
