@@ -1,0 +1,23 @@
+#!/bin/sh
+# Enforces conventional commit messages: <type>(scope): description
+# Setup (once per machine): git config core.hooksPath .githooks
+
+first_line=$(head -n1 "$1")
+
+# Allow merges, reverts, and fixups through untouched
+case "$first_line" in
+  "Merge "*|"Revert "*|"fixup!"*|"squash!"*) exit 0 ;;
+esac
+
+pattern='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|rem)(\([a-z0-9_. -]+\))?!?: .+'
+
+if ! printf '%s' "$first_line" | grep -qE "$pattern"; then
+  echo "" >&2
+  echo "Commit message must follow: <type>(scope): description" >&2
+  echo "  e.g. feat(dictionary): add stroke order display" >&2
+  echo "Allowed types: feat fix docs style refactor perf test build ci chore rem" >&2
+  echo "" >&2
+  echo "Your message was saved. Retry with:" >&2
+  echo "  git commit --edit --file=.git/COMMIT_EDITMSG" >&2
+  exit 1
+fi
