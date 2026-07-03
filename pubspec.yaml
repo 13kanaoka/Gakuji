@@ -1,5 +1,5 @@
-name: my_app
-description: "A new Flutter project."
+name: gakuji
+description: "Gakuji — a Japanese kanji handwriting and flashcard study app."
 publish_to: 'none'
 
 version: 1.0.0+1
