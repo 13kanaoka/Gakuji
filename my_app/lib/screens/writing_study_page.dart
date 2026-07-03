@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/deck.dart';
 import '../models/term.dart';
@@ -10,15 +12,18 @@ import '../services/prompt_converter.dart';
 import '../services/writing_answer_checker.dart';
 import '../services/writing_recognition_service.dart';
 import '../widgets/gakuji_top_bar.dart';
+import 'deck_edit_page.dart';
 
 class WritingStudyPage extends StatefulWidget {
   final List<Term> terms;
   final Deck deck;
+  final bool initialIsShuffled;
 
   const WritingStudyPage({
     super.key,
     required this.terms,
     required this.deck,
+    this.initialIsShuffled = false,
   });
 
   @override
@@ -33,19 +38,22 @@ class WritingSessionController {
   WritingSessionController({
     required List<Term> terms,
     required this.deckId,
-  }) : prompts = terms.map(PromptConverter.fromTerm).toList() {
+  })  : allTerms = List<Term>.from(terms),
+        activeTerms = List<Term>.from(terms) {
     _initSlots();
   }
 
-  final List<WritingPrompt> prompts;
-  final String deckId;
+  List<Term> allTerms;
+  List<Term> activeTerms;
 
-  int _currentIndex = 0;
+  final List<Term> answeredTerms = [];
+  final List<_WritingHistoryEntry> history = [];
+  final List<Term> incorrectReviewTerms = [];
+
+  final String deckId;
 
   int correctCount = 0;
   int incorrectCount = 0;
-
-  final List<bool?> history = [];
 
   List<List<List<WritingPoint>>> slotStrokes = [];
   List<String?> slotAnswers = [];
@@ -57,13 +65,16 @@ class WritingSessionController {
   bool showGrid = true;
   bool hasChecked = false;
 
-  int get currentIndex => _currentIndex;
-  WritingPrompt get current => prompts[_currentIndex];
+  int get currentIndex => answeredTerms.length;
+  int get totalSessionCount => answeredTerms.length + activeTerms.length;
 
-  bool get isComplete => _currentIndex >= prompts.length;
+  bool get isComplete => activeTerms.isEmpty && allTerms.isNotEmpty;
+
+  Term get currentTerm => activeTerms.first;
+  WritingPrompt get current => PromptConverter.fromTerm(currentTerm);
 
   List<String> get currentAnswerCharacters {
-    if (prompts.isEmpty || isComplete) return [];
+    if (activeTerms.isEmpty || isComplete) return [];
 
     return current.answer.runes.map((rune) {
       return String.fromCharCode(rune);
@@ -82,8 +93,73 @@ class WritingSessionController {
     return slotAnswers.map((answer) => answer ?? '').join();
   }
 
+  bool _isSameTerm(Term first, Term second) {
+    return first.kanji == second.kanji &&
+        first.reading == second.reading &&
+        first.meaning == second.meaning;
+  }
+
+  int _termOrderIndex(Term term) {
+    final index = allTerms.indexWhere(
+      (savedTerm) => _isSameTerm(savedTerm, term),
+    );
+
+    return index == -1 ? 999999 : index;
+  }
+
+  void _sortActiveTermsToBaseOrder() {
+    activeTerms.sort((a, b) {
+      return _termOrderIndex(a).compareTo(_termOrderIndex(b));
+    });
+  }
+
+  void _addIncorrectReviewTerm(Term term) {
+    final alreadyAdded = incorrectReviewTerms.any(
+      (savedTerm) => _isSameTerm(savedTerm, term),
+    );
+
+    if (!alreadyAdded) {
+      incorrectReviewTerms.add(term);
+    }
+  }
+
+  void _removeIncorrectReviewTerm(Term term) {
+    final index = incorrectReviewTerms.indexWhere(
+      (savedTerm) => _isSameTerm(savedTerm, term),
+    );
+
+    if (index != -1) {
+      incorrectReviewTerms.removeAt(index);
+    }
+  }
+
+  void _removeAnsweredTerm(Term term) {
+    if (answeredTerms.isEmpty) return;
+
+    final lastTerm = answeredTerms.last;
+
+    if (_isSameTerm(lastTerm, term)) {
+      answeredTerms.removeLast();
+      return;
+    }
+
+    final index = answeredTerms.lastIndexWhere(
+      (savedTerm) => _isSameTerm(savedTerm, term),
+    );
+
+    if (index != -1) {
+      answeredTerms.removeAt(index);
+    }
+  }
+
+  void _saveProgress(bool saveProgress) {
+    if (!saveProgress) return;
+
+    DeckStorage.saveProgress(deckId, answeredTerms.length);
+  }
+
   void _initSlots() {
-    if (prompts.isEmpty || isComplete) {
+    if (activeTerms.isEmpty || isComplete) {
       slotStrokes = List.generate(
         1,
         (_) => <List<WritingPoint>>[],
@@ -108,15 +184,84 @@ class WritingSessionController {
     hasChecked = false;
   }
 
-  void setIndex(int index) {
-    if (prompts.isEmpty) {
-      _currentIndex = 0;
+  void restoreProgress(
+    int index, {
+    required bool shuffle,
+  }) {
+    if (allTerms.isEmpty) {
+      answeredTerms.clear();
+      activeTerms = [];
+      correctCount = 0;
+      incorrectCount = 0;
+      history.clear();
+      incorrectReviewTerms.clear();
       _initSlots();
       return;
     }
 
-    _currentIndex = index.clamp(0, prompts.length);
+    final savedCount = index.clamp(0, allTerms.length).toInt();
+
+    answeredTerms
+      ..clear()
+      ..addAll(allTerms.take(savedCount));
+
+    activeTerms = List<Term>.from(allTerms.skip(savedCount));
+
+    if (shuffle) {
+      activeTerms.shuffle();
+    }
+
+    correctCount = 0;
+    incorrectCount = 0;
+    history.clear();
+    incorrectReviewTerms.clear();
+
     _initSlots();
+  }
+
+  void replaceSessionTerms(
+    List<Term> newTerms, {
+    required bool shuffle,
+    bool saveProgress = true,
+    bool clearIncorrectReviewTerms = true,
+  }) {
+    allTerms = List<Term>.from(newTerms);
+    activeTerms = List<Term>.from(allTerms);
+
+    if (shuffle) {
+      activeTerms.shuffle();
+    }
+
+    answeredTerms.clear();
+    history.clear();
+
+    correctCount = 0;
+    incorrectCount = 0;
+
+    if (clearIncorrectReviewTerms) {
+      incorrectReviewTerms.clear();
+    }
+
+    _initSlots();
+
+    _saveProgress(saveProgress);
+  }
+
+  void updateShuffle({
+    required bool shuffled,
+    required bool saveProgress,
+  }) {
+    if (activeTerms.isEmpty) return;
+
+    if (shuffled) {
+      activeTerms.shuffle();
+    } else {
+      _sortActiveTermsToBaseOrder();
+    }
+
+    _initSlots();
+
+    _saveProgress(saveProgress);
   }
 
   void selectSlot(int index) {
@@ -184,53 +329,81 @@ class WritingSessionController {
 
   bool isStarred() => starred.contains(current.id);
 
-  void answer(bool correct) {
-    history.add(correct);
+  void answer(
+    bool correct, {
+    bool saveProgress = true,
+  }) {
+    if (activeTerms.isEmpty) return;
+
+    final answeredTerm = activeTerms.first;
+
+    history.add(
+      _WritingHistoryEntry(
+        term: answeredTerm,
+        correct: correct,
+      ),
+    );
+
+    answeredTerms.add(answeredTerm);
+    activeTerms.removeAt(0);
 
     if (correct) {
       correctCount++;
     } else {
       incorrectCount++;
+      _addIncorrectReviewTerm(answeredTerm);
     }
 
-    _currentIndex++;
     _initSlots();
 
-    DeckStorage.saveProgress(deckId, _currentIndex);
+    _saveProgress(saveProgress);
   }
 
-  void skip() {
-    history.add(false);
+  void skip({
+    bool saveProgress = true,
+  }) {
+    if (activeTerms.isEmpty) return;
+
+    final skippedTerm = activeTerms.first;
+
+    history.add(
+      _WritingHistoryEntry(
+        term: skippedTerm,
+        correct: false,
+      ),
+    );
+
+    answeredTerms.add(skippedTerm);
+    activeTerms.removeAt(0);
+
     incorrectCount++;
+    _addIncorrectReviewTerm(skippedTerm);
 
-    _currentIndex++;
     _initSlots();
 
-    DeckStorage.saveProgress(deckId, _currentIndex);
+    _saveProgress(saveProgress);
   }
 
-  void previousCard() {
-    if (_currentIndex == 0 || history.isEmpty) return;
+  void previousCard({
+    bool saveProgress = true,
+  }) {
+    if (history.isEmpty) return;
 
     final last = history.removeLast();
 
-    last == true ? correctCount-- : incorrectCount--;
+    if (last.correct) {
+      correctCount--;
+    } else {
+      incorrectCount--;
+      _removeIncorrectReviewTerm(last.term);
+    }
 
-    _currentIndex--;
-    _initSlots();
-
-    DeckStorage.saveProgress(deckId, _currentIndex);
-  }
-
-  void restartDeck() {
-    _currentIndex = 0;
-    correctCount = 0;
-    incorrectCount = 0;
-    history.clear();
+    _removeAnsweredTerm(last.term);
+    activeTerms.insert(0, last.term);
 
     _initSlots();
 
-    DeckStorage.saveProgress(deckId, _currentIndex);
+    _saveProgress(saveProgress);
   }
 }
 
@@ -244,6 +417,16 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   static const Duration _cardExitDuration = Duration(milliseconds: 140);
   static const Duration _cardContentFadeDuration = Duration(milliseconds: 120);
 
+  static const Color deckBlue = Color(0xFF4D7EF7);
+  static const Color cardGray = Color(0xFFEDEDED);
+  static const Color dividerGray = Color(0xFFE1E1E1);
+  static const Color textGray = Color(0xFF6F6F6F);
+
+  static const Color incorrectRed = Color(0xFFFF8C8C);
+  static const Color incorrectRedOutline = Color(0xFFFF6F6F);
+  static const Color correctGreen = Color(0xFFC8F29D);
+  static const Color correctGreenOutline = Color(0xFFA9E67E);
+
   late WritingSessionController controller;
 
   late AnimationController _swipeController;
@@ -254,6 +437,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
   bool isCheckingAnswer = false;
   bool showMenu = false;
+  bool isShuffled = false;
+  bool isReviewingIncorrect = false;
 
   bool isAnswerRevealed = false;
   WritingAnswerResult? answerResult;
@@ -262,14 +447,27 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   bool isRevealDragging = false;
   bool isRevealSwipingAway = false;
 
+  String get writingGridPreferenceKey {
+    return 'writing_grid_visible_${widget.deck.id}';
+  }
+
   @override
   void initState() {
     super.initState();
+
+    isShuffled = widget.initialIsShuffled;
 
     controller = WritingSessionController(
       terms: widget.terms,
       deckId: widget.deck.id,
     );
+
+    if (isShuffled) {
+      controller.updateShuffle(
+        shuffled: true,
+        saveProgress: false,
+      );
+    }
 
     _swipeController = AnimationController(
       vsync: this,
@@ -312,19 +510,36 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
   Future<void> _loadProgress() async {
     final saved = await DeckStorage.loadProgress(widget.deck.id);
+    final prefs = await SharedPreferences.getInstance();
+    final savedGridVisible = prefs.getBool(writingGridPreferenceKey);
 
-    if (!mounted) return;
+    if (!mounted || isReviewingIncorrect) return;
 
     setState(() {
-      controller.setIndex(saved);
+      controller.restoreProgress(
+        saved,
+        shuffle: isShuffled,
+      );
+
+      if (savedGridVisible != null) {
+        controller.showGrid = savedGridVisible;
+      }
+
       resetRevealState();
     });
   }
 
-  void refresh() => setState(() {});
+  Future<void> _saveGridPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setBool(
+      writingGridPreferenceKey,
+      controller.showGrid,
+    );
+  }
 
   Future<void> exitDeck() async {
-    if (controller.isComplete) {
+    if (controller.isComplete && !isReviewingIncorrect) {
       await DeckStorage.saveProgress(widget.deck.id, 0);
     }
 
@@ -340,8 +555,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   }
 
   Color? get swipeFeedbackColor {
-    if (revealDragOffset.dx > 32) return const Color(0xFF20BFA9);
-    if (revealDragOffset.dx < -32) return const Color(0xFFFFA24A);
+    if (revealDragOffset.dx > 32) return correctGreenOutline;
+    if (revealDragOffset.dx < -32) return incorrectRedOutline;
 
     return null;
   }
@@ -354,7 +569,24 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   }
 
   bool get hasNextPrompt {
-    return controller.currentIndex < controller.prompts.length - 1;
+    return controller.activeTerms.length > 1;
+  }
+
+  bool get isCheckingFinalSlot {
+    if (controller.slotAnswers.isEmpty) return false;
+
+    final emptyIndexes = <int>[];
+
+    for (int i = 0; i < controller.slotAnswers.length; i++) {
+      final answer = controller.slotAnswers[i];
+
+      if (answer == null || answer.isEmpty) {
+        emptyIndexes.add(i);
+      }
+    }
+
+    return emptyIndexes.length == 1 &&
+        emptyIndexes.first == controller.activeSlotIndex;
   }
 
   void resetRevealState({bool resetContentOpacity = true}) {
@@ -376,7 +608,102 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
     setState(() {
       showMenu = false;
-      controller.restartDeck();
+      isReviewingIncorrect = false;
+      controller.replaceSessionTerms(
+        widget.terms,
+        shuffle: isShuffled,
+        saveProgress: true,
+      );
+      resetRevealState();
+    });
+  }
+
+  void startIncorrectReview() {
+    if (controller.incorrectReviewTerms.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No incorrect answers to review.'),
+        ),
+      );
+      return;
+    }
+
+    _swipeController.stop();
+    _cardContentController.stop();
+    _cardContentController.value = 1;
+
+    final reviewTerms = List<Term>.from(controller.incorrectReviewTerms);
+
+    setState(() {
+      showMenu = false;
+      isReviewingIncorrect = true;
+      controller.replaceSessionTerms(
+        reviewTerms,
+        shuffle: isShuffled,
+        saveProgress: false,
+      );
+      resetRevealState();
+    });
+  }
+
+  void toggleGridFromMenu() {
+    if (isRevealSwipingAway) return;
+
+    setState(() {
+      controller.toggleGrid();
+      showMenu = false;
+    });
+
+    _saveGridPreference();
+  }
+
+  void toggleShuffle() {
+    if (isRevealSwipingAway) return;
+
+    _swipeController.stop();
+    _cardContentController.stop();
+
+    final nextIsShuffled = !isShuffled;
+
+    setState(() {
+      isShuffled = nextIsShuffled;
+      showMenu = false;
+
+      controller.updateShuffle(
+        shuffled: isShuffled,
+        saveProgress: !isReviewingIncorrect,
+      );
+
+      resetRevealState();
+    });
+  }
+
+  Future<void> openDeckEdit() async {
+    if (isRevealSwipingAway) return;
+
+    setState(() {
+      showMenu = false;
+    });
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DeckEditPage(deck: widget.deck),
+      ),
+    );
+
+    if (!mounted) return;
+
+    _swipeController.stop();
+    _cardContentController.stop();
+
+    setState(() {
+      isReviewingIncorrect = false;
+      controller.replaceSessionTerms(
+        widget.terms,
+        shuffle: isShuffled,
+        saveProgress: true,
+      );
       resetRevealState();
     });
   }
@@ -388,7 +715,9 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     _cardContentController.stop();
 
     setState(() {
-      controller.previousCard();
+      controller.previousCard(
+        saveProgress: !isReviewingIncorrect,
+      );
       resetRevealState();
     });
   }
@@ -400,14 +729,15 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     _cardContentController.stop();
 
     setState(() {
-      controller.skip();
+      controller.skip(
+        saveProgress: !isReviewingIncorrect,
+      );
       resetRevealState();
     });
   }
 
   void submitRevealedAnswer(bool correct) {
-    final shouldFadeInNextPrompt =
-        controller.currentIndex + 1 < controller.prompts.length;
+    final shouldFadeInNextPrompt = controller.activeTerms.length > 1;
 
     if (shouldFadeInNextPrompt) {
       _cardContentController.value = 0;
@@ -416,7 +746,10 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     }
 
     setState(() {
-      controller.answer(correct);
+      controller.answer(
+        correct,
+        saveProgress: !isReviewingIncorrect,
+      );
       resetRevealState(resetContentOpacity: false);
     });
 
@@ -607,8 +940,19 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.terms.isEmpty) {
-      return const Scaffold(body: Center(child: Text('No terms')));
+    if (controller.allTerms.isEmpty && controller.activeTerms.isEmpty) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Text(
+            'No terms',
+            style: TextStyle(
+              fontSize: 18,
+              color: textGray,
+            ),
+          ),
+        ),
+      );
     }
 
     if (controller.isComplete) {
@@ -628,78 +972,60 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         child: SafeArea(
           child: Stack(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
-                child: Column(
-                  children: [
-                    GakujiTopBar(
-                      leftIcon: Icons.close,
-                      onLeftTap: exitDeck,
-                      title:
-                          '${controller.currentIndex + 1}/${controller.prompts.length}',
-                      titleStyle: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.black,
-                      ),
-                      rightIcon: Icons.more_horiz,
-                      onRightTap: () {
-                        setState(() => showMenu = !showMenu);
-                      },
+              Column(
+                children: [
+                  GakujiTopBar(
+                    leftIcon: Icons.close,
+                    onLeftTap: exitDeck,
+                    title:
+                        '${controller.currentIndex + 1}/${controller.totalSessionCount}',
+                    titleStyle: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black,
                     ),
-
-                    const SizedBox(height: 16),
-
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 22),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
-                              children: [
-                                _counterPill(
-                                  controller.incorrectCount,
-                                  const Color(0xFFFF5A6A),
-                                ),
-                                _counterPill(
-                                  controller.correctCount,
-                                  const Color(0xFFC7F3B5),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 18),
-
-                            Expanded(
-                              child: _studyCardArea(prompt),
-                            ),
-
-                            const SizedBox(height: 16),
-
-                            Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.arrow_back),
-                                  onPressed: goBack,
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.skip_next),
-                                  onPressed: skipCard,
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                    rightIcon: Icons.more_horiz,
+                    onRightTap: () {
+                      setState(() => showMenu = !showMenu);
+                    },
+                  ),
+                  const SizedBox(height: 22),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _pill(
+                        controller.incorrectCount,
+                        incorrectRed,
+                        alignLeft: true,
                       ),
+                      _pill(
+                        controller.correctCount,
+                        correctGreen,
+                        alignLeft: false,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  Expanded(
+                    child: _studyCardArea(prompt),
+                  ),
+                  const SizedBox(height: 22),
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: 22,
+                      right: 22,
+                      bottom: 22,
                     ),
-                  ],
-                ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _circle(Icons.undo_rounded, goBack),
+                        _circle(Icons.skip_next_rounded, skipCard),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-
               if (showMenu) _menuOverlay(),
             ],
           ),
@@ -709,18 +1035,6 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   }
 
   Widget _studyCardArea(WritingPrompt prompt) {
-    if (!isAnswerRevealed) {
-      return AnimatedBuilder(
-        animation: _cardContentController,
-        builder: (context, child) {
-          return _studyCard(
-            prompt,
-            contentOpacity: _cardContentOpacity.value,
-          );
-        },
-      );
-    }
-
     final rotation =
         (revealDragOffset.dx / 700).clamp(-0.35, 0.35).toDouble();
 
@@ -731,47 +1045,61 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (hasNextPrompt)
-          Transform.scale(
-            scale: 0.96,
-            child: Opacity(
-              opacity: 0.22,
-              child: _studyCardShell(),
+        if (hasNextPrompt) _blankCardBehind(),
+        if (!isAnswerRevealed)
+          AnimatedBuilder(
+            animation: _cardContentController,
+            builder: (context, child) {
+              return _studyCard(
+                prompt,
+                contentOpacity: _cardContentOpacity.value,
+              );
+            },
+          )
+        else
+          Transform(
+            transform: Matrix4.identity()
+              ..translate(revealDragOffset.dx, revealDragOffset.dy)
+              ..rotateZ(rotation),
+            alignment: Alignment.center,
+            child: GestureDetector(
+              onPanStart: onRevealDragStart,
+              onPanUpdate: onRevealDragUpdate,
+              onPanEnd: onRevealDragEnd,
+              child: AnimatedBuilder(
+                animation: _cardContentController,
+                builder: (context, child) {
+                  return _studyCard(
+                    prompt,
+                    swipeLabel: feedbackText,
+                    swipeColor: feedbackColor,
+                    swipeOpacity: feedbackOpacity,
+                    contentOpacity: _cardContentOpacity.value,
+                  );
+                },
+              ),
             ),
           ),
-
-        Transform(
-          transform: Matrix4.identity()
-            ..translate(revealDragOffset.dx, revealDragOffset.dy)
-            ..rotateZ(rotation),
-          alignment: Alignment.center,
-          child: GestureDetector(
-            onPanStart: onRevealDragStart,
-            onPanUpdate: onRevealDragUpdate,
-            onPanEnd: onRevealDragEnd,
-            child: AnimatedBuilder(
-              animation: _cardContentController,
-              builder: (context, child) {
-                return _studyCard(
-                  prompt,
-                  swipeLabel: feedbackText,
-                  swipeColor: feedbackColor,
-                  swipeOpacity: feedbackOpacity,
-                  contentOpacity: _cardContentOpacity.value,
-                );
-              },
-            ),
-          ),
-        ),
       ],
     );
   }
 
-  Widget _studyCardShell() {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFEDEDED),
-        borderRadius: BorderRadius.circular(12),
+  Widget _blankCardBehind() {
+    return IgnorePointer(
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 28),
+        decoration: BoxDecoration(
+          color: cardGray,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x22000000),
+              blurRadius: 0,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -787,16 +1115,25 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         swipeLabel != null && swipeColor != null && swipeOpacity > 0;
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 28),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDEDED),
-        borderRadius: BorderRadius.circular(12),
+        color: cardGray,
+        borderRadius: BorderRadius.circular(24),
         border: hasSwipeFeedback
             ? Border.all(
                 color: swipeColor,
                 width: 5,
               )
             : null,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 0,
+            offset: Offset(0, 8),
+          ),
+        ],
       ),
       child: Stack(
         children: [
@@ -806,18 +1143,30 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                 ? _answerRevealContent(prompt)
                 : _writingContent(prompt),
           ),
-
           if (hasSwipeFeedback)
             Center(
               child: Opacity(
                 opacity: swipeOpacity,
-                child: Text(
-                  swipeLabel,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: swipeColor,
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 22,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Text(
+                    swipeLabel,
+                    textAlign: TextAlign.center,
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      color: swipeColor,
+                      fontSize: 34,
+                      height: 1,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.6,
+                    ),
                   ),
                 ),
               ),
@@ -832,103 +1181,115 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       children: [
         Text(
           prompt.reading,
+          textScaler: TextScaler.noScaling,
           style: const TextStyle(fontSize: 20),
         ),
-
-        const SizedBox(height: 28),
-
+        const SizedBox(height: 20),
         _answerSlotRow(prompt),
-
-        const SizedBox(height: 28),
-
+        const SizedBox(height: 20),
         Text(
           prompt.meaning,
+          textAlign: TextAlign.center,
+          textScaler: TextScaler.noScaling,
           style: const TextStyle(fontSize: 18),
         ),
-
         const Spacer(),
-
         Row(
           children: [
-            IconButton(
-              icon: Icon(
-                controller.showGrid
-                    ? Icons.visibility
-                    : Icons.visibility_off,
-              ),
-              onPressed: () {
-                setState(() {
-                  controller.toggleGrid();
-                });
-              },
-            ),
-            ElevatedButton(
-              onPressed: () {
+            _miniDeckButton(
+              label: 'Clear',
+              color: Colors.white,
+              textColor: Colors.black,
+              onTap: () {
                 setState(() {
                   controller.clearSlot();
                 });
               },
-              child: const Text('Clear'),
             ),
             const Spacer(),
-            ElevatedButton(
-              onPressed: isCheckingAnswer ? null : checkAnswer,
-              child: Text(
-                isCheckingAnswer ? 'Checking...' : 'Check',
-              ),
+            _miniDeckButton(
+              label: isCheckingAnswer
+                  ? 'Checking...'
+                  : isCheckingFinalSlot
+                      ? 'Submit'
+                      : 'Check',
+              color: deckBlue,
+              textColor: Colors.white,
+              width: isCheckingAnswer ? 104 : 74,
+              onTap: isCheckingAnswer ? null : checkAnswer,
             ),
           ],
         ),
+        const SizedBox(height: 14),
+        Center(
+          child: SizedBox(
+            width: 242,
+            height: 242,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanStart: (details) {
+                        final box =
+                            context.findRenderObject() as RenderBox;
+                        final point = box.globalToLocal(
+                          details.globalPosition,
+                        );
 
-        const SizedBox(height: 8),
+                        setState(() {
+                          controller.addStroke(
+                            point,
+                            isStart: true,
+                          );
+                        });
+                      },
+                      onPanUpdate: (details) {
+                        final box =
+                            context.findRenderObject() as RenderBox;
+                        final point = box.globalToLocal(
+                          details.globalPosition,
+                        );
 
-        /// KANJI WRITING CANVAS
-        AspectRatio(
-          aspectRatio: 1,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onPanStart: (details) {
-                    final box =
-                        context.findRenderObject() as RenderBox;
-                    final point = box.globalToLocal(
-                      details.globalPosition,
+                        setState(() {
+                          controller.addStroke(point);
+                        });
+                      },
+                      child: CustomPaint(
+                        painter: _Painter(
+                          controller.slotStrokes.isNotEmpty
+                              ? controller
+                                  .slotStrokes[controller.activeSlotIndex]
+                              : <List<WritingPoint>>[],
+                          controller.showGrid,
+                        ),
+                        child: Container(),
+                      ),
                     );
-
-                    setState(() {
-                      controller.addStroke(
-                        point,
-                        isStart: true,
-                      );
-                    });
                   },
-                  onPanUpdate: (details) {
-                    final box =
-                        context.findRenderObject() as RenderBox;
-                    final point = box.globalToLocal(
-                      details.globalPosition,
-                    );
-
-                    setState(() {
-                      controller.addStroke(point);
-                    });
-                  },
-                  child: CustomPaint(
-                    painter: _Painter(
-                      controller.slotStrokes.isNotEmpty
-                          ? controller
-                              .slotStrokes[controller.activeSlotIndex]
-                          : <List<WritingPoint>>[],
-                      controller.showGrid,
-                    ),
-                    child: Container(),
-                  ),
-                );
-              },
+                ),
+              ),
             ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'Please write your answer in the box above',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: 11,
+            height: 1,
+            fontWeight: FontWeight.w500,
+            color: textGray,
           ),
         ),
       ],
@@ -942,43 +1303,38 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       children: [
         Text(
           prompt.reading,
+          textScaler: TextScaler.noScaling,
           style: const TextStyle(fontSize: 20),
         ),
-
         const SizedBox(height: 24),
-
         _answerSlotRow(prompt),
-
         const SizedBox(height: 24),
-
         Text(
           prompt.meaning,
+          textAlign: TextAlign.center,
+          textScaler: TextScaler.noScaling,
           style: const TextStyle(fontSize: 18),
         ),
-
         const SizedBox(height: 90),
-
         Container(
           width: double.infinity,
           height: 3,
           color: Colors.black,
         ),
-
         const SizedBox(height: 40),
-
         Text(
           result?.correctAnswer ?? prompt.answer,
+          textScaler: TextScaler.noScaling,
           style: const TextStyle(
             fontSize: 48,
             color: Color(0xFF6C78FF),
           ),
         ),
-
         const Spacer(),
-
         const Text(
           'Swipe left for incorrect · Swipe right for correct',
           textAlign: TextAlign.center,
+          textScaler: TextScaler.noScaling,
           style: TextStyle(
             fontSize: 14,
             color: Colors.grey,
@@ -994,8 +1350,11 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       children: List.generate(prompt.slotCount, (index) {
         final active = index == controller.activeSlotIndex;
         final slotAnswer = controller.slotAnswers[index];
+        final slotColor =
+            active && !isAnswerRevealed ? deckBlue : Colors.black;
 
         return GestureDetector(
+          behavior: HitTestBehavior.translucent,
           onTap: () {
             if (isAnswerRevealed) return;
 
@@ -1004,31 +1363,96 @@ class _WritingStudyPageState extends State<WritingStudyPage>
             });
           },
           child: Container(
-            margin: const EdgeInsets.symmetric(
-              horizontal: 6,
-            ),
-            width: 48,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            width: 58,
             height: 48,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: active && !isAnswerRevealed
-                    ? Colors.blue
-                    : Colors.grey,
-                width: 2,
-              ),
-            ),
-            child: Text(
-              slotAnswer ?? '_',
-              style: const TextStyle(fontSize: 28),
-            ),
+            color: Colors.transparent,
+            child: slotAnswer == null || slotAnswer.isEmpty
+                ? Container(
+                    width: 50,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: slotColor,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  )
+                : Text(
+                    slotAnswer,
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      fontSize: 30,
+                      height: 1,
+                      fontWeight: FontWeight.w600,
+                      color: slotColor,
+                    ),
+                  ),
           ),
         );
       }),
     );
   }
 
+  Widget _miniDeckButton({
+    required String label,
+    required Color color,
+    required Color textColor,
+    required VoidCallback? onTap,
+    double width = 74,
+  }) {
+    final disabled = onTap == null;
+
+    return Opacity(
+      opacity: disabled ? 0.55 : 1,
+      child: _Pushable(
+        onTap: onTap,
+        pressedOffset: 6,
+        builder: (pressed) {
+          return Container(
+            width: width,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: pressed || disabled
+                  ? const []
+                  : const [
+                      BoxShadow(
+                        color: Color(0x22000000),
+                        blurRadius: 0,
+                        offset: Offset(0, 6),
+                      ),
+                    ],
+            ),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    label,
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1,
+                      fontWeight: FontWeight.w800,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _completeScreen() {
+    final total = controller.correctCount + controller.incorrectCount;
+    final percent =
+        total == 0 ? 0 : ((controller.correctCount / total) * 100).round();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -1046,66 +1470,216 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                   },
                 ),
                 Expanded(
-                  child: Stack(
-                    children: [
-                      const Center(
-                        child: Text(
-                          'Complete!',
-                          style: TextStyle(fontSize: 42),
-                        ),
-                      ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final compact =
+                          constraints.maxWidth < 390 ||
+                              constraints.maxHeight < 720;
 
-                      Positioned(
-                        top: 230,
-                        left: 0,
-                        right: 0,
+                      final donutSize = compact ? 142.0 : 164.0;
+                      final statWidth = compact ? 112.0 : 132.0;
+                      final statGap = compact ? 16.0 : 24.0;
+                      final titleTopGap = compact ? 64.0 : 92.0;
+                      final bottomReserve = compact ? 78.0 : 92.0;
+
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
                         child: Column(
                           children: [
-                            _resultBox(
-                              'Correct',
-                              controller.correctCount,
-                              const Color(0xFFC7F3B5),
+                            SizedBox(height: titleTopGap),
+                            const Text(
+                              'Complete!',
+                              textScaler: TextScaler.noScaling,
+                              style: TextStyle(
+                                fontSize: 48,
+                                height: 1,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -1.2,
+                                color: Colors.black,
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            _resultBox(
-                              'Incorrect',
-                              controller.incorrectCount,
-                              const Color(0xFFFF5A6A),
+                            const Spacer(flex: 3),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: donutSize,
+                                  height: donutSize,
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      CustomPaint(
+                                        size: Size(donutSize, donutSize),
+                                        painter: _CompletionDonutPainter(
+                                          correctCount:
+                                              controller.correctCount,
+                                          incorrectCount:
+                                              controller.incorrectCount,
+                                          correctColor: correctGreen,
+                                          incorrectColor: incorrectRedOutline,
+                                        ),
+                                      ),
+                                      Text(
+                                        '$percent%',
+                                        textScaler: TextScaler.noScaling,
+                                        style: TextStyle(
+                                          fontSize: compact ? 36 : 40,
+                                          height: 1,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.black,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                SizedBox(width: statGap),
+                                Column(
+                                  children: [
+                                    _completeStatPill(
+                                      label: 'Correct',
+                                      value: controller.correctCount,
+                                      fillColor: correctGreen,
+                                      textColor: const Color(0xFF5DCB38),
+                                      width: statWidth,
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _completeStatPill(
+                                      label: 'Incorrect',
+                                      value: controller.incorrectCount,
+                                      fillColor: incorrectRed,
+                                      textColor: incorrectRedOutline,
+                                      width: statWidth,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
+                            const Spacer(flex: 4),
+                            _completeActionButton(
+                              label: 'Restart Deck',
+                              color: deckBlue,
+                              onTap: restartDeck,
+                            ),
+                            const SizedBox(height: 22),
+                            _completeActionButton(
+                              label: 'Review Incorrect Answers',
+                              color: incorrectRedOutline,
+                              onTap: startIncorrectReview,
+                            ),
+                            SizedBox(height: bottomReserve),
                           ],
                         ),
-                      ),
-
-                      Positioned(
-                        bottom: 100,
-                        left: 0,
-                        right: 0,
-                        child: Center(
-                          child: ElevatedButton(
-                            onPressed: restartDeck,
-                            child: const Text('Restart'),
-                          ),
-                        ),
-                      ),
-
-                      Positioned(
-                        bottom: 0,
-                        left: 22,
-                        child: _circle(
-                          Icons.arrow_back_ios_new,
-                          goBack,
-                        ),
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
               ],
             ),
-
+            Positioned(
+              left: 22,
+              bottom: 18,
+              child: _circle(Icons.undo_rounded, goBack),
+            ),
             if (showMenu) _menuOverlay(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _completeStatPill({
+    required String label,
+    required int value,
+    required Color fillColor,
+    required Color textColor,
+    required double width,
+  }) {
+    return Container(
+      width: width,
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: fillColor,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 19,
+                height: 1,
+                fontWeight: FontWeight.w800,
+                color: textColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '$value',
+            textScaler: TextScaler.noScaling,
+            style: TextStyle(
+              fontSize: 19,
+              height: 1,
+              fontWeight: FontWeight.w800,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _completeActionButton({
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return _Pushable(
+      onTap: onTap,
+      pressedOffset: 8,
+      builder: (pressed) {
+        return Container(
+          width: double.infinity,
+          height: 64,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: pressed
+                ? const []
+                : const [
+                    BoxShadow(
+                      color: Color(0x22000000),
+                      blurRadius: 0,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+          ),
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  textScaler: TextScaler.noScaling,
+                  style: const TextStyle(
+                    fontSize: 26,
+                    height: 1,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1114,44 +1688,53 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       child: GestureDetector(
         onTap: () => setState(() => showMenu = false),
         child: Container(
-          color: Colors.black.withOpacity(0.2),
+          color: Colors.black.withOpacity(0.16),
           child: Center(
             child: Container(
-              width: 220,
+              width: 264,
               padding: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x26000000),
+                    blurRadius: 0,
+                    offset: Offset(0, 8),
+                  ),
+                ],
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit),
-                        SizedBox(width: 10),
-                        Text('Edit Deck'),
-                      ],
-                    ),
+                  _menuItem(
+                    icon: Icons.edit,
+                    label: 'Edit Deck',
+                    onTap: openDeckEdit,
                   ),
-                  const Divider(),
-                  InkWell(
+                  const Divider(height: 1, color: dividerGray),
+                  _menuItem(
+                    icon: controller.showGrid
+                        ? Icons.visibility
+                        : Icons.visibility_off,
+                    label: controller.showGrid ? 'Hide Grid' : 'Show Grid',
+                    iconColor:
+                        controller.showGrid ? Colors.black : Colors.grey,
+                    onTap: toggleGridFromMenu,
+                  ),
+                  const Divider(height: 1, color: dividerGray),
+                  _menuItem(
+                    icon: Icons.shuffle,
+                    label: isShuffled ? 'Unshuffle' : 'Shuffle',
+                    iconColor: isShuffled ? Colors.black : Colors.grey,
+                    onTap: toggleShuffle,
+                  ),
+                  const Divider(height: 1, color: dividerGray),
+                  _menuItem(
+                    icon: Icons.refresh,
+                    label: 'Reset Deck',
+                    iconColor: Colors.grey,
                     onTap: restartDeck,
-                    child: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.refresh,
-                            color: Colors.grey,
-                          ),
-                          SizedBox(width: 10),
-                          Text('Reset Deck'),
-                        ],
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -1162,45 +1745,201 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     );
   }
 
-  Widget _resultBox(String label, int value, Color color) {
-    return Container(
-      width: 160,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text('$value'),
-        ],
+  Widget _menuItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color iconColor = Colors.black,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: iconColor,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              textScaler: TextScaler.noScaling,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _counterPill(int value, Color color) {
+  Widget _pill(
+    int count,
+    Color color, {
+    required bool alignLeft,
+  }) {
+    final isIncorrect = color == incorrectRed;
+
     return Container(
-      width: 74,
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      width: 78,
+      height: 34,
+      padding: EdgeInsets.only(
+        left: alignLeft ? 24 : 0,
+        right: alignLeft ? 0 : 24,
+      ),
+      alignment: alignLeft ? Alignment.centerLeft : Alignment.centerRight,
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: alignLeft
+            ? const BorderRadius.horizontal(
+                right: Radius.circular(30),
+              )
+            : const BorderRadius.horizontal(
+                left: Radius.circular(30),
+              ),
+        border: Border.all(
+          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
+          width: 3,
+        ),
       ),
-      child: Text('$value', textAlign: TextAlign.center),
+      child: Text(
+        '$count',
+        textScaler: TextScaler.noScaling,
+        style: TextStyle(
+          fontSize: 24,
+          height: 1,
+          fontWeight: FontWeight.w700,
+          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
+        ),
+      ),
     );
   }
 
   Widget _circle(IconData icon, VoidCallback onTap) {
-    return CircleAvatar(
-      backgroundColor: Colors.white,
-      child: IconButton(
-        onPressed: onTap,
-        icon: Icon(icon),
+    return _Pushable(
+      onTap: onTap,
+      pressedOffset: 5,
+      builder: (pressed) {
+        return Container(
+          width: 46,
+          height: 46,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: pressed
+                ? const []
+                : const [
+                    BoxShadow(
+                      color: Color(0x1F000000),
+                      blurRadius: 0,
+                      offset: Offset(0, 5),
+                    ),
+                  ],
+          ),
+          child: Icon(
+            icon,
+            size: 25,
+            color: Colors.black,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _Pushable extends StatefulWidget {
+  final VoidCallback? onTap;
+  final Widget Function(bool pressed) builder;
+  final double pressedOffset;
+
+  const _Pushable({
+    required this.onTap,
+    required this.builder,
+    this.pressedOffset = 6,
+  });
+
+  @override
+  State<_Pushable> createState() => _PushableState();
+}
+
+class _PushableState extends State<_Pushable> {
+  static const Duration minimumPressDuration = Duration(milliseconds: 85);
+
+  bool pressed = false;
+  DateTime? pressedStartedAt;
+  int releaseRunId = 0;
+
+  void setPressed(bool value) {
+    if (!mounted || pressed == value || widget.onTap == null) return;
+
+    setState(() {
+      pressed = value;
+    });
+
+    if (value) {
+      pressedStartedAt = DateTime.now();
+    }
+  }
+
+  void releaseAfterMinimumPress() {
+    if (widget.onTap == null) return;
+
+    final runId = ++releaseRunId;
+    final startedAt = pressedStartedAt;
+    final elapsed = startedAt == null
+        ? Duration.zero
+        : DateTime.now().difference(startedAt);
+
+    final remaining = elapsed >= minimumPressDuration
+        ? Duration.zero
+        : minimumPressDuration - elapsed;
+
+    Future.delayed(remaining, () {
+      if (!mounted || runId != releaseRunId) return;
+
+      setPressed(false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = widget.onTap == null;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: disabled ? null : (_) => setPressed(true),
+      onTapUp: disabled ? null : (_) => releaseAfterMinimumPress(),
+      onTapCancel: disabled ? null : releaseAfterMinimumPress,
+      onTap: disabled ? null : widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 55),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(
+          0,
+          pressed ? widget.pressedOffset : 0,
+          0,
+        ),
+        child: widget.builder(pressed),
       ),
     );
   }
+}
+
+class _WritingHistoryEntry {
+  final Term term;
+  final bool correct;
+
+  const _WritingHistoryEntry({
+    required this.term,
+    required this.correct,
+  });
 }
 
 /* =========================
@@ -1223,16 +1962,6 @@ class _Painter extends CustomPainter {
     final grid = Paint()
       ..color = Colors.grey
       ..strokeWidth = 1;
-
-    final border = Paint()
-      ..color = Colors.grey
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.width, size.height),
-      border,
-    );
 
     if (showGrid) {
       canvas.drawLine(
@@ -1261,4 +1990,79 @@ class _Painter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+class _CompletionDonutPainter extends CustomPainter {
+  final int correctCount;
+  final int incorrectCount;
+  final Color correctColor;
+  final Color incorrectColor;
+
+  const _CompletionDonutPainter({
+    required this.correctCount,
+    required this.incorrectCount,
+    required this.correctColor,
+    required this.incorrectColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = correctCount + incorrectCount;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
+    final strokeWidth = size.width * 0.19;
+
+    final rect = Rect.fromCircle(
+      center: center,
+      radius: radius - strokeWidth / 2,
+    );
+
+    final correctPaint = Paint()
+      ..color = correctColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    final incorrectPaint = Paint()
+      ..color = incorrectColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    if (total == 0) {
+      canvas.drawArc(
+        rect,
+        -math.pi / 2,
+        math.pi * 2,
+        false,
+        incorrectPaint,
+      );
+      return;
+    }
+
+    final correctSweep = (correctCount / total) * math.pi * 2;
+    final incorrectSweep = math.pi * 2 - correctSweep;
+
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      correctSweep,
+      false,
+      correctPaint,
+    );
+
+    canvas.drawArc(
+      rect,
+      -math.pi / 2 + correctSweep,
+      incorrectSweep,
+      false,
+      incorrectPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _CompletionDonutPainter oldDelegate) {
+    return oldDelegate.correctCount != correctCount ||
+        oldDelegate.incorrectCount != incorrectCount ||
+        oldDelegate.correctColor != correctColor ||
+        oldDelegate.incorrectColor != incorrectColor;
+  }
 }

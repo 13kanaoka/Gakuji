@@ -78,12 +78,43 @@ class Term {
   /// has already been saved.
   final String? sourceId;
 
+  /// Main kanji/spelling shown for this word.
+  ///
+  /// For kana-only words like する or から, this can be empty or the same as
+  /// [reading].
   final String kanji;
+
   final String reading;
   final String meaning;
 
+  /// Alternative kanji/spellings from the dictionary source.
+  ///
+  /// Example:
+  /// 暑い with alternatives 熱い and 厚い can display as:
+  /// あつい【暑い・熱い・厚い】
+  final List<String> alternativeKanji;
+
   final String partOfSpeech;
+
+  /// Raw dictionary definitions/glosses.
+  ///
+  /// This can contain a lot of JMdict-style glosses. UI should usually use
+  /// [displayDefinitions] or [cardDefinitions] instead of showing this whole
+  /// list directly.
   final List<String> definitions;
+
+  /// Future card customization.
+  ///
+  /// These indexes point into [learnerDefinitions]. If empty, the card uses
+  /// the default top definitions.
+  final List<int> selectedDefinitionIndexes;
+
+  /// Default number of simplified gloss groups to show on deck cards.
+  ///
+  /// This keeps normal cards simple while preserving the full dictionary data
+  /// for later advanced settings.
+  final int defaultCardDefinitionLimit;
+
   final bool isCommon;
   final List<String> relatedTerms;
   final String? note;
@@ -107,8 +138,8 @@ class Term {
 
   /// Star/focus-study marker for copied deck terms.
   ///
-  /// This should not control the dictionary heart. The dictionary heart is
-  /// based on whether the term has been saved to a deck.
+  /// This should not control the dictionary save button. The dictionary save
+  /// button is based on whether the term has been saved to a deck.
   bool marked;
 
   Term({
@@ -117,8 +148,11 @@ class Term {
     required this.kanji,
     required this.reading,
     required this.meaning,
+    List<String>? alternativeKanji,
     this.partOfSpeech = 'noun',
     List<String>? definitions,
+    List<int>? selectedDefinitionIndexes,
+    this.defaultCardDefinitionLimit = 3,
     this.isCommon = false,
     List<String>? relatedTerms,
     this.note,
@@ -135,7 +169,13 @@ class Term {
     List<String>? similarKanji,
     List<KanjiCompound>? compounds,
     this.marked = false,
-  })  : definitions = definitions ?? const [],
+  })  : alternativeKanji = _cleanSpellingList(
+          alternativeKanji ?? const [],
+          primarySpelling: kanji,
+          reading: reading,
+        ),
+        definitions = definitions ?? const [],
+        selectedDefinitionIndexes = selectedDefinitionIndexes ?? const [],
         relatedTerms = relatedTerms ?? const [],
         kanjiMeaning = kanjiMeaning ?? meaning,
         kunyomi = kunyomi ?? const [],
@@ -146,14 +186,35 @@ class Term {
         compounds = compounds ?? const [];
 
   factory Term.fromJson(Map<String, dynamic> json) {
+    final kanji = json['kanji']?.toString() ?? '';
+    final reading = json['reading']?.toString() ?? '';
+
+    final directAlternatives = _stringList(json['alternativeKanji']);
+    final legacyAlternatives = _stringList(json['alternativeSpellings']);
+    final spellingList = _stringList(json['kanjiSpellings']);
+
+    final alternativeKanji = _cleanSpellingList(
+      [
+        ...directAlternatives,
+        ...legacyAlternatives,
+        ...spellingList,
+      ],
+      primarySpelling: kanji,
+      reading: reading,
+    );
+
     return Term(
       id: json['id']?.toString() ?? '',
       sourceId: _nullableString(json['sourceId']),
-      kanji: json['kanji']?.toString() ?? '',
-      reading: json['reading']?.toString() ?? '',
+      kanji: kanji,
+      reading: reading,
       meaning: json['meaning']?.toString() ?? '',
+      alternativeKanji: alternativeKanji,
       partOfSpeech: json['partOfSpeech']?.toString() ?? 'noun',
       definitions: _stringList(json['definitions']),
+      selectedDefinitionIndexes: _intList(json['selectedDefinitionIndexes']),
+      defaultCardDefinitionLimit:
+          _nullableInt(json['defaultCardDefinitionLimit']) ?? 3,
       isCommon: json['isCommon'] == true,
       relatedTerms: _stringList(json['relatedTerms']),
       note: _nullableString(json['note']),
@@ -180,8 +241,13 @@ class Term {
       'kanji': kanji,
       'reading': reading,
       'meaning': meaning,
+      if (alternativeKanji.isNotEmpty) 'alternativeKanji': alternativeKanji,
       'partOfSpeech': partOfSpeech,
       'definitions': definitions,
+      if (selectedDefinitionIndexes.isNotEmpty)
+        'selectedDefinitionIndexes': selectedDefinitionIndexes,
+      if (defaultCardDefinitionLimit != 3)
+        'defaultCardDefinitionLimit': defaultCardDefinitionLimit,
       'isCommon': isCommon,
       'relatedTerms': relatedTerms,
       if (note != null) 'note': note,
@@ -217,8 +283,11 @@ class Term {
       kanji: dictionaryTerm.kanji,
       reading: dictionaryTerm.reading,
       meaning: dictionaryTerm.meaning,
+      alternativeKanji: dictionaryTerm.alternativeKanji,
       partOfSpeech: dictionaryTerm.partOfSpeech,
       definitions: dictionaryTerm.definitions,
+      selectedDefinitionIndexes: dictionaryTerm.selectedDefinitionIndexes,
+      defaultCardDefinitionLimit: dictionaryTerm.defaultCardDefinitionLimit,
       isCommon: dictionaryTerm.isCommon,
       relatedTerms: dictionaryTerm.relatedTerms,
       note: dictionaryTerm.note,
@@ -238,16 +307,126 @@ class Term {
     );
   }
 
-  List<String> get displayDefinitions {
+  /// Main + alternative kanji spellings for display.
+  ///
+  /// This excludes kana-only spellings and duplicates.
+  List<String> get kanjiSpellings {
+    return _cleanSpellingList(
+      [
+        kanji,
+        ...alternativeKanji,
+      ],
+      primarySpelling: '',
+      reading: reading,
+    );
+  }
+
+  /// Text that should appear inside Japanese corner brackets.
+  ///
+  /// Example:
+  /// あつい【暑い・熱い・厚い】
+  ///
+  /// Kana-only words return an empty string, so the UI can hide the brackets.
+  String get kanjiBracketText {
+    return kanjiSpellings.join('・');
+  }
+
+  bool get hasKanjiBracketText {
+    return kanjiBracketText.isNotEmpty;
+  }
+
+  /// Full raw definitions.
+  ///
+  /// This preserves the original dictionary gloss data. Use this later for
+  /// advanced definition selection.
+  List<String> get rawDefinitions {
     if (definitions.isNotEmpty) {
-      return definitions;
+      return _cleanDefinitionList(definitions);
     }
 
-    return meaning
-        .split('/')
-        .map((definition) => definition.trim())
-        .where((definition) => definition.isNotEmpty)
+    return _cleanDefinitionList(meaning.split('/'));
+  }
+
+  /// Learner-facing definitions.
+  ///
+  /// This groups long gloss lists into fewer rows so entries like する do not
+  /// flood the dictionary detail page with too many tiny meanings.
+  List<String> get learnerDefinitions {
+    final raw = rawDefinitions;
+
+    if (raw.isEmpty) return const [];
+
+    if (raw.length <= 4) {
+      return raw;
+    }
+
+    if (raw.length <= 8) {
+      return _groupDefinitions(
+        raw,
+        groupSize: 2,
+        maxGroups: 4,
+      );
+    }
+
+    return _groupDefinitions(
+      raw,
+      groupSize: 3,
+      maxGroups: 4,
+    );
+  }
+
+  /// Primary definitions shown in dictionary UI.
+  ///
+  /// This intentionally uses the simplified learner layer instead of raw
+  /// JMdict glosses.
+  List<String> get displayDefinitions {
+    return learnerDefinitions;
+  }
+
+  /// Definitions shown on the back of deck cards.
+  ///
+  /// By default, this uses the top 3 learner definitions. Later, advanced
+  /// card settings can populate [selectedDefinitionIndexes] to customize this.
+  List<String> get cardDefinitions {
+    final learner = learnerDefinitions;
+
+    if (learner.isEmpty) return const [];
+
+    final selected = selectedDefinitionIndexes
+        .where((index) => index >= 0 && index < learner.length)
+        .map((index) => learner[index])
         .toList();
+
+    if (selected.isNotEmpty) {
+      return selected;
+    }
+
+    final limit =
+        defaultCardDefinitionLimit <= 0 ? 3 : defaultCardDefinitionLimit;
+
+    return learner.take(limit).toList();
+  }
+
+  /// One-line card meaning.
+  ///
+  /// Useful for simple card backs or compact previews.
+  String get cardMeaning {
+    final definitions = cardDefinitions;
+
+    if (definitions.isEmpty) return meaning;
+
+    return definitions.join('; ');
+  }
+
+  /// Whether there is extra raw dictionary data hidden behind the learner view.
+  bool get hasMoreDefinitions {
+    return rawDefinitions.length > learnerDefinitions.length;
+  }
+
+  int get hiddenDefinitionCount {
+    final hidden = rawDefinitions.length - learnerDefinitions.length;
+
+    return hidden < 0 ? 0 : hidden;
   }
 
   /// Helps determine whether a term has enough real kanji data to open the
@@ -281,8 +460,11 @@ class Term {
     String? kanji,
     String? reading,
     String? meaning,
+    List<String>? alternativeKanji,
     String? partOfSpeech,
     List<String>? definitions,
+    List<int>? selectedDefinitionIndexes,
+    int? defaultCardDefinitionLimit,
     bool? isCommon,
     List<String>? relatedTerms,
     String? note,
@@ -306,8 +488,13 @@ class Term {
       kanji: kanji ?? this.kanji,
       reading: reading ?? this.reading,
       meaning: meaning ?? this.meaning,
+      alternativeKanji: alternativeKanji ?? this.alternativeKanji,
       partOfSpeech: partOfSpeech ?? this.partOfSpeech,
       definitions: definitions ?? this.definitions,
+      selectedDefinitionIndexes:
+          selectedDefinitionIndexes ?? this.selectedDefinitionIndexes,
+      defaultCardDefinitionLimit:
+          defaultCardDefinitionLimit ?? this.defaultCardDefinitionLimit,
       isCommon: isCommon ?? this.isCommon,
       relatedTerms: relatedTerms ?? this.relatedTerms,
       note: note ?? this.note,
@@ -350,6 +537,12 @@ List<String> _stringList(dynamic value) {
   return value.map((item) => item.toString()).toList();
 }
 
+List<int> _intList(dynamic value) {
+  if (value is! List) return const [];
+
+  return value.map(_nullableInt).whereType<int>().toList();
+}
+
 List<DictionaryExample> _dictionaryExamples(dynamic value) {
   if (value is! List) return const [];
 
@@ -366,4 +559,78 @@ List<KanjiCompound> _kanjiCompounds(dynamic value) {
       .whereType<Map<String, dynamic>>()
       .map(KanjiCompound.fromJson)
       .toList();
+}
+
+List<String> _cleanDefinitionList(Iterable<dynamic> values) {
+  final cleaned = <String>[];
+  final seen = <String>{};
+
+  for (final value in values) {
+    final definition = value.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
+
+    if (definition.isEmpty) continue;
+
+    final key = definition.toLowerCase();
+
+    if (seen.contains(key)) continue;
+
+    seen.add(key);
+    cleaned.add(definition);
+  }
+
+  return cleaned;
+}
+
+List<String> _cleanSpellingList(
+  Iterable<dynamic> values, {
+  required String primarySpelling,
+  required String reading,
+}) {
+  final cleaned = <String>[];
+  final seen = <String>{};
+
+  final normalizedPrimary = primarySpelling.trim();
+  final normalizedReading = reading.trim();
+
+  for (final value in values) {
+    final spelling = value.toString().replaceAll(RegExp(r'\s+'), '').trim();
+
+    if (spelling.isEmpty) continue;
+    if (spelling == normalizedPrimary && cleaned.isNotEmpty) continue;
+    if (spelling == normalizedReading) continue;
+    if (!_containsKanji(spelling)) continue;
+
+    final key = spelling.toLowerCase();
+
+    if (seen.contains(key)) continue;
+
+    seen.add(key);
+    cleaned.add(spelling);
+  }
+
+  return cleaned;
+}
+
+List<String> _groupDefinitions(
+  List<String> definitions, {
+  required int groupSize,
+  required int maxGroups,
+}) {
+  final grouped = <String>[];
+
+  for (var index = 0; index < definitions.length; index += groupSize) {
+    if (grouped.length >= maxGroups) break;
+
+    final group = definitions.skip(index).take(groupSize).toList();
+
+    if (group.isEmpty) continue;
+
+    grouped.add(group.join('; '));
+  }
+
+  return grouped;
+}
+
+bool _containsKanji(String text) {
+  return RegExp(r'[\u4E00-\u9FFF]').hasMatch(text);
 }

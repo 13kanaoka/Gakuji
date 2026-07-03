@@ -17,6 +17,7 @@ dependencies:
   sqflite: ^2.4.3
   path: ^1.9.1
   path_provider: ^2.1.6
+  image_picker: ^1.2.3
 
 dev_dependencies:
   flutter_test:
@@ -28,4 +29,7 @@ flutter:
   uses-material-design: true
 
   assets:
-    - assets/dictionary/
+    - assets/dictionary/dictionary.db
+    - assets/images/deck_watermark_1.png
+    - assets/images/deck_watermark_2.png
+    - assets/images/deck_watermark_3.png
