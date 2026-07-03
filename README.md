@@ -1,6 +1,8 @@
 # Gakuji - an SRS Kanji Handwriting App
 
-A spaced repetition flashcard app for learning and practicing how to write the 常用漢字 (jōyō kanji), the 2,136 kanji officially designated for daily use in Japanese. Brought to you by Matthew Rohde <small>(Software Development)</small> & Vincenzo Escobar <small>(Illustrations & Linguistics)</small>.
+A spaced repetition flashcard app for learning and practicing how to write the 常用漢字 (jōyō kanji), the 2,136 kanji officially designated for daily use in Japanese. 
+
+Brought to you by **Matthew Rohde** <sub><sup>(Software Development)</sup></sub> and **Vincenzo Escobar** <sub><sup>(Linguistics, Illustrations)</sup></sub>
 
 [→ Setup and Run Guide](#setup-and-run-guide)
 
@@ -30,6 +32,7 @@ For Japanese learners, this creates an even bigger challenge. Many learners choo
 We built this app to help learners practice writing kanji in a structured, consistent, and efficient way. By combining handwriting practice with spaced repetition, the goal is to make kanji study more active, memorable, and connected to long-term understanding.
 
 # Setup and Run Guide
+### Mac
 **Setup**
 1) Install Xcode to your computer. Then, in the terminal, run:
 ```
