@@ -33,20 +33,38 @@ We built this app to help learners practice writing kanji in a structured, consi
 
 # Setup and Run Guide
 ### Mac
-**Setup**
-1) Install Xcode to your computer. Then, in the terminal, run:
+**Setup**  
+0) Install Flutter SDK (if you don't already have it):  
+```
+https://docs.flutter.dev/install
+```  
+1) Clone the repository and install dependencies:  
+```  
+git clone git@github.com:13kanaoka/Gakuji.git
+cd Gakuji
+flutter pub get
+```   
+2) Download `dictionary.db` from the [Releases page](https://github.com/13kanaoka/Gakuji/releases/tag/assets-dictionary) and place it at:  
+```
+assets/dictionary/dictionary.db
+```  
+3) (Contributors) Activate the git hooks so commit messages are checked locally:  
+```
+git config core.hooksPath .githooks
+```  
+4) Install Xcode to your computer. Then, in the terminal, run:
 ```
 sudo sh -c 'xcode-select -s /Applications/Xcode.app/Contents/Developer && xcodebuild -runFirstLaunch'
 ```
-2) Accept the license:
+5) Accept the license:
 ```
 sudo xcodebuild -license
 ```
-3) Download iOS platform / simulator support
+6) Download iOS platform / simulator support
 ```
 xcodebuild -downloadPlatform iOS
 ```
-4) Check for validity
+7) Check for validity
 ```
 flutter doctor -v
 ```  
@@ -56,7 +74,7 @@ flutter doctor -v
 ```
 open -a simulator
 ```
-2) Then, run the following command. Depending on what simulator you intend to use, the '{device name}' may change.
+2) Then, run the following command. replace {device name} with whatever simulator you end up using.
 ```
-flutter run -d 'iPhone 17'
+flutter run -d '{device name}'
 ```
