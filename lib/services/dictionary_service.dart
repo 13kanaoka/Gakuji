@@ -12,7 +12,7 @@ class DictionaryService {
   static const String dictionaryAssetPath = 'assets/dictionary/dictionary.db';
  /// Whenever you regenerate assets/dictionary/dictionary.db,
  ///increase the dictionary version by 1, ex: v7,v8, etc.///
-  static const String dictionaryDatabaseFileName = 'dictionary_v6.db';
+  static const String dictionaryDatabaseFileName = 'dictionary_v7.db';
 
   static Database? _database;
   static Future<void>? _loadFuture;

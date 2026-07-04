@@ -56,6 +56,11 @@ jobs:
           channel: stable
           cache: true
 
+      # dictionary.db is gitignored (download from Releases or regenerate
+      # with tools/convert_jmdict_to_sqlite.py); the analyzer only checks
+      # the declared asset file exists, so an empty stand-in satisfies it.
+      - run: touch assets/dictionary/dictionary.db
+
       - run: flutter pub get
 
       - run: flutter analyze --fatal-infos
