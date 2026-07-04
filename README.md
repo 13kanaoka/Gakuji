@@ -78,3 +78,5 @@ open -a simulator
 ```
 flutter run -d '{device name}'
 ```
+
+### Windows (coming shortly)
