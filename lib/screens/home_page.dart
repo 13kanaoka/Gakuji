@@ -41,16 +41,13 @@ class _HomePageState extends State<HomePage> {
                     Column(
                       children: [
                         for (final deck in dailyDecks) ...[
-                          _deckCard(
-                            context: context,
-                            deck: deck,
-                          ),
+                          _deckCard(context: context, deck: deck),
                           const SizedBox(height: 18),
                         ],
                       ],
                     ),
                   const SizedBox(height: 12),
-                  _sectionTitle('Decks'),
+                  _sectionTitle('Pinned'),
                   const SizedBox(height: 16),
                   if (pinnedDecks.isEmpty)
                     _emptySectionText('No pinned decks yet')
@@ -58,10 +55,7 @@ class _HomePageState extends State<HomePage> {
                     Column(
                       children: [
                         for (final deck in pinnedDecks) ...[
-                          _deckCard(
-                            context: context,
-                            deck: deck,
-                          ),
+                          _deckCard(context: context, deck: deck),
                           const SizedBox(height: 18),
                         ],
                       ],
@@ -80,7 +74,7 @@ class _HomePageState extends State<HomePage> {
 
     return Container(
       width: double.infinity,
-      height: topInset + 96,
+      height: topInset + 58,
       color: HomePage.deckBlue,
       padding: EdgeInsets.fromLTRB(28, topInset + 18, 28, 18),
       child: Stack(
@@ -97,44 +91,21 @@ class _HomePageState extends State<HomePage> {
               color: Colors.white,
             ),
           ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _settingsButton(),
-          ),
+          Align(alignment: Alignment.centerRight, child: _settingsButton()),
         ],
       ),
     );
   }
 
   Widget _settingsButton() {
-    return Container(
-      width: 38,
-      height: 38,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: HomePage.outlineGray,
-          width: 2.5,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x4D000000),
-            blurRadius: 0,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
+    return Transform.translate(
+      offset: const Offset(8, 0),
       child: IconButton(
         padding: EdgeInsets.zero,
-        icon: const Icon(
-          Icons.settings,
-          color: Color(0xFF666666),
-          size: 22,
-        ),
+        constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+        icon: const Icon(Icons.settings, color: Colors.white, size: 22),
         onPressed: () {
-          // settings page later
+          // TODO: Settings page
         },
       ),
     );
@@ -153,10 +124,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _deckCard({
-    required BuildContext context,
-    required Deck deck,
-  }) {
+  Widget _deckCard({required BuildContext context, required Deck deck}) {
     return GakujiDeckCard(
       title: deck.name,
       subtitle: _deckTypeLabel(deck.type),
@@ -166,9 +134,7 @@ class _HomePageState extends State<HomePage> {
       onTap: () async {
         await Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => DeckPage(deck: deck),
-          ),
+          MaterialPageRoute(builder: (context) => DeckPage(deck: deck)),
         );
 
         if (!mounted) return;
@@ -184,10 +150,7 @@ class _HomePageState extends State<HomePage> {
       child: Text(
         text,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          color: Colors.grey,
-          fontSize: 16,
-        ),
+        style: const TextStyle(color: Colors.grey, fontSize: 16),
       ),
     );
   }

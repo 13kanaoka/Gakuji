@@ -457,7 +457,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
     final query = searchText.trim();
     final wordsToShow = query.isEmpty ? recentSearches : searchResults;
     final writingPanelHeight = _writingPanelHeight(context);
-    final headerHeight = MediaQuery.of(context).padding.top + 96;
+    final headerHeight = MediaQuery.of(context).padding.top + 58;
     final bottomResultsPadding = inputMode == DictionaryInputMode.writing
         ? writingPanelHeight + 92
         : shouldShowInputAccessoryBar
@@ -526,7 +526,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
     return Container(
       width: double.infinity,
-      height: topInset + 96,
+      height: topInset + 58,
       color: accentBlue,
       padding: EdgeInsets.fromLTRB(28, topInset + 18, 28, 18),
       child: const Stack(
