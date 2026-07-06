@@ -128,7 +128,7 @@ class _MainShellState extends State<MainShell> {
     return Positioned(
       left: 16,
       right: 16,
-      bottom: bottomInset + 16,
+      bottom: bottomInset,
       child: IgnorePointer(
         ignoring: isMainShellHidden,
         child: AnimatedSlide(
