@@ -40,6 +40,7 @@ class _LibraryPageState extends State<LibraryPage> {
   final TextEditingController searchController = TextEditingController();
   final TextEditingController deckNameController = TextEditingController();
   final TextEditingController folderNameController = TextEditingController();
+  final FocusNode searchFocusNode = FocusNode();
 
   String searchQuery = '';
 
@@ -56,6 +57,7 @@ class _LibraryPageState extends State<LibraryPage> {
     searchController.dispose();
     deckNameController.dispose();
     folderNameController.dispose();
+    searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -376,7 +378,9 @@ class _LibraryPageState extends State<LibraryPage> {
       body: Stack(
         children: [
           GestureDetector(
+            behavior: HitTestBehavior.translucent,
             onTap: () {
+              FocusScope.of(context).unfocus();
               if (showMenu) {
                 setState(() {
                   showMenu = false;
@@ -396,11 +400,12 @@ class _LibraryPageState extends State<LibraryPage> {
                             : _folderContent(visibleFolders),
                       ),
                       Positioned(
-                        top: 18,
+                        top: 8,
                         left: 18,
                         right: 18,
                         child: GakujiSearchBar(
                           controller: searchController,
+                          focusNode: searchFocusNode,
                           hintText: 'Search',
                           showClearButton: searchQuery.isNotEmpty,
                           onChanged: (value) {
