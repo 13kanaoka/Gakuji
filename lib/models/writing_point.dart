@@ -3,22 +3,14 @@ class WritingPoint {
   final double y;
   final int time;
 
-  const WritingPoint({
-    required this.x,
-    required this.y,
-    required this.time,
-  });
+  const WritingPoint({required this.x, required this.y, required this.time});
 
   factory WritingPoint.fromOffset({
     required double x,
     required double y,
     required int time,
   }) {
-    return WritingPoint(
-      x: x,
-      y: y,
-      time: time,
-    );
+    return WritingPoint(x: x, y: y, time: time);
   }
 
   @override

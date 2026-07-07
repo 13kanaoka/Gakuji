@@ -2,16 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../models/deck.dart';
 import '../models/term.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'reading_card_edit_page.dart';
 
 class DeckEditPage extends StatefulWidget {
   final Deck deck;
 
-  const DeckEditPage({
-    super.key,
-    required this.deck,
-  });
+  const DeckEditPage({super.key, required this.deck});
 
   @override
   State<DeckEditPage> createState() => _DeckEditPageState();
@@ -86,9 +84,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
     });
   }
 
-  void setTermFilter({
-    required bool starredOnly,
-  }) {
+  void setTermFilter({required bool starredOnly}) {
     setState(() {
       showStarredOnly = starredOnly;
       showMenu = false;
@@ -108,14 +104,10 @@ class _DeckEditPageState extends State<DeckEditPage> {
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1400),
           backgroundColor: Colors.black.withValues(alpha: 0.86),
-          content: const Text(
+          content: Text(
             'Reading card editing is only for reading decks right now',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
+            style: AppText.fieldLabel.copyWith(color: Colors.white),
           ),
         ),
       );
@@ -170,9 +162,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
 
   void deleteSelected() {
     setState(() {
-      widget.deck.terms.removeWhere(
-        (term) => selectedTerms.contains(term.id),
-      );
+      widget.deck.terms.removeWhere((term) => selectedTerms.contains(term.id));
 
       selectedTerms.clear();
       selectionMode = false;
@@ -203,10 +193,8 @@ class _DeckEditPageState extends State<DeckEditPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ReadingCardEditPage(
-          deck: widget.deck,
-          term: term,
-        ),
+        builder: (context) =>
+            ReadingCardEditPage(deck: widget.deck, term: term),
       ),
     );
   }
@@ -309,7 +297,8 @@ class _DeckEditPageState extends State<DeckEditPage> {
     final normalizedSearch = searchQuery.trim().toLowerCase();
 
     return cards.where((term) {
-      final matchesSearch = normalizedSearch.isEmpty ||
+      final matchesSearch =
+          normalizedSearch.isEmpty ||
           term.kanji.toLowerCase().contains(normalizedSearch) ||
           term.reading.toLowerCase().contains(normalizedSearch) ||
           term.meaning.toLowerCase().contains(normalizedSearch) ||
@@ -346,10 +335,8 @@ class _DeckEditPageState extends State<DeckEditPage> {
                     leftIcon: Icons.arrow_back_ios_new,
                     onLeftTap: () => Navigator.pop(context),
                     title: 'Edit Deck',
-                    titleStyle: const TextStyle(
-                      fontSize: 18,
+                    titleStyle: AppText.topBarTitleSmall.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: Colors.black,
                     ),
                     rightIcon: selectionMode ? Icons.delete : null,
                     onRightTap: selectionMode ? deleteSelected : null,
@@ -405,23 +392,15 @@ class _DeckEditPageState extends State<DeckEditPage> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 33,
-            height: 0.98,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.8,
-            color: Colors.black,
-          ),
+          style: AppText.screenTitle,
         ),
         const SizedBox(height: 8),
         Text(
           '$totalCards cards',
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 15.5,
-            height: 1,
-            color: softTextGray,
+          style: AppText.body.copyWith(
             fontWeight: FontWeight.w500,
+            color: softTextGray,
           ),
         ),
       ],
@@ -446,11 +425,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.search,
-            size: 22,
-            color: Colors.black,
-          ),
+          const Icon(Icons.search, size: 22, color: Colors.black),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -466,21 +441,11 @@ class _DeckEditPageState extends State<DeckEditPage> {
               textInputAction: TextInputAction.search,
               decoration: const InputDecoration(
                 hintText: 'Search cards',
-                hintStyle: TextStyle(
-                  color: Color(0xFF7A7A7A),
-                  fontSize: 17,
-                  height: 1,
-                  fontWeight: FontWeight.w400,
-                ),
+                hintStyle: AppText.inputHint,
                 border: InputBorder.none,
                 isCollapsed: true,
               ),
-              style: const TextStyle(
-                fontSize: 17,
-                height: 1.1,
-                color: Colors.black,
-                fontWeight: FontWeight.w400,
-              ),
+              style: AppText.input,
             ),
           ),
           if (searchQuery.isNotEmpty)
@@ -489,11 +454,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
               height: 32,
               child: IconButton(
                 padding: EdgeInsets.zero,
-                icon: const Icon(
-                  Icons.close,
-                  size: 18,
-                  color: Colors.black45,
-                ),
+                icon: const Icon(Icons.close, size: 18, color: Colors.black45),
                 onPressed: () {
                   setState(() {
                     searchController.clear();
@@ -515,22 +476,15 @@ class _DeckEditPageState extends State<DeckEditPage> {
         Text(
           label,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 15,
-            height: 1,
-            color: softTextGray,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppText.buttonLabel.copyWith(color: softTextGray),
         ),
         const SizedBox(width: 7),
         Text(
           '$visibleCount',
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 15,
-            height: 1,
-            color: softTextGray,
+          style: AppText.body.copyWith(
             fontWeight: FontWeight.w500,
+            color: softTextGray,
           ),
         ),
         const Spacer(),
@@ -538,12 +492,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
           Text(
             '${selectedTerms.length} selected',
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1,
-              color: Colors.red,
-              fontWeight: FontWeight.w700,
-            ),
+            style: AppText.buttonLabel.copyWith(color: Colors.red),
           ),
       ],
     );
@@ -554,10 +503,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
       child: Text(
         showStarredOnly ? 'No starred cards yet' : 'No cards yet',
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          color: Colors.grey,
-          fontSize: 16,
-        ),
+        style: AppText.emptyState,
       ),
     );
   }
@@ -575,12 +521,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
             Colors.black,
             Color(0x00000000),
           ],
-          stops: [
-            0.0,
-            0.035,
-            0.94,
-            1.0,
-          ],
+          stops: [0.0, 0.035, 0.94, 1.0],
         ).createShader(bounds);
       },
       child: ListView.separated(
@@ -588,11 +529,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
         padding: const EdgeInsets.only(bottom: 120),
         itemCount: visibleCards.length,
         separatorBuilder: (context, index) {
-          return const Divider(
-            height: 1,
-            thickness: 1,
-            color: rowDividerGray,
-          );
+          return const Divider(height: 1, thickness: 1, color: rowDividerGray);
         },
         itemBuilder: (context, index) {
           final term = visibleCards[index];
@@ -632,10 +569,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
                       color: Colors.redAccent,
                       alignment: Alignment.centerRight,
                       padding: const EdgeInsets.only(right: 24),
-                      child: const Icon(
-                        Icons.delete,
-                        color: Colors.white,
-                      ),
+                      child: const Icon(Icons.delete, color: Colors.white),
                     ),
                   ),
                 ),
@@ -659,9 +593,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
                             size: 24,
                           ),
                         ),
-                      Expanded(
-                        child: _termText(term, isSelected),
-                      ),
+                      Expanded(child: _termText(term, isSelected)),
                       const SizedBox(width: 8),
                       Icon(
                         term.marked ? Icons.star : Icons.star_border,
@@ -680,8 +612,9 @@ class _DeckEditPageState extends State<DeckEditPage> {
   }
 
   Widget _termText(Term term, bool isSelected) {
-    final titleText =
-        term.kanjiBracketText.isNotEmpty ? term.kanjiBracketText : term.kanji;
+    final titleText = term.kanjiBracketText.isNotEmpty
+        ? term.kanjiBracketText
+        : term.kanji;
     final readingText = term.reading.trim();
 
     return Column(
@@ -695,23 +628,15 @@ class _DeckEditPageState extends State<DeckEditPage> {
             Text(
               titleText,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 22,
-                height: 1,
+              style: AppText.cardTitle.copyWith(
                 fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
-                color: Colors.black,
               ),
             ),
             if (readingText.isNotEmpty)
               Text(
                 '【$readingText】',
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 19,
-                  height: 1,
-                  fontWeight: FontWeight.w600,
-                  color: accentBlue,
-                ),
+                style: AppText.cardReading,
               ),
           ],
         ),
@@ -721,11 +646,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 14,
-            height: 1.1,
-            color: Colors.black,
-          ),
+          style: AppText.cardCaption.copyWith(height: 1.1),
         ),
       ],
     );
@@ -738,15 +659,9 @@ class _DeckEditPageState extends State<DeckEditPage> {
           GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: closeMenu,
-            child: Container(
-              color: Colors.transparent,
-            ),
+            child: Container(color: Colors.transparent),
           ),
-          Positioned(
-            top: 58,
-            right: 22,
-            child: _deckEditMenuCard(),
-          ),
+          Positioned(top: 58, right: 22, child: _deckEditMenuCard()),
         ],
       ),
     );
@@ -792,33 +707,19 @@ class _DeckEditPageState extends State<DeckEditPage> {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
           children: [
             SizedBox(
               width: 28,
-              child: Center(
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 24,
-                ),
-              ),
+              child: Center(child: Icon(icon, color: iconColor, size: 24)),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 label,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black,
-                ),
+                style: AppText.body.copyWith(fontWeight: FontWeight.w500),
               ),
             ),
           ],

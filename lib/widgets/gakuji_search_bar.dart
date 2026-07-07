@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_text_styles.dart';
+
 class GakujiSearchBar extends StatelessWidget {
   final TextEditingController controller;
   final String hintText;
@@ -52,21 +54,11 @@ class GakujiSearchBar extends StatelessWidget {
                   focusNode: focusNode,
                   enabled: enabled,
                   onChanged: onChanged,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.black,
-                  ),
+                  style: AppText.input,
                   cursorColor: Colors.black,
                   decoration: InputDecoration(
                     hintText: hintText,
-                    hintStyle: const TextStyle(
-                      fontSize: 16,
-                      height: 1,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF777777),
-                    ),
+                    hintStyle: AppText.inputHint,
                     border: InputBorder.none,
                     isCollapsed: true,
                   ),

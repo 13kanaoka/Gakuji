@@ -10,8 +10,9 @@ import '../models/term.dart';
 
 class DictionaryService {
   static const String dictionaryAssetPath = 'assets/dictionary/dictionary.db';
- /// Whenever you regenerate assets/dictionary/dictionary.db,
- ///increase the dictionary version by 1, ex: v7,v8, etc.///
+
+  /// Whenever you regenerate assets/dictionary/dictionary.db,
+  ///increase the dictionary version by 1, ex: v7,v8, etc.///
   static const String dictionaryDatabaseFileName = 'dictionary_v7.db';
 
   static Database? _database;
@@ -32,17 +33,11 @@ class DictionaryService {
 
   static Future<void> _openDictionaryDatabase() async {
     final directory = await getApplicationSupportDirectory();
-    final databasePath = path.join(
-      directory.path,
-      dictionaryDatabaseFileName,
-    );
+    final databasePath = path.join(directory.path, dictionaryDatabaseFileName);
 
     await _copyAssetDatabaseIfNeeded(databasePath);
 
-    final database = await openDatabase(
-      databasePath,
-      readOnly: true,
-    );
+    final database = await openDatabase(databasePath, readOnly: true);
 
     await database.rawQuery('SELECT COUNT(*) FROM terms LIMIT 1');
 
@@ -61,16 +56,10 @@ class DictionaryService {
     );
 
     await databaseFile.parent.create(recursive: true);
-    await databaseFile.writeAsBytes(
-      assetBytes,
-      flush: true,
-    );
+    await databaseFile.writeAsBytes(assetBytes, flush: true);
   }
 
-  static Future<List<Term>> search(
-    String rawQuery, {
-    int limit = 60,
-  }) async {
+  static Future<List<Term>> search(String rawQuery, {int limit = 60}) async {
     final query = rawQuery.trim();
 
     if (query.isEmpty) return const [];
@@ -84,18 +73,10 @@ class DictionaryService {
     }
 
     if (_isLikelyEnglishQuery(query)) {
-      return _searchEnglish(
-        database: database,
-        query: query,
-        limit: limit,
-      );
+      return _searchEnglish(database: database, query: query, limit: limit);
     }
 
-    return _searchJapanese(
-      database: database,
-      query: query,
-      limit: limit,
-    );
+    return _searchJapanese(database: database, query: query, limit: limit);
   }
 
   static Future<List<Term>> _searchEnglish({
@@ -109,8 +90,9 @@ class DictionaryService {
         .split(RegExp(r'[^a-zA-Z]+'))
         .map((token) => token.trim())
         .where((token) {
-      return token.isNotEmpty && !_isEnglishStopWord(token);
-    }).toList();
+          return token.isNotEmpty && !_isEnglishStopWord(token);
+        })
+        .toList();
 
     final searchTokens = tokens.isEmpty ? <String>[lowerQuery] : tokens;
 
@@ -163,10 +145,7 @@ class DictionaryService {
         LENGTH(t.kanji) ASC
       LIMIT ?
       """,
-      [
-        '$lowerQuery%',
-        limit,
-      ],
+      ['$lowerQuery%', limit],
     );
 
     return _termsFromRows(database, prefixRows);
@@ -216,10 +195,7 @@ class DictionaryService {
         LENGTH(t.kanji) ASC
       LIMIT ?
       """,
-      [
-        ...keywords,
-        limit,
-      ],
+      [...keywords, limit],
     );
   }
 
@@ -350,15 +326,12 @@ class DictionaryService {
 
     final placeholders = List.filled(termIds.length, '?').join(', ');
 
-    final rows = await database.rawQuery(
-      """
+    final rows = await database.rawQuery("""
       SELECT term_id, definition
       FROM definitions
       WHERE term_id IN ($placeholders)
       ORDER BY term_id, position
-      """,
-      termIds,
-    );
+      """, termIds);
 
     final definitionsByTermId = <String, List<String>>{};
 
@@ -374,10 +347,7 @@ class DictionaryService {
     return definitionsByTermId;
   }
 
-  static List<Term> _fallbackSearch(
-    String rawQuery, {
-    required int limit,
-  }) {
+  static List<Term> _fallbackSearch(String rawQuery, {required int limit}) {
     final query = rawQuery.trim();
     final lowerQuery = query.toLowerCase();
 

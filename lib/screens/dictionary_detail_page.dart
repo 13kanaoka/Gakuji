@@ -6,24 +6,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/deck_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'kanji_dictionary_detail_page.dart';
 
 class DictionaryDetailBackResult {
   final bool returnToResults;
 
-  const DictionaryDetailBackResult({
-    this.returnToResults = true,
-  });
+  const DictionaryDetailBackResult({this.returnToResults = true});
 }
 
 class DictionaryDetailPage extends StatefulWidget {
   final Term word;
 
-  const DictionaryDetailPage({
-    super.key,
-    required this.word,
-  });
+  const DictionaryDetailPage({super.key, required this.word});
 
   @override
   State<DictionaryDetailPage> createState() => _DictionaryDetailPageState();
@@ -161,10 +157,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     _showSavePopup('Direct save deck: ${deck.name}');
   }
 
-  void _showSavePopup(
-    String message, {
-    IconData icon = Icons.check_circle,
-  }) {
+  void _showSavePopup(String message, {IconData icon = Icons.check_circle}) {
     savePopupTimer?.cancel();
 
     setState(() {
@@ -206,34 +199,23 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     });
   }
 
-  Future<void> _saveNoteFromController({
-    required bool closeEditor,
-  }) async {
+  Future<void> _saveNoteFromController({required bool closeEditor}) async {
     final cleanedNote = _cleanNoteText(noteController.text);
 
-    await _saveNote(
-      cleanedNote,
-      closeEditor: closeEditor,
-    );
+    await _saveNote(cleanedNote, closeEditor: closeEditor);
   }
 
   Future<void> _clearNote() async {
     noteController.clear();
 
-    await _saveNote(
-      '',
-      closeEditor: true,
-    );
+    await _saveNote('', closeEditor: true);
 
     if (!mounted) return;
 
     FocusScope.of(context).unfocus();
   }
 
-  Future<void> _saveNote(
-    String value, {
-    required bool closeEditor,
-  }) async {
+  Future<void> _saveNote(String value, {required bool closeEditor}) async {
     final prefs = await SharedPreferences.getInstance();
 
     await prefs.setString(notePreferenceKey, value);
@@ -264,9 +246,9 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
 
     if (!mounted) return;
 
-    Navigator.of(context).pop(
-      const DictionaryDetailBackResult(returnToResults: true),
-    );
+    Navigator.of(
+      context,
+    ).pop(const DictionaryDetailBackResult(returnToResults: true));
   }
 
   bool deckContainsWord(Deck deck) {
@@ -302,10 +284,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     });
 
     if (wasSaved) {
-      _showSavePopup(
-        'Removed from ${deck.name}',
-        icon: Icons.close_rounded,
-      );
+      _showSavePopup('Removed from ${deck.name}', icon: Icons.close_rounded);
     } else {
       _showSavePopup('Saved to ${deck.name}');
     }
@@ -323,10 +302,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     });
 
     if (wasSaved) {
-      _showSavePopup(
-        'Removed from ${deck.name}',
-        icon: Icons.close_rounded,
-      );
+      _showSavePopup('Removed from ${deck.name}', icon: Icons.close_rounded);
     } else {
       _showSavePopup('Saved to ${deck.name}');
     }
@@ -374,9 +350,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => KanjiDictionaryDetailPage(
-          kanjiEntry: word,
-        ),
+        builder: (_) => KanjiDictionaryDetailPage(kanjiEntry: word),
       ),
     );
   }
@@ -449,10 +423,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(15),
-                  border: Border.all(
-                    color: sectionColor,
-                    width: 1.4,
-                  ),
+                  border: Border.all(color: sectionColor, width: 1.4),
                   boxShadow: const [
                     BoxShadow(
                       color: Color(0x26000000),
@@ -476,10 +447,8 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         textScaler: TextScaler.noScaling,
-                        style: const TextStyle(
-                          fontSize: 14.5,
+                        style: AppText.body.copyWith(
                           height: 1.12,
-                          color: Colors.black,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -522,11 +491,10 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             Text(
               word.partOfSpeech,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 16,
+              style: AppText.body.copyWith(
                 height: 1.12,
-                color: softTextGray,
                 fontWeight: FontWeight.w500,
+                color: softTextGray,
               ),
             ),
             const SizedBox(height: 7),
@@ -535,11 +503,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             const Text(
               'No definitions yet',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.2,
-                color: softTextGray,
-              ),
+              style: AppText.emptyState,
             )
           else
             ...definitions.asMap().entries.map((entry) {
@@ -566,23 +530,13 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         Text(
           word.reading,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 27,
-            height: 1,
-            fontWeight: FontWeight.w700,
-            color: Colors.black,
-          ),
+          style: AppText.kanjiCandidate.copyWith(fontWeight: FontWeight.w700),
         ),
         if (word.hasKanjiBracketText)
           Text(
             '【${word.kanjiBracketText}】',
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
-              fontSize: 23,
-              height: 1,
-              fontWeight: FontWeight.w700,
-              color: Colors.black,
-            ),
+            style: AppText.cardTitle,
           ),
       ],
     );
@@ -606,20 +560,16 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             margin: const EdgeInsets.only(top: 3),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                color: softTextGray,
-                width: 1.5,
-              ),
+              border: Border.all(color: softTextGray, width: 1.5),
             ),
             child: Center(
               child: Text(
                 label,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 10,
+                style: AppText.smallLabel.copyWith(
                   height: 1,
-                  color: softTextGray,
                   fontWeight: FontWeight.w800,
+                  color: softTextGray,
                 ),
               ),
             ),
@@ -629,12 +579,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             child: RichText(
               textScaler: TextScaler.noScaling,
               text: TextSpan(
-                style: const TextStyle(
-                  fontSize: 17.5,
-                  height: 1.22,
-                  color: Colors.black,
-                  fontWeight: FontWeight.w400,
-                ),
+                style: AppText.detailValue,
                 children: [
                   TextSpan(text: definition),
                   if (relatedTerms.isNotEmpty)
@@ -674,12 +619,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                         ? 'Hide meanings'
                         : 'More meanings (${extraDefinitions.length})',
                     textScaler: TextScaler.noScaling,
-                    style: const TextStyle(
-                      fontSize: 15.5,
-                      height: 1,
-                      color: accentBlue,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: AppText.cardReading,
                   ),
                   const SizedBox(width: 3),
                   Icon(
@@ -715,29 +655,20 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       decoration: BoxDecoration(
         color: softBlueFill,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: sectionColor,
-          width: 1.4,
-        ),
+        border: Border.all(color: sectionColor, width: 1.4),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: extraDefinitions.asMap().entries.map((entry) {
           final isLast = entry.key == extraDefinitions.length - 1;
 
-          return _extraMeaningRow(
-            definition: entry.value,
-            isLast: isLast,
-          );
+          return _extraMeaningRow(definition: entry.value, isLast: isLast);
         }).toList(),
       ),
     );
   }
 
-  Widget _extraMeaningRow({
-    required String definition,
-    required bool isLast,
-  }) {
+  Widget _extraMeaningRow({required String definition, required bool isLast}) {
     return Padding(
       padding: EdgeInsets.only(bottom: isLast ? 0 : 6),
       child: Row(
@@ -761,12 +692,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             child: Text(
               definition,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 14.5,
-                height: 1.22,
-                color: Colors.black,
-                fontWeight: FontWeight.w400,
-              ),
+              style: AppText.body.copyWith(height: 1.22),
             ),
           ),
         ],
@@ -781,15 +707,10 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         color: accentBlue,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: const Text(
+      child: Text(
         'Common',
         textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 12.5,
-          height: 1.1,
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-        ),
+        style: AppText.smallLabel.copyWith(height: 1.1, color: Colors.white),
       ),
     );
   }
@@ -811,12 +732,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return const Text(
       'Loading note...',
       textScaler: TextScaler.noScaling,
-      style: TextStyle(
-        fontSize: 16,
-        height: 1.15,
-        color: softTextGray,
-        fontWeight: FontWeight.w400,
-      ),
+      style: AppText.emptyState,
     );
   }
 
@@ -837,11 +753,9 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         child: Text(
           hasNote ? noteText : 'Write a note',
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 16,
+          style: AppText.body.copyWith(
             height: 1.2,
             color: hasNote ? Colors.black : accentBlue,
-            fontWeight: FontWeight.w400,
           ),
         ),
       ),
@@ -863,12 +777,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
           cursorColor: accentBlue,
-          style: const TextStyle(
-            fontSize: 16,
-            height: 1.2,
-            color: Colors.black,
-            fontWeight: FontWeight.w400,
-          ),
+          style: AppText.input.copyWith(height: 1.2),
           decoration: InputDecoration(
             hintText: 'Write a note',
             hintStyle: const TextStyle(
@@ -877,25 +786,15 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             ),
             filled: true,
             fillColor: softBlueFill,
-            counterStyle: const TextStyle(
-              fontSize: 12,
-              height: 1,
-              color: softTextGray,
-            ),
+            counterStyle: AppText.cardCaption.copyWith(color: softTextGray),
             contentPadding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
-              borderSide: const BorderSide(
-                color: sectionColor,
-                width: 1.4,
-              ),
+              borderSide: const BorderSide(color: sectionColor, width: 1.4),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
-              borderSide: const BorderSide(
-                color: accentBlue,
-                width: 1.6,
-              ),
+              borderSide: const BorderSide(color: accentBlue, width: 1.6),
             ),
           ),
           onChanged: (value) {
@@ -934,12 +833,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         child: Text(
           label,
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 15,
-            height: 1,
-            color: color,
-            fontWeight: FontWeight.w600,
-          ),
+          style: AppText.fieldLabel.copyWith(color: color),
         ),
       ),
     );
@@ -961,15 +855,10 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           color: accentBlue,
           borderRadius: BorderRadius.circular(999),
         ),
-        child: const Text(
+        child: Text(
           'Done',
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 14.5,
-            height: 1,
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-          ),
+          style: AppText.buttonLabel.copyWith(color: Colors.white),
         ),
       ),
     );
@@ -994,12 +883,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                   child: Text(
                     firstCharacter,
                     textScaler: TextScaler.noScaling,
-                    style: const TextStyle(
-                      fontSize: 32,
-                      height: 1,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black,
-                    ),
+                    style: AppText.kanjiCandidate,
                   ),
                 ),
                 Expanded(
@@ -1010,11 +894,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                         Text(
                           word.kanjiMeaning,
                           textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            height: 1.14,
-                            color: Colors.black,
-                          ),
+                          style: AppText.body.copyWith(height: 1.14),
                         ),
                       if (word.kunyomi.isNotEmpty)
                         Padding(
@@ -1022,11 +902,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                           child: Text(
                             word.kunyomi.join(', '),
                             textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              height: 1.14,
-                              color: Colors.black,
-                            ),
+                            style: AppText.body.copyWith(height: 1.14),
                           ),
                         ),
                       if (word.onyomi.isNotEmpty)
@@ -1035,11 +911,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                           child: Text(
                             word.onyomi.join(', '),
                             textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              height: 1.14,
-                              color: Colors.black,
-                            ),
+                            style: AppText.body.copyWith(height: 1.14),
                           ),
                         ),
                     ],
@@ -1072,30 +944,22 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             child: Text(
               'No examples yet',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
-                color: softTextGray,
-              ),
+              style: AppText.emptyState,
             ),
           )
         else
           ...examples.asMap().entries.map((entry) {
             final isLast = entry.key == examples.length - 1;
-            return _exampleRow(
-              example: entry.value,
-              showDivider: !isLast,
-            );
+            return _exampleRow(example: entry.value, showDivider: !isLast);
           }),
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 13, 22, 0),
           child: Text(
             'More Examples',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 16,
-              height: 1,
-              color: accentBlue.withValues(alpha: 0.72),
+            style: AppText.cardReading.copyWith(
               fontWeight: FontWeight.w500,
+              color: accentBlue.withValues(alpha: 0.72),
             ),
           ),
         ),
@@ -1122,51 +986,31 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                     Text(
                       example.reading,
                       textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        height: 1.15,
-                        color: Colors.black,
-                      ),
+                      style: AppText.cardCaption.copyWith(height: 1.15),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       example.japanese,
                       textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        height: 1.24,
-                        color: Colors.black,
-                      ),
+                      style: AppText.detailValue.copyWith(height: 1.24),
                     ),
                     const SizedBox(height: 3),
                     Text(
                       example.english,
                       textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        height: 1.18,
-                        color: Colors.black,
-                      ),
+                      style: AppText.body.copyWith(height: 1.18),
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right,
-                size: 27,
-                color: softTextGray,
-              ),
+              const Icon(Icons.chevron_right, size: 27, color: softTextGray),
             ],
           ),
           if (showDivider)
             const Padding(
               padding: EdgeInsets.only(top: 13),
-              child: Divider(
-                height: 1,
-                thickness: 1,
-                color: dividerColor,
-              ),
+              child: Divider(height: 1, thickness: 1, color: dividerColor),
             ),
         ],
       ),
@@ -1181,12 +1025,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       child: Text(
         title,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          height: 1,
-          color: Colors.black,
-        ),
+        style: AppText.listHeading.copyWith(fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1232,11 +1071,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
-          child: Icon(
-            icon,
-            size: 26,
-            color: iconColor,
-          ),
+          child: Icon(icon, size: 26, color: iconColor),
         ),
       ),
     );
@@ -1326,19 +1161,13 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   }
 }
 
-enum _DeckSheetAction {
-  saveToDeck,
-  setDirectSaveDeck,
-}
+enum _DeckSheetAction { saveToDeck, setDirectSaveDeck }
 
 class _DeckSheetResult {
   final _DeckSheetAction action;
   final Deck deck;
 
-  const _DeckSheetResult({
-    required this.action,
-    required this.deck,
-  });
+  const _DeckSheetResult({required this.action, required this.deck});
 }
 
 class _DeckSaveSheet extends StatefulWidget {
@@ -1400,21 +1229,14 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
         height: sheetHeight,
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(22),
-          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
         ),
         child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(22),
-          ),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           child: PageView(
             controller: pageController,
             physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _saveToPanel(context),
-              _directSavePanel(context),
-            ],
+            children: [_saveToPanel(context), _directSavePanel(context)],
           ),
         ),
       ),
@@ -1434,15 +1256,12 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 10),
-              child: const Text(
+              child: Text(
                 'Select direct save deck',
                 textAlign: TextAlign.center,
                 textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontSize: 15.5,
-                  height: 1,
+                style: AppText.buttonLabel.copyWith(
                   color: _DictionaryDetailPageState.accentBlue,
-                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -1467,16 +1286,15 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (isDirectSaveDeck)
-                      const Padding(
-                        padding: EdgeInsets.only(right: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
                         child: Text(
                           'Direct',
                           textScaler: TextScaler.noScaling,
-                          style: TextStyle(
-                            fontSize: 12.5,
+                          style: AppText.smallLabel.copyWith(
                             height: 1,
-                            color: _DictionaryDetailPageState.accentBlue,
                             fontWeight: FontWeight.w700,
+                            color: _DictionaryDetailPageState.accentBlue,
                           ),
                         ),
                       ),
@@ -1534,29 +1352,23 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
                   'Select direct save deck',
                   textAlign: TextAlign.center,
                   textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 18,
-                    height: 1,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black,
-                  ),
+                  style: AppText.listHeading,
                 ),
               ),
               const SizedBox(width: 48),
             ],
           ),
         ),
-        const Padding(
-          padding: EdgeInsets.fromLTRB(22, 0, 22, 12),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
           child: Text(
             'The bookmark button saves terms to this deck.',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 13.5,
+            style: AppText.cardCaption.copyWith(
               height: 1.15,
-              color: _DictionaryDetailPageState.softTextGray,
               fontWeight: FontWeight.w500,
+              color: _DictionaryDetailPageState.softTextGray,
             ),
           ),
         ),
@@ -1621,12 +1433,7 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
         title,
         textAlign: TextAlign.center,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          fontSize: 18,
-          height: 1,
-          fontWeight: FontWeight.w700,
-          color: Colors.black,
-        ),
+        style: AppText.listHeading,
       ),
     );
   }
@@ -1644,21 +1451,14 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          fontSize: 16,
-          height: 1.05,
-          fontWeight: FontWeight.w600,
-          color: Colors.black,
-        ),
+        style: AppText.body.copyWith(height: 1.05, fontWeight: FontWeight.w600),
       ),
       subtitle: Text(
         '${deck.terms.length} terms',
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          fontSize: 13,
+        style: AppText.cardCaption.copyWith(
           height: 1.2,
           color: _DictionaryDetailPageState.softTextGray,
-          fontWeight: FontWeight.w400,
         ),
       ),
       trailing: trailing,

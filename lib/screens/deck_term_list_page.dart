@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/deck.dart';
 import '../models/term.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'dictionary_detail_page.dart';
 
@@ -12,10 +13,7 @@ class DeckTermListPage extends StatelessWidget {
 
   final Deck deck;
 
-  const DeckTermListPage({
-    super.key,
-    required this.deck,
-  });
+  const DeckTermListPage({super.key, required this.deck});
 
   @override
   Widget build(BuildContext context) {
@@ -41,10 +39,7 @@ class DeckTermListPage extends StatelessWidget {
                       child: Text(
                         'No terms yet',
                         textScaler: TextScaler.noScaling,
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 16,
-                        ),
+                        style: AppText.emptyState,
                       ),
                     )
                   : _termList(context, terms),
@@ -64,21 +59,13 @@ class DeckTermListPage extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 34,
-            height: 0.98,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.8,
-            color: Colors.black,
-          ),
+          style: AppText.screenTitle,
         ),
         const SizedBox(height: 10),
         Text(
           '$termsCount terms',
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 16,
-            height: 1,
+          style: AppText.body.copyWith(
             fontWeight: FontWeight.w500,
             color: metadataGray,
           ),
@@ -100,23 +87,14 @@ class DeckTermListPage extends StatelessWidget {
             Colors.black,
             Color(0x00000000),
           ],
-          stops: [
-            0.0,
-            0.035,
-            0.94,
-            1.0,
-          ],
+          stops: [0.0, 0.035, 0.94, 1.0],
         ).createShader(bounds);
       },
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(24, 4, 24, 120),
         itemCount: terms.length,
         separatorBuilder: (context, index) {
-          return const Divider(
-            height: 1,
-            thickness: 1,
-            color: dividerGray,
-          );
+          return const Divider(height: 1, thickness: 1, color: dividerGray);
         },
         itemBuilder: (context, index) {
           final term = terms[index];
@@ -139,20 +117,16 @@ class DeckTermListPage extends StatelessWidget {
 }
 
 class _TermListTile extends StatelessWidget {
-  static const Color deckBlue = Color(0xFF4D7EF7);
-
   final Term term;
   final VoidCallback onTap;
 
-  const _TermListTile({
-    required this.term,
-    required this.onTap,
-  });
+  const _TermListTile({required this.term, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final titleText =
-        term.kanjiBracketText.isNotEmpty ? term.kanjiBracketText : term.kanji;
+    final titleText = term.kanjiBracketText.isNotEmpty
+        ? term.kanjiBracketText
+        : term.kanji;
     final readingText = term.reading.trim();
 
     return Material(
@@ -175,23 +149,13 @@ class _TermListTile extends StatelessWidget {
                         Text(
                           titleText,
                           textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black,
-                          ),
+                          style: AppText.cardTitle,
                         ),
                         if (readingText.isNotEmpty)
                           Text(
                             '【$readingText】',
                             textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
-                              fontSize: 19,
-                              height: 1,
-                              fontWeight: FontWeight.w600,
-                              color: deckBlue,
-                            ),
+                            style: AppText.cardReading,
                           ),
                       ],
                     ),
@@ -201,11 +165,7 @@ class _TermListTile extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.1,
-                        color: Colors.black,
-                      ),
+                      style: AppText.cardCaption.copyWith(height: 1.1),
                     ),
                   ],
                 ),

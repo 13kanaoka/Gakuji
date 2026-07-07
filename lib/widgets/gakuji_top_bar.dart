@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_text_styles.dart';
+
 class GakujiTopBar extends StatelessWidget {
   static const double horizontalPadding = 22;
   static const double topPadding = 16;
@@ -62,7 +64,8 @@ class GakujiTopBar extends StatelessWidget {
               width: sideWidth,
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: leftWidget ??
+                child:
+                    leftWidget ??
                     _TopBarButton(
                       icon: leftIcon,
                       onTap: onLeftTap,
@@ -73,18 +76,14 @@ class GakujiTopBar extends StatelessWidget {
 
             Expanded(
               child: Center(
-                child: titleWidget ??
+                child:
+                    titleWidget ??
                     Text(
                       title ?? '',
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: titleStyle ??
-                          const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.black,
-                          ),
+                      style: titleStyle ?? AppText.topBarTitle,
                     ),
               ),
             ),
@@ -151,11 +150,7 @@ class _TopBarButton extends StatelessWidget {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
-          child: Icon(
-            icon,
-            size: 24,
-            color: iconColor ?? Colors.black,
-          ),
+          child: Icon(icon, size: 24, color: iconColor ?? Colors.black),
         ),
       ),
     );

@@ -1,4 +1,3 @@
-
 import 'package:google_mlkit_digital_ink_recognition/google_mlkit_digital_ink_recognition.dart';
 
 import '../models/writing_point.dart';
@@ -6,8 +5,9 @@ import '../models/writing_point.dart';
 class WritingRecognitionService {
   static const String japaneseModel = 'ja';
 
-  static final DigitalInkRecognizer _recognizer =
-      DigitalInkRecognizer(languageCode: japaneseModel);
+  static final DigitalInkRecognizer _recognizer = DigitalInkRecognizer(
+    languageCode: japaneseModel,
+  );
 
   static final DigitalInkRecognizerModelManager _modelManager =
       DigitalInkRecognizerModelManager();
@@ -64,17 +64,13 @@ class WritingRecognitionService {
   static Ink _buildInkFromSlot(List<List<WritingPoint>> slotStrokes) {
     final ink = Ink();
 
-    ink.strokes = slotStrokes
-        .where((rawStroke) => rawStroke.isNotEmpty)
-        .map((rawStroke) {
+    ink.strokes = slotStrokes.where((rawStroke) => rawStroke.isNotEmpty).map((
+      rawStroke,
+    ) {
       final stroke = Stroke();
 
       stroke.points = rawStroke.map((point) {
-        return StrokePoint(
-          x: point.x,
-          y: point.y,
-          t: point.time,
-        );
+        return StrokePoint(x: point.x, y: point.y, t: point.time);
       }).toList();
 
       return stroke;

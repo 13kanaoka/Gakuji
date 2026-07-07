@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_text_styles.dart';
+
 class GakujiFolderCard extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
 
-  const GakujiFolderCard({
-    super.key,
-    required this.title,
-    required this.onTap,
-  });
+  const GakujiFolderCard({super.key, required this.title, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -39,10 +37,8 @@ class GakujiFolderCard extends StatelessWidget {
                   title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 19,
+                  style: AppText.listTitle.copyWith(
                     height: 1.05,
-                    fontWeight: FontWeight.w700,
                     color: Colors.white,
                   ),
                 ),
@@ -73,12 +69,7 @@ class _GakujiFolderCardPainter extends CustomPainter {
       ..lineTo(size.width - 18, 0)
       ..quadraticBezierTo(size.width, 0, size.width, 18)
       ..lineTo(size.width, size.height - 20)
-      ..quadraticBezierTo(
-        size.width,
-        size.height,
-        size.width - 20,
-        size.height,
-      )
+      ..quadraticBezierTo(size.width, size.height, size.width - 20, size.height)
       ..lineTo(20, size.height)
       ..quadraticBezierTo(0, size.height, 0, size.height - 20)
       ..lineTo(0, 18)
@@ -102,12 +93,7 @@ class _GakujiFolderCardPainter extends CustomPainter {
         size.height * 0.54,
       )
       ..lineTo(size.width, size.height - 20)
-      ..quadraticBezierTo(
-        size.width,
-        size.height,
-        size.width - 20,
-        size.height,
-      )
+      ..quadraticBezierTo(size.width, size.height, size.width - 20, size.height)
       ..lineTo(20, size.height)
       ..quadraticBezierTo(0, size.height, 0, size.height - 20)
       ..close();

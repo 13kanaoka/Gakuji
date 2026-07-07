@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../data/deck_data.dart';
 import '../models/deck.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 
 class CreateDeckPage extends StatefulWidget {
@@ -26,11 +27,9 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
     final name = nameController.text.trim();
 
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Deck name required'),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Deck name required')));
 
       return;
     }
@@ -58,11 +57,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
               leftIcon: Icons.arrow_back_ios_new,
               onLeftTap: () => Navigator.pop(context),
               title: 'Create Deck',
-              titleStyle: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w400,
-                color: Colors.black,
-              ),
+              titleStyle: AppText.topBarTitleSmall,
             ),
 
             const SizedBox(height: 32),
@@ -73,13 +68,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Deck Name',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.black,
-                      ),
-                    ),
+                    const Text('Deck Name', style: AppText.body),
 
                     const SizedBox(height: 8),
 
@@ -101,13 +90,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
 
                     const SizedBox(height: 24),
 
-                    const Text(
-                      'Deck Type',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.black,
-                      ),
-                    ),
+                    const Text('Deck Type', style: AppText.body),
 
                     const SizedBox(height: 8),
 
@@ -148,7 +131,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                         onPressed: createDeck,
                         child: const Text(
                           'Create Deck',
-                          style: TextStyle(fontSize: 18),
+                          style: AppText.primaryButton,
                         ),
                       ),
                     ),

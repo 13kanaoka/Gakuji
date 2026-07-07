@@ -4,22 +4,13 @@ import 'dictionary_data.dart';
 
 class DefaultDecks {
   /// 📚 SAME DICTIONARY SOURCE SET USED FOR BOTH MODES
-  static final List<String> sourceIds = [
-    't1',
-    't2',
-    't3',
-    't4',
-    't5',
-  ];
+  static final List<String> sourceIds = ['t1', 't2', 't3', 't4', 't5'];
 
   static List<Term> _deckCopies(String deckId) {
     return sourceIds.map((sourceId) {
       final dictionaryTerm = getTermById(sourceId);
 
-      return Term.deckCopyFrom(
-        dictionaryTerm,
-        id: '${deckId}_$sourceId',
-      );
+      return Term.deckCopyFrom(dictionaryTerm, id: '${deckId}_$sourceId');
     }).toList();
   }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/deck_data.dart';
 import '../data/pinned_deck_data.dart';
 import '../models/deck.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_deck_card.dart';
 import 'deck_page.dart';
 
@@ -84,12 +85,7 @@ class _HomePageState extends State<HomePage> {
             'Home',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 18,
-              height: 1,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
+            style: AppText.pageTitle,
           ),
           Align(alignment: Alignment.centerRight, child: _settingsButton()),
         ],
@@ -115,12 +111,7 @@ class _HomePageState extends State<HomePage> {
     return Text(
       title,
       textScaler: TextScaler.noScaling,
-      style: const TextStyle(
-        fontSize: 28,
-        height: 1,
-        fontWeight: FontWeight.bold,
-        color: Colors.black,
-      ),
+      style: AppText.sectionTitle,
     );
   }
 
@@ -150,7 +141,7 @@ class _HomePageState extends State<HomePage> {
       child: Text(
         text,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(color: Colors.grey, fontSize: 16),
+        style: AppText.emptyState,
       ),
     );
   }

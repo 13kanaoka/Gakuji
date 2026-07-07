@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_text_styles.dart';
+
 class GakujiSegmentedToggle extends StatelessWidget {
   final String leftLabel;
   final String rightLabel;
@@ -79,12 +81,7 @@ class _GakujiSegmentedToggleButton extends StatelessWidget {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 16,
-                height: 1,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
+              style: AppText.toggleLabel,
             ),
           ),
         ),

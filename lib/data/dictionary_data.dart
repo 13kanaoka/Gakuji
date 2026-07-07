@@ -30,52 +30,19 @@ final List<Term> dictionaryWords = [
     jlptLevel: 'N5',
     frequency: 23,
     radical: '月 (74)',
-    similarKanji: const [
-      '日',
-      '曰',
-      '目',
-      '用',
-      '丹',
-      '且',
-      '有',
-      '肌',
-      '肖',
-      '肘',
-      '肝',
-    ],
+    similarKanji: const ['日', '曰', '目', '用', '丹', '且', '有', '肌', '肖', '肘', '肝'],
     compounds: const [
-      KanjiCompound(
-        kanji: '5月',
-        reading: 'ごがつ',
-        meaning: 'May',
-      ),
-      KanjiCompound(
-        kanji: '1月',
-        reading: 'いちがつ',
-        meaning: 'January',
-      ),
-      KanjiCompound(
-        kanji: '月',
-        reading: 'つき',
-        meaning: 'Moon',
-        termId: 't1',
-      ),
+      KanjiCompound(kanji: '5月', reading: 'ごがつ', meaning: 'May'),
+      KanjiCompound(kanji: '1月', reading: 'いちがつ', meaning: 'January'),
+      KanjiCompound(kanji: '月', reading: 'つき', meaning: 'Moon', termId: 't1'),
       KanjiCompound(
         kanji: '今月',
         reading: 'こんげつ',
         meaning: 'this month',
         termId: 't7',
       ),
-      KanjiCompound(
-        kanji: '先月',
-        reading: 'せんげつ',
-        meaning: 'last month',
-      ),
-      KanjiCompound(
-        kanji: '来月',
-        reading: 'らいげつ',
-        meaning: 'next month',
-      ),
+      KanjiCompound(kanji: '先月', reading: 'せんげつ', meaning: 'last month'),
+      KanjiCompound(kanji: '来月', reading: 'らいげつ', meaning: 'next month'),
     ],
     examples: const [
       DictionaryExample(

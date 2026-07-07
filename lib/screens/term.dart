@@ -57,12 +57,12 @@ class Term {
     List<String>? onyomi,
     List<DictionaryExample>? examples,
     this.marked = false,
-  })  : definitions = definitions ?? const [],
-        relatedTerms = relatedTerms ?? const [],
-        kanjiMeaning = kanjiMeaning ?? meaning,
-        kunyomi = kunyomi ?? const [],
-        onyomi = onyomi ?? const [],
-        examples = examples ?? const [];
+  }) : definitions = definitions ?? const [],
+       relatedTerms = relatedTerms ?? const [],
+       kanjiMeaning = kanjiMeaning ?? meaning,
+       kunyomi = kunyomi ?? const [],
+       onyomi = onyomi ?? const [],
+       examples = examples ?? const [];
 
   /// Creates an independent deck-owned copy of a dictionary term.
   ///
@@ -74,7 +74,8 @@ class Term {
     bool marked = false,
   }) {
     return Term(
-      id: id ??
+      id:
+          id ??
           '${dictionaryTerm.sourceId ?? dictionaryTerm.id}_${DateTime.now().microsecondsSinceEpoch}',
       sourceId: dictionaryTerm.sourceId ?? dictionaryTerm.id,
       kanji: dictionaryTerm.kanji,

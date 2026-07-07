@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/deck_data.dart';
 import '../models/deck.dart';
 import '../models/folder.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_deck_card.dart';
 import '../widgets/gakuji_search_bar.dart';
 import '../widgets/gakuji_top_bar.dart';
@@ -11,10 +12,7 @@ import 'deck_page.dart';
 class FolderPage extends StatefulWidget {
   final Folder folder;
 
-  const FolderPage({
-    super.key,
-    required this.folder,
-  });
+  const FolderPage({super.key, required this.folder});
 
   @override
   State<FolderPage> createState() => _FolderPageState();
@@ -131,11 +129,7 @@ class _FolderPageState extends State<FolderPage> {
                       Navigator.pop(context);
                     },
                     title: widget.folder.name,
-                    titleStyle: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.black,
-                    ),
+                    titleStyle: AppText.topBarTitleSmall,
                     rightIcon: isRemovingDecks ? null : Icons.more_horiz,
                     onRightTap: isRemovingDecks
                         ? null
@@ -176,23 +170,24 @@ class _FolderPageState extends State<FolderPage> {
                                           ? 'No decks in this folder yet'
                                           : 'No decks found',
                                       textScaler: TextScaler.noScaling,
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 16,
-                                      ),
+                                      style: AppText.emptyState,
                                     ),
                                   )
                                 : ListView.separated(
-                                    padding:
-                                        const EdgeInsets.fromLTRB(0, 12, 0, 190),
+                                    padding: const EdgeInsets.fromLTRB(
+                                      0,
+                                      12,
+                                      0,
+                                      190,
+                                    ),
                                     itemCount: visibleDecks.length,
                                     separatorBuilder: (context, index) {
                                       return const SizedBox(height: 18);
                                     },
                                     itemBuilder: (context, index) {
                                       final deck = visibleDecks[index];
-                                      final isSelected =
-                                          selectedDeckIds.contains(deck.id);
+                                      final isSelected = selectedDeckIds
+                                          .contains(deck.id);
 
                                       return _deckCard(deck, isSelected);
                                     },
@@ -239,9 +234,7 @@ class _FolderPageState extends State<FolderPage> {
 
           await Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (context) => DeckPage(deck: deck),
-            ),
+            MaterialPageRoute(builder: (context) => DeckPage(deck: deck)),
           );
 
           if (!mounted) return;
@@ -258,9 +251,7 @@ class _FolderPageState extends State<FolderPage> {
         children: [
           GestureDetector(
             onTap: closeMenu,
-            child: Container(
-              color: Colors.transparent,
-            ),
+            child: Container(color: Colors.transparent),
           ),
           Positioned(
             top: 48,
@@ -332,8 +323,7 @@ class _FolderPageState extends State<FolderPage> {
                     alignment: Alignment.topCenter,
                     heightFactor: hasSelection ? 1 : 0,
                     child: AnimatedSlide(
-                      offset:
-                          hasSelection ? Offset.zero : const Offset(0, 1.2),
+                      offset: hasSelection ? Offset.zero : const Offset(0, 1.2),
                       duration: deleteAnimationDuration,
                       curve: Curves.easeOutCubic,
                       child: AnimatedOpacity(
@@ -370,22 +360,15 @@ class _FolderPageState extends State<FolderPage> {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: iconColor,
-            ),
+            Icon(icon, color: iconColor),
             const SizedBox(width: 12),
             Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15,
+              style: AppText.body.copyWith(
                 fontWeight: FontWeight.w500,
                 color: textColor,
               ),
@@ -411,10 +394,7 @@ class _FolderPageState extends State<FolderPage> {
         borderRadius: BorderRadius.circular(14),
         border: borderColor == null
             ? null
-            : Border.all(
-                color: borderColor,
-                width: 1.5,
-              ),
+            : Border.all(color: borderColor, width: 1.5),
         boxShadow: const [
           BoxShadow(
             color: Color(0x33000000),
@@ -433,12 +413,7 @@ class _FolderPageState extends State<FolderPage> {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 20,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                color: textColor,
-              ),
+              style: AppText.primaryButton.copyWith(color: textColor),
             ),
           ),
         ),
