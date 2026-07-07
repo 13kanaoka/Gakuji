@@ -23,27 +23,15 @@ class GakujiCorners {
 
 class GakujiShadows {
   static const List<BoxShadow> soft = [
-    BoxShadow(
-      color: Color(0x14000000),
-      blurRadius: 18,
-      offset: Offset(0, 8),
-    ),
+    BoxShadow(color: Color(0x14000000), blurRadius: 18, offset: Offset(0, 8)),
   ];
 
   static const List<BoxShadow> cardDrop = [
-    BoxShadow(
-      color: Color(0x22000000),
-      blurRadius: 0,
-      offset: Offset(0, 10),
-    ),
+    BoxShadow(color: Color(0x22000000), blurRadius: 0, offset: Offset(0, 10)),
   ];
 
   static const List<BoxShadow> folderDrop = [
-    BoxShadow(
-      color: Color(0x22000000),
-      blurRadius: 0,
-      offset: Offset(0, 8),
-    ),
+    BoxShadow(color: Color(0x22000000), blurRadius: 0, offset: Offset(0, 8)),
   ];
 }
 

@@ -29,18 +29,10 @@ class DailyCard extends StatelessWidget {
               Text('Deck Name'),
               Text('Items: 20'),
               SizedBox(height: 4),
-              Text(
-                'Deck Type: Reading',
-                style: TextStyle(fontSize: 12),
-              ),
+              Text('Deck Type: Reading', style: TextStyle(fontSize: 12)),
             ],
           ),
-          Column(
-            children: [
-              Text('New: 5'),
-              Text('Review: 10'),
-            ],
-          ),
+          Column(children: [Text('New: 5'), Text('Review: 10')]),
         ],
       ),
     );

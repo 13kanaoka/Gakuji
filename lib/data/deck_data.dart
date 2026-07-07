@@ -20,14 +20,7 @@ final List<Deck> decks = [
     id: 'd1',
     name: 'Gakuji test deck',
     type: DeckType.reading,
-    terms: _deckCopies('d1', [
-      't1',
-      't2',
-      't3',
-      't4',
-      't5',
-      't6',
-    ]),
+    terms: _deckCopies('d1', ['t1', 't2', 't3', 't4', 't5', 't6']),
   ),
 
   /// ✍️ DEFAULT WRITING DECK
@@ -35,13 +28,6 @@ final List<Deck> decks = [
     id: 'd2',
     name: 'Gakuji write test',
     type: DeckType.writing,
-    terms: _deckCopies('d2', [
-      't1',
-      't2',
-      't3',
-      't4',
-      't5',
-      't6',
-    ]),
+    terms: _deckCopies('d2', ['t1', 't2', 't3', 't4', 't5', 't6']),
   ),
 ];

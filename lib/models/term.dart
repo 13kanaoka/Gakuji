@@ -18,11 +18,7 @@ class DictionaryExample {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'japanese': japanese,
-      'reading': reading,
-      'english': english,
-    };
+    return {'japanese': japanese, 'reading': reading, 'english': english};
   }
 }
 
@@ -169,21 +165,21 @@ class Term {
     List<String>? similarKanji,
     List<KanjiCompound>? compounds,
     this.marked = false,
-  })  : alternativeKanji = _cleanSpellingList(
-          alternativeKanji ?? const [],
-          primarySpelling: kanji,
-          reading: reading,
-        ),
-        definitions = definitions ?? const [],
-        selectedDefinitionIndexes = selectedDefinitionIndexes ?? const [],
-        relatedTerms = relatedTerms ?? const [],
-        kanjiMeaning = kanjiMeaning ?? meaning,
-        kunyomi = kunyomi ?? const [],
-        onyomi = onyomi ?? const [],
-        examples = examples ?? const [],
-        nanori = nanori ?? const [],
-        similarKanji = similarKanji ?? const [],
-        compounds = compounds ?? const [];
+  }) : alternativeKanji = _cleanSpellingList(
+         alternativeKanji ?? const [],
+         primarySpelling: kanji,
+         reading: reading,
+       ),
+       definitions = definitions ?? const [],
+       selectedDefinitionIndexes = selectedDefinitionIndexes ?? const [],
+       relatedTerms = relatedTerms ?? const [],
+       kanjiMeaning = kanjiMeaning ?? meaning,
+       kunyomi = kunyomi ?? const [],
+       onyomi = onyomi ?? const [],
+       examples = examples ?? const [],
+       nanori = nanori ?? const [],
+       similarKanji = similarKanji ?? const [],
+       compounds = compounds ?? const [];
 
   factory Term.fromJson(Map<String, dynamic> json) {
     final kanji = json['kanji']?.toString() ?? '';
@@ -194,11 +190,7 @@ class Term {
     final spellingList = _stringList(json['kanjiSpellings']);
 
     final alternativeKanji = _cleanSpellingList(
-      [
-        ...directAlternatives,
-        ...legacyAlternatives,
-        ...spellingList,
-      ],
+      [...directAlternatives, ...legacyAlternatives, ...spellingList],
       primarySpelling: kanji,
       reading: reading,
     );
@@ -277,7 +269,8 @@ class Term {
     bool marked = false,
   }) {
     return Term(
-      id: id ??
+      id:
+          id ??
           '${dictionaryTerm.sourceId ?? dictionaryTerm.id}_${DateTime.now().microsecondsSinceEpoch}',
       sourceId: dictionaryTerm.sourceId ?? dictionaryTerm.id,
       kanji: dictionaryTerm.kanji,
@@ -312,10 +305,7 @@ class Term {
   /// This excludes kana-only spellings and duplicates.
   List<String> get kanjiSpellings {
     return _cleanSpellingList(
-      [
-        kanji,
-        ...alternativeKanji,
-      ],
+      [kanji, ...alternativeKanji],
       primarySpelling: '',
       reading: reading,
     );
@@ -361,18 +351,10 @@ class Term {
     }
 
     if (raw.length <= 8) {
-      return _groupDefinitions(
-        raw,
-        groupSize: 2,
-        maxGroups: 4,
-      );
+      return _groupDefinitions(raw, groupSize: 2, maxGroups: 4);
     }
 
-    return _groupDefinitions(
-      raw,
-      groupSize: 3,
-      maxGroups: 4,
-    );
+    return _groupDefinitions(raw, groupSize: 3, maxGroups: 4);
   }
 
   /// Primary definitions shown in dictionary UI.
@@ -401,8 +383,9 @@ class Term {
       return selected;
     }
 
-    final limit =
-        defaultCardDefinitionLimit <= 0 ? 3 : defaultCardDefinitionLimit;
+    final limit = defaultCardDefinitionLimit <= 0
+        ? 3
+        : defaultCardDefinitionLimit;
 
     return learner.take(limit).toList();
   }

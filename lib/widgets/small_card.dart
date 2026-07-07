@@ -5,10 +5,7 @@ import '../data/deck_data.dart';
 class SmallCard extends StatelessWidget {
   final String title;
 
-  const SmallCard({
-    super.key,
-    required this.title,
-  });
+  const SmallCard({super.key, required this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +18,7 @@ class SmallCard extends StatelessWidget {
 
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => DeckPage(deck: deck),
-          ),
+          MaterialPageRoute(builder: (context) => DeckPage(deck: deck)),
         );
       },
       child: Container(

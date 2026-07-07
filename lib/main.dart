@@ -33,29 +33,20 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Gakuji',
-      theme: ThemeData(
-        useMaterial3: true,
-      ),
+      theme: ThemeData(useMaterial3: true),
       home: const MainShell(),
       builder: (context, child) {
         Widget app = child ?? const SizedBox.shrink();
 
         if (useIphonePreviewFrame) {
-          app = _IphonePreviewFrame(
-            child: app,
-          );
+          app = _IphonePreviewFrame(child: app);
         }
 
         if (!showScreenSizeDebugLabel) {
           return app;
         }
 
-        return Stack(
-          children: [
-            app,
-            const _ScreenSizeDebugLabel(),
-          ],
-        );
+        return Stack(children: [app, const _ScreenSizeDebugLabel()]);
       },
     );
   }
@@ -64,9 +55,7 @@ class MyApp extends StatelessWidget {
 class _IphonePreviewFrame extends StatelessWidget {
   final Widget child;
 
-  const _IphonePreviewFrame({
-    required this.child,
-  });
+  const _IphonePreviewFrame({required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -74,14 +63,8 @@ class _IphonePreviewFrame extends StatelessWidget {
 
     final previewMediaQuery = originalMediaQuery.copyWith(
       size: MyApp.iphonePreviewSize,
-      padding: const EdgeInsets.only(
-        top: 47,
-        bottom: 34,
-      ),
-      viewPadding: const EdgeInsets.only(
-        top: 47,
-        bottom: 34,
-      ),
+      padding: const EdgeInsets.only(top: 47, bottom: 34),
+      viewPadding: const EdgeInsets.only(top: 47, bottom: 34),
       viewInsets: EdgeInsets.zero,
     );
 
@@ -103,10 +86,7 @@ class _IphonePreviewFrame extends StatelessWidget {
             ],
           ),
           clipBehavior: Clip.antiAlias,
-          child: MediaQuery(
-            data: previewMediaQuery,
-            child: child,
-          ),
+          child: MediaQuery(data: previewMediaQuery, child: child),
         ),
       ),
     );
@@ -130,10 +110,7 @@ class _ScreenSizeDebugLabel extends StatelessWidget {
           color: Colors.black.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(8),
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 5,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             child: Text(
               '${size.width.toStringAsFixed(0)} x ${size.height.toStringAsFixed(0)}  DPR ${devicePixelRatio.toStringAsFixed(1)}',
               style: const TextStyle(

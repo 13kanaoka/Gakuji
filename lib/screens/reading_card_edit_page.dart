@@ -8,6 +8,7 @@ import '../data/reading_card_edit_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
 import '../services/reading_card_edit_storage.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 
 class ReadingCardEditPage extends StatefulWidget {
@@ -221,17 +222,11 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text(
-                'Cancel',
-                textScaler: TextScaler.noScaling,
-              ),
+              child: const Text('Cancel', textScaler: TextScaler.noScaling),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text(
-                'Discard',
-                textScaler: TextScaler.noScaling,
-              ),
+              child: const Text('Discard', textScaler: TextScaler.noScaling),
             ),
           ],
         );
@@ -265,11 +260,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
+            style: AppText.fieldLabel.copyWith(color: Colors.white),
           ),
         ),
       );
@@ -341,12 +332,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                       ),
                     ),
                   ),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.2,
-                    color: Colors.black,
-                    fontWeight: FontWeight.w400,
-                  ),
+                  style: AppText.input.copyWith(height: 1.2),
                 ),
                 const SizedBox(height: 14),
                 _SheetSaveButton(
@@ -621,24 +607,14 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                       termTitle,
                       textAlign: TextAlign.center,
                       textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 31,
-                        height: 1,
-                        color: Colors.black,
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: AppText.screenTitle,
                     ),
                     const SizedBox(height: 8),
                     const Text(
                       'Card Edit',
                       textAlign: TextAlign.center,
                       textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 17,
-                        height: 1,
-                        color: Colors.black,
-                        fontWeight: FontWeight.w700,
-                      ),
+                      style: AppText.listHeading,
                     ),
                   ],
                 ),
@@ -646,9 +622,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
               Expanded(
                 child: Center(
                   child: isLoadingEditData
-                      ? const CircularProgressIndicator(
-                          color: accentBlue,
-                        )
+                      ? const CircularProgressIndicator(color: accentBlue)
                       : SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(24, 30, 24, 46),
                           child: _cardPreview(),
@@ -667,8 +641,8 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
       onPressed: isSaving || isPickingPhoto
           ? null
           : hasUnsavedChanges
-              ? saveChanges
-              : handleBackTap,
+          ? saveChanges
+          : handleBackTap,
       style: TextButton.styleFrom(
         foregroundColor: hasUnsavedChanges ? accentBlue : softTextGray,
         disabledForegroundColor: softTextGray,
@@ -679,14 +653,12 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
         isSaving
             ? 'Saving'
             : isPickingPhoto
-                ? 'Loading'
-                : hasUnsavedChanges
-                    ? 'Save'
-                    : 'Cancel',
+            ? 'Loading'
+            : hasUnsavedChanges
+            ? 'Save'
+            : 'Cancel',
         textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 16,
-          height: 1,
+        style: AppText.listTitle.copyWith(
           fontWeight: hasUnsavedChanges ? FontWeight.w800 : FontWeight.w700,
         ),
       ),
@@ -701,11 +673,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
         color: cardGray,
         borderRadius: BorderRadius.circular(28),
         boxShadow: const [
-          BoxShadow(
-            color: shadowGray,
-            blurRadius: 0,
-            offset: Offset(0, 10),
-          ),
+          BoxShadow(color: shadowGray, blurRadius: 0, offset: Offset(0, 10)),
         ],
       ),
       child: Padding(
@@ -765,10 +733,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
           padding: const EdgeInsets.fromLTRB(14, 11, 14, 12),
           decoration: BoxDecoration(
             color: Colors.transparent,
-            border: Border.all(
-              color: accentBlue,
-              width: 2.4,
-            ),
+            border: Border.all(color: accentBlue, width: 2.4),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -777,18 +742,20 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                 title,
                 textAlign: TextAlign.center,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  height: 1,
-                  color: accentBlue,
+                style: AppText.cardCaption.copyWith(
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.2,
+                  color: accentBlue,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 label,
-                maxLines: title == 'Glosses' ? 5 : title == 'Examples' ? 3 : 4,
+                maxLines: title == 'Glosses'
+                    ? 5
+                    : title == 'Examples'
+                    ? 3
+                    : 4,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 textScaler: TextScaler.noScaling,
@@ -820,16 +787,11 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: Colors.transparent,
-            border: Border.all(
-              color: accentBlue,
-              width: 2.4,
-            ),
+            border: Border.all(color: accentBlue, width: 2.4),
           ),
           child: isPickingPhoto
               ? const Center(
-                  child: CircularProgressIndicator(
-                    color: accentBlue,
-                  ),
+                  child: CircularProgressIndicator(color: accentBlue),
                 )
               : Stack(
                   fit: StackFit.expand,
@@ -862,14 +824,13 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                               color: Colors.white.withValues(alpha: 0.92),
                               borderRadius: BorderRadius.circular(999),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Remove',
                               textScaler: TextScaler.noScaling,
-                              style: TextStyle(
-                                fontSize: 12,
+                              style: AppText.smallLabel.copyWith(
                                 height: 1,
-                                color: removeRed,
                                 fontWeight: FontWeight.w800,
+                                color: removeRed,
                               ),
                             ),
                           ),
@@ -885,14 +846,13 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                             color: Colors.white.withValues(alpha: 0.92),
                             borderRadius: BorderRadius.circular(999),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Change',
                             textScaler: TextScaler.noScaling,
-                            style: TextStyle(
-                              fontSize: 12,
+                            style: AppText.smallLabel.copyWith(
                               height: 1,
-                              color: accentBlue,
                               fontWeight: FontWeight.w800,
+                              color: accentBlue,
                             ),
                           ),
                         ),
@@ -910,12 +870,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
         label,
         textAlign: TextAlign.center,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          fontSize: 16.5,
-          height: 1.2,
-          color: Colors.black,
-          fontWeight: FontWeight.w700,
-        ),
+        style: AppText.listTitle.copyWith(height: 1.2),
       ),
     );
   }
@@ -929,19 +884,14 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: const Color(0xFFD8D8D8),
-            width: 1.3,
-          ),
+          border: Border.all(color: const Color(0xFFD8D8D8), width: 1.3),
         ),
         child: Text(
           isPickingPhoto ? 'Loading photo' : 'Add photo',
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 14.5,
-            height: 1,
-            color: accentBlue,
+          style: AppText.buttonLabel.copyWith(
             fontWeight: FontWeight.w800,
+            color: accentBlue,
           ),
         ),
       ),
@@ -976,10 +926,7 @@ class _CardEditBottomSheet extends StatelessWidget {
   final String title;
   final Widget child;
 
-  const _CardEditBottomSheet({
-    required this.title,
-    required this.child,
-  });
+  const _CardEditBottomSheet({required this.title, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -992,9 +939,7 @@ class _CardEditBottomSheet extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(22),
-          ),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1014,12 +959,7 @@ class _CardEditBottomSheet extends StatelessWidget {
               title,
               textAlign: TextAlign.center,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 18,
-                height: 1,
-                fontWeight: FontWeight.w800,
-                color: Colors.black,
-              ),
+              style: AppText.listHeading.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 16),
             Flexible(child: child),
@@ -1095,11 +1035,10 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
             '${workingSelection.length}/$maxGlosses selected • drag selected glosses to reorder',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
-              fontSize: 13.5,
+            style: AppText.cardCaption.copyWith(
               height: 1.2,
-              color: Color(0xFF8A8A8A),
               fontWeight: FontWeight.w600,
+              color: const Color(0xFF8A8A8A),
             ),
           ),
           const SizedBox(height: 12),
@@ -1124,11 +1063,10 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                       child: Text(
                         String.fromCharCode(65 + index),
                         textScaler: TextScaler.noScaling,
-                        style: const TextStyle(
-                          fontSize: 12,
+                        style: AppText.smallLabel.copyWith(
                           height: 1,
-                          color: Colors.white,
                           fontWeight: FontWeight.w800,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -1137,8 +1075,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 14.5,
+                      style: AppText.body.copyWith(
                         height: 1.1,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1155,10 +1092,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                     child: Text(
                       'No glosses available',
                       textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
+                      style: AppText.emptyState,
                     ),
                   )
                 : ListView.separated(
@@ -1169,8 +1103,9 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                     itemBuilder: (context, index) {
                       final gloss = widget.glosses[index];
                       final isSelected = workingSelection.contains(gloss);
-                      final label =
-                          index < 26 ? String.fromCharCode(65 + index) : '•';
+                      final label = index < 26
+                          ? String.fromCharCode(65 + index)
+                          : '•';
 
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
@@ -1181,11 +1116,9 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                             child: Text(
                               label,
                               textScaler: TextScaler.noScaling,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                height: 1,
-                                color: Color(0xFF8A8A8A),
+                              style: AppText.buttonLabel.copyWith(
                                 fontWeight: FontWeight.w800,
+                                color: const Color(0xFF8A8A8A),
                               ),
                             ),
                           ),
@@ -1193,10 +1126,8 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                         title: Text(
                           gloss,
                           textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 15.5,
+                          style: AppText.body.copyWith(
                             height: 1.15,
-                            color: Colors.black,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -1204,18 +1135,16 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                           isSelected
                               ? Icons.check_circle
                               : Icons.circle_outlined,
-                          color:
-                              isSelected ? accentBlue : const Color(0xFF8A8A8A),
+                          color: isSelected
+                              ? accentBlue
+                              : const Color(0xFF8A8A8A),
                         ),
                       );
                     },
                   ),
           ),
           const SizedBox(height: 12),
-          _SheetSaveButton(
-            label: 'Save Glosses',
-            onTap: saveAndClose,
-          ),
+          _SheetSaveButton(label: 'Save Glosses', onTap: saveAndClose),
         ],
       ),
     );
@@ -1285,11 +1214,10 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
             '${workingSelection.length} selected',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
-              fontSize: 13.5,
+            style: AppText.cardCaption.copyWith(
               height: 1.2,
-              color: Color(0xFF8A8A8A),
               fontWeight: FontWeight.w600,
+              color: const Color(0xFF8A8A8A),
             ),
           ),
           const SizedBox(height: 12),
@@ -1299,10 +1227,7 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                     child: Text(
                       'No examples yet',
                       textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
+                      style: AppText.emptyState,
                     ),
                   )
                 : ListView.separated(
@@ -1320,10 +1245,8 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                         title: Text(
                           example.japanese,
                           textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 15.5,
+                          style: AppText.body.copyWith(
                             height: 1.18,
-                            color: Colors.black,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -1332,11 +1255,10 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                           child: Text(
                             example.english,
                             textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
-                              fontSize: 13.5,
+                            style: AppText.cardCaption.copyWith(
                               height: 1.15,
-                              color: Color(0xFF8A8A8A),
                               fontWeight: FontWeight.w500,
+                              color: const Color(0xFF8A8A8A),
                             ),
                           ),
                         ),
@@ -1344,18 +1266,16 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                           isSelected
                               ? Icons.check_circle
                               : Icons.circle_outlined,
-                          color:
-                              isSelected ? accentBlue : const Color(0xFF8A8A8A),
+                          color: isSelected
+                              ? accentBlue
+                              : const Color(0xFF8A8A8A),
                         ),
                       );
                     },
                   ),
           ),
           const SizedBox(height: 12),
-          _SheetSaveButton(
-            label: 'Save Examples',
-            onTap: saveAndClose,
-          ),
+          _SheetSaveButton(label: 'Save Examples', onTap: saveAndClose),
         ],
       ),
     );
@@ -1368,10 +1288,7 @@ class _SheetSaveButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _SheetSaveButton({
-    required this.label,
-    required this.onTap,
-  });
+  const _SheetSaveButton({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1387,12 +1304,7 @@ class _SheetSaveButton extends StatelessWidget {
           child: Text(
             label,
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
-              fontSize: 15.5,
-              height: 1,
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
+            style: AppText.primaryButton.copyWith(fontWeight: FontWeight.w800),
           ),
         ),
       ),

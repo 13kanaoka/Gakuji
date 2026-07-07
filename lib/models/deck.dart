@@ -1,15 +1,8 @@
 import 'term.dart';
 
-enum DeckType {
-  writing,
-  reading,
-  hybrid,
-}
+enum DeckType { writing, reading, hybrid }
 
-enum StudyMode {
-  normal,
-  spacedRepetition,
-}
+enum StudyMode { normal, spacedRepetition }
 
 /// Deck = container of copied deck-owned Terms.
 class Deck {

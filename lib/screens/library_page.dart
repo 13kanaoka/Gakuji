@@ -5,6 +5,7 @@ import '../data/folder_data.dart';
 import '../data/pinned_deck_data.dart';
 import '../models/deck.dart';
 import '../models/folder.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_deck_card.dart';
 import '../widgets/gakuji_folder_card.dart';
 import '../widgets/gakuji_search_bar.dart';
@@ -449,12 +450,7 @@ class _LibraryPageState extends State<LibraryPage> {
             'Library',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 18,
-              height: 1,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
+            style: AppText.pageTitle,
           ),
           Align(alignment: Alignment.centerRight, child: _headerMenuButton()),
         ],
@@ -486,12 +482,7 @@ class _LibraryPageState extends State<LibraryPage> {
           showDecks ? 'Decks' : 'Folders',
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 15,
-            height: 1,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF666666),
-          ),
+          style: AppText.buttonLabel.copyWith(color: const Color(0xFF666666)),
         ),
       ),
     );
@@ -531,7 +522,7 @@ class _LibraryPageState extends State<LibraryPage> {
               : searchQuery.trim().isEmpty
               ? 'No decks yet'
               : 'No decks found',
-          style: const TextStyle(color: Colors.grey, fontSize: 16),
+          style: AppText.emptyState,
         ),
       );
     }
@@ -589,7 +580,7 @@ class _LibraryPageState extends State<LibraryPage> {
               : searchQuery.trim().isEmpty
               ? 'No folders yet'
               : 'No folders found',
-          style: const TextStyle(color: Colors.grey, fontSize: 16),
+          style: AppText.emptyState,
         ),
       );
     }
@@ -831,13 +822,7 @@ class _LibraryPageState extends State<LibraryPage> {
             'New Deck',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 36,
-              height: 1,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.8,
-              color: Colors.black,
-            ),
+            style: AppText.dialogTitle,
           ),
           const SizedBox(height: 44),
           _fieldLabel('Deck Name'),
@@ -893,13 +878,7 @@ class _LibraryPageState extends State<LibraryPage> {
             'New Folder',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 36,
-              height: 1,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.8,
-              color: Colors.black,
-            ),
+            style: AppText.dialogTitle,
           ),
           const SizedBox(height: 44),
           _fieldLabel('Folder Name'),
@@ -928,12 +907,7 @@ class _LibraryPageState extends State<LibraryPage> {
       child: Text(
         label,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          fontSize: 15,
-          height: 1,
-          fontWeight: FontWeight.w600,
-          color: Colors.black,
-        ),
+        style: AppText.fieldLabel,
       ),
     );
   }
@@ -944,11 +918,7 @@ class _LibraryPageState extends State<LibraryPage> {
       child: Text(
         text ?? '',
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: deleteRed,
-        ),
+        style: AppText.smallLabel.copyWith(color: deleteRed),
       ),
     );
   }
@@ -1000,7 +970,7 @@ class _LibraryPageState extends State<LibraryPage> {
           borderRadius: BorderRadius.circular(14),
           dropdownColor: Colors.white,
           icon: const Icon(Icons.keyboard_arrow_down_rounded),
-          style: const TextStyle(fontSize: 16, color: Colors.black),
+          style: AppText.body,
           items: DeckType.values.map((type) {
             return DropdownMenuItem(
               value: type,
@@ -1048,12 +1018,7 @@ class _LibraryPageState extends State<LibraryPage> {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 20,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
+              style: AppText.primaryButton,
             ),
           ),
         ),
@@ -1095,12 +1060,7 @@ class _LibraryPageState extends State<LibraryPage> {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 20,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                color: textColor,
-              ),
+              style: AppText.primaryButton.copyWith(color: textColor),
             ),
           ),
         ),
@@ -1126,8 +1086,7 @@ class _LibraryPageState extends State<LibraryPage> {
             Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15,
+              style: AppText.body.copyWith(
                 fontWeight: FontWeight.w500,
                 color: textColor,
               ),

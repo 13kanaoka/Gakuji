@@ -8,6 +8,7 @@ import '../models/deck.dart';
 import '../models/term.dart';
 import '../services/deck_storage.dart';
 import '../services/reading_card_edit_storage.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'deck_edit_page.dart';
 
@@ -35,8 +36,9 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   static const Duration _cardReturnDuration = Duration(milliseconds: 320);
   static const Duration _cardExitDuration = Duration(milliseconds: 140);
   static const Duration _cardContentFadeDuration = Duration(milliseconds: 120);
-  static const Duration _previousCardReturnDuration =
-      Duration(milliseconds: 180);
+  static const Duration _previousCardReturnDuration = Duration(
+    milliseconds: 180,
+  );
 
   static const Color deckBlue = Color(0xFF4D7EF7);
   static const Color cardGray = Color(0xFFEDEDED);
@@ -110,14 +112,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 260),
     );
 
-    _flipAnimation = Tween<double>(
-      begin: 0,
-      end: math.pi,
-    ).animate(
-      CurvedAnimation(
-        parent: _flipController,
-        curve: Curves.easeInOut,
-      ),
+    _flipAnimation = Tween<double>(begin: 0, end: math.pi).animate(
+      CurvedAnimation(parent: _flipController, curve: Curves.easeInOut),
     );
 
     _swipeController = AnimationController(
@@ -447,9 +443,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   void startIncorrectReview() {
     if (incorrectReviewTerms.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No incorrect answers to review.'),
-        ),
+        const SnackBar(content: Text('No incorrect answers to review.')),
       );
       return;
     }
@@ -564,12 +558,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     _previousCardReturnRunId++;
 
     setState(() {
-      history.add(
-        _StudyHistoryEntry(
-          term: answeredTerm,
-          correct: correct,
-        ),
-      );
+      history.add(_StudyHistoryEntry(term: answeredTerm, correct: correct));
 
       answeredTerms.add(answeredTerm);
       activeTerms.removeAt(0);
@@ -655,15 +644,10 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
     _swipeController.duration = _cardReturnDuration;
 
-    _swipeAnimation = Tween<Offset>(
-      begin: startOffset,
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _swipeController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _swipeAnimation = Tween<Offset>(begin: startOffset, end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _swipeController, curve: Curves.easeOutCubic),
+        );
 
     _swipeController.reset();
 
@@ -682,9 +666,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     });
   }
 
-  Future<void> animateCardOffscreen({
-    required bool correct,
-  }) async {
+  Future<void> animateCardOffscreen({required bool correct}) async {
     if (activeTerms.isEmpty) return;
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -696,14 +678,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       dragOffset.dy * 0.45,
     );
 
-    _swipeAnimation = Tween<Offset>(
-      begin: dragOffset,
-      end: endOffset,
-    ).animate(
-      CurvedAnimation(
-        parent: _swipeController,
-        curve: Curves.easeOutQuad,
-      ),
+    _swipeAnimation = Tween<Offset>(begin: dragOffset, end: endOffset).animate(
+      CurvedAnimation(parent: _swipeController, curve: Curves.easeOutQuad),
     );
 
     _swipeController.reset();
@@ -788,9 +764,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => DeckEditPage(deck: widget.deck),
-      ),
+      MaterialPageRoute(builder: (context) => DeckEditPage(deck: widget.deck)),
     );
 
     if (!mounted) return;
@@ -839,10 +813,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
           child: Text(
             'No terms',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 18,
-              color: textGray,
-            ),
+            style: AppText.emptyState,
           ),
         ),
       );
@@ -866,8 +837,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
     final returningOffsetX = isReturningPreviousCard
         ? previousCardReturnDirection *
-            screenWidth *
-            (1 - previousReturnProgress)
+              screenWidth *
+              (1 - previousReturnProgress)
         : 0.0;
 
     final outgoingOffsetX =
@@ -895,10 +866,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                     leftIcon: Icons.close,
                     onLeftTap: handleExit,
                     title: '$currentPosition/$totalPosition',
-                    titleStyle: const TextStyle(
-                      fontSize: 24,
+                    titleStyle: AppText.topBarTitle.copyWith(
                       fontWeight: FontWeight.w500,
-                      color: Colors.black,
                     ),
                     rightIcon: Icons.more_horiz,
                     onRightTap: () {
@@ -909,16 +878,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _pill(
-                        incorrectCount,
-                        incorrectRed,
-                        alignLeft: true,
-                      ),
-                      _pill(
-                        correctCount,
-                        correctGreen,
-                        alignLeft: false,
-                      ),
+                      _pill(incorrectCount, incorrectRed, alignLeft: true),
+                      _pill(correctCount, correctGreen, alignLeft: false),
                     ],
                   ),
                   const SizedBox(height: 28),
@@ -950,9 +911,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                               0,
                               1,
                             )
-                            ..rotateZ(
-                              isReturningPreviousCard ? 0.0 : rotation,
-                            ),
+                            ..rotateZ(isReturningPreviousCard ? 0.0 : rotation),
                           alignment: Alignment.center,
                           child: GestureDetector(
                             onTap: flip,
@@ -1049,7 +1008,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final compact =
-                          constraints.maxWidth < 390 || constraints.maxHeight < 720;
+                          constraints.maxWidth < 390 ||
+                          constraints.maxHeight < 720;
 
                       final donutSize = compact ? 142.0 : 164.0;
                       final statWidth = compact ? 112.0 : 132.0;
@@ -1065,13 +1025,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                             const Text(
                               'Complete!',
                               textScaler: TextScaler.noScaling,
-                              style: TextStyle(
-                                fontSize: 48,
-                                height: 1,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -1.2,
-                                color: Colors.black,
-                              ),
+                              style: AppText.displayTitle,
                             ),
                             const Spacer(flex: 3),
                             Row(
@@ -1184,9 +1138,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
               label,
               overflow: TextOverflow.ellipsis,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 19,
-                height: 1,
+              style: AppText.listTitle.copyWith(
                 fontWeight: FontWeight.w800,
                 color: textColor,
               ),
@@ -1196,9 +1148,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
           Text(
             '$value',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 19,
-              height: 1,
+            style: AppText.listTitle.copyWith(
               fontWeight: FontWeight.w800,
               color: textColor,
             ),
@@ -1241,11 +1191,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                 child: Text(
                   label,
                   textScaler: TextScaler.noScaling,
-                  style: const TextStyle(
-                    fontSize: 26,
-                    height: 1,
+                  style: AppText.buttonLarge.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
                   ),
                 ),
               ),
@@ -1298,10 +1245,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                           Text(
                             'あ',
                             textScaler: TextScaler.noScaling,
-                            style: TextStyle(
-                              fontSize: 22,
-                              height: 1,
-                              fontWeight: FontWeight.bold,
+                            style: AppText.kanjiGlyphSmall.copyWith(
                               color: showFurigana ? Colors.black : Colors.grey,
                             ),
                           ),
@@ -1309,10 +1253,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                           Text(
                             showFurigana ? 'Hide Furigana' : 'Show Furigana',
                             textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
-                              fontSize: 15,
+                            style: AppText.body.copyWith(
                               fontWeight: FontWeight.w500,
-                              color: Colors.black,
                             ),
                           ),
                         ],
@@ -1338,11 +1280,10 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   'Card Orientation:',
                                   textScaler: TextScaler.noScaling,
-                                  style: TextStyle(
-                                    fontSize: 15,
+                                  style: AppText.body.copyWith(
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -1350,9 +1291,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                                 Text(
                                   termFirst ? 'Term -> Def.' : 'Def. -> Term',
                                   textScaler: TextScaler.noScaling,
-                                  style: const TextStyle(
+                                  style: AppText.cardCaption.copyWith(
                                     color: textGray,
-                                    fontSize: 13,
                                   ),
                                 ),
                               ],
@@ -1380,10 +1320,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                           Text(
                             isShuffled ? 'Unshuffle' : 'Shuffle',
                             textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
-                              fontSize: 15,
+                            style: AppText.body.copyWith(
                               fontWeight: FontWeight.w500,
-                              color: Colors.black,
                             ),
                           ),
                         ],
@@ -1415,25 +1353,15 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: iconColor,
-            ),
+            Icon(icon, color: iconColor),
             const SizedBox(width: 12),
             Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: Colors.black,
-              ),
+              style: AppText.body.copyWith(fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -1481,10 +1409,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
         color: cardGray,
         borderRadius: BorderRadius.circular(24),
         border: hasSwipeFeedback
-            ? Border.all(
-                color: swipeColor,
-                width: 5,
-              )
+            ? Border.all(color: swipeColor, width: 5)
             : null,
         boxShadow: const [
           BoxShadow(
@@ -1499,10 +1424,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
           Center(
             child: Opacity(
               opacity: contentOpacity,
-              child: _cardContent(
-                term,
-                showDefinition: showDefinition,
-              ),
+              child: _cardContent(term, showDefinition: showDefinition),
             ),
           ),
           if (hasSwipeFeedback)
@@ -1522,13 +1444,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                     swipeLabel,
                     textAlign: TextAlign.center,
                     textScaler: TextScaler.noScaling,
-                    style: TextStyle(
-                      color: swipeColor,
-                      fontSize: 34,
-                      height: 1,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.6,
-                    ),
+                    style: AppText.screenTitle.copyWith(color: swipeColor),
                   ),
                 ),
               ),
@@ -1538,10 +1454,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _cardContent(
-    Term term, {
-    required bool showDefinition,
-  }) {
+  Widget _cardContent(Term term, {required bool showDefinition}) {
     if (showDefinition) {
       return _definitionCardContent(term);
     }
@@ -1565,10 +1478,10 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     final glossFontSize = glosses.length <= 1 && !hasExtras
         ? 34.0
         : hasPhoto
-            ? 18.0
-            : glosses.length <= 3
-                ? 23.0
-                : 20.0;
+        ? 18.0
+        : glosses.length <= 3
+        ? 23.0
+        : 20.0;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(25, 24, 25, 24),
@@ -1580,7 +1493,11 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
             children: [
               Text(
                 glossText,
-                maxLines: hasPhoto ? 4 : hasExtras ? 6 : 8,
+                maxLines: hasPhoto
+                    ? 4
+                    : hasExtras
+                    ? 6
+                    : 8,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 textScaler: TextScaler.noScaling,
@@ -1614,10 +1531,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                 SizedBox(height: hasPhoto ? 12 : 18),
                 _studyCardDivider(),
                 SizedBox(height: hasPhoto ? 10 : 14),
-                _studyExamplesBlock(
-                  examples,
-                  compact: hasPhoto,
-                ),
+                _studyExamplesBlock(examples, compact: hasPhoto),
               ],
               if (hasPhoto) ...[
                 const SizedBox(height: 14),
@@ -1647,14 +1561,12 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
               color: Colors.white.withValues(alpha: 0.72),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Text(
+            child: Text(
               'Photo unavailable',
               textAlign: TextAlign.center,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 13,
+              style: AppText.buttonLabel.copyWith(
                 height: 1.15,
-                fontWeight: FontWeight.w700,
                 color: textGray,
               ),
             ),
@@ -1665,8 +1577,9 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }
 
   Widget _termCardContent(Term term) {
-    final kanjiText =
-        term.kanji.trim().isNotEmpty ? term.kanji.trim() : term.reading.trim();
+    final kanjiText = term.kanji.trim().isNotEmpty
+        ? term.kanji.trim()
+        : term.reading.trim();
     final readingText = term.reading.trim();
 
     return Center(
@@ -1682,9 +1595,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                 readingText,
                 textAlign: TextAlign.center,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 20,
-                  height: 1,
+                style: AppText.listHeading.copyWith(
                   fontWeight: FontWeight.w500,
                   color: textGray,
                 ),
@@ -1786,8 +1697,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
                   textScaler: TextScaler.noScaling,
-                  style: const TextStyle(
-                    fontSize: 12.5,
+                  style: AppText.cardCaption.copyWith(
                     height: 1.15,
                     fontWeight: FontWeight.w600,
                     color: textGray,
@@ -1801,11 +1711,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _pill(
-    int count,
-    Color color, {
-    required bool alignLeft,
-  }) {
+  Widget _pill(int count, Color color, {required bool alignLeft}) {
     final isIncorrect = color == incorrectRed;
 
     return Container(
@@ -1819,12 +1725,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         color: color,
         borderRadius: alignLeft
-            ? const BorderRadius.horizontal(
-                right: Radius.circular(30),
-              )
-            : const BorderRadius.horizontal(
-                left: Radius.circular(30),
-              ),
+            ? const BorderRadius.horizontal(right: Radius.circular(30))
+            : const BorderRadius.horizontal(left: Radius.circular(30)),
         border: Border.all(
           color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
           width: 3,
@@ -1833,8 +1735,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       child: Text(
         '$count',
         textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 24,
+        style: AppText.buttonLarge.copyWith(
           height: 1,
           fontWeight: FontWeight.w700,
           color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
@@ -1864,11 +1765,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
         clipBehavior: Clip.antiAlias,
         child: IconButton(
           onPressed: onTap,
-          icon: Icon(
-            icon,
-            size: 25,
-            color: Colors.black,
-          ),
+          icon: Icon(icon, size: 25, color: Colors.black),
         ),
       ),
     );
@@ -1879,10 +1776,7 @@ class _StudyHistoryEntry {
   final Term term;
   final bool correct;
 
-  const _StudyHistoryEntry({
-    required this.term,
-    required this.correct,
-  });
+  const _StudyHistoryEntry({required this.term, required this.correct});
 }
 
 class _CompletionDonutPainter extends CustomPainter {
@@ -1921,26 +1815,14 @@ class _CompletionDonutPainter extends CustomPainter {
       ..strokeWidth = strokeWidth;
 
     if (total == 0) {
-      canvas.drawArc(
-        rect,
-        -math.pi / 2,
-        math.pi * 2,
-        false,
-        incorrectPaint,
-      );
+      canvas.drawArc(rect, -math.pi / 2, math.pi * 2, false, incorrectPaint);
       return;
     }
 
     final correctSweep = (correctCount / total) * math.pi * 2;
     final incorrectSweep = math.pi * 2 - correctSweep;
 
-    canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      correctSweep,
-      false,
-      correctPaint,
-    );
+    canvas.drawArc(rect, -math.pi / 2, correctSweep, false, correctPaint);
 
     canvas.drawArc(
       rect,

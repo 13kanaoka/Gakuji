@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'gakuji_styles.dart';
 
-enum GakujiDeckCardSize {
-  large,
-  compact,
-}
+enum GakujiDeckCardSize { large, compact }
 
 class GakujiDeckCard extends StatefulWidget {
   final String title;
@@ -229,11 +226,7 @@ class _GakujiDeckCardState extends State<GakujiDeckCard> {
         height: totalHeight,
         duration: const Duration(milliseconds: 55),
         curve: Curves.easeOut,
-        transform: Matrix4.translationValues(
-          0,
-          isPressed ? 7 : 0,
-          0,
-        ),
+        transform: Matrix4.translationValues(0, isPressed ? 7 : 0, 0),
         decoration: BoxDecoration(
           color: widget.showShell ? shellColor : Colors.transparent,
           borderRadius: outerRadius,
@@ -273,10 +266,7 @@ class _GakujiDeckCardState extends State<GakujiDeckCard> {
   Widget _titleOnly() {
     return Transform.translate(
       offset: Offset(0, contentYOffset),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: _titleText(),
-      ),
+      child: Align(alignment: Alignment.centerLeft, child: _titleText()),
     );
   }
 
@@ -337,10 +327,7 @@ class _GakujiDeckCardState extends State<GakujiDeckCard> {
           decoration: BoxDecoration(
             color: pinRed,
             shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.white,
-              width: 2,
-            ),
+            border: Border.all(color: Colors.white, width: 2),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x33000000),

@@ -4,16 +4,14 @@ import '../data/deck_data.dart';
 import '../data/dictionary_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'dictionary_detail_page.dart';
 
 class KanjiDictionaryDetailPage extends StatefulWidget {
   final Term kanjiEntry;
 
-  const KanjiDictionaryDetailPage({
-    super.key,
-    required this.kanjiEntry,
-  });
+  const KanjiDictionaryDetailPage({super.key, required this.kanjiEntry});
 
   @override
   State<KanjiDictionaryDetailPage> createState() =>
@@ -51,9 +49,9 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
       if (isSaved) {
         defaultDeck.terms.removeWhere((term) => term.sourceId == sourceId);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Removed from deck')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Removed from deck')));
       } else {
         defaultDeck.terms.add(copiedEntryForDeck(defaultDeck));
 
@@ -70,9 +68,7 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(20),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
         return ListView(
@@ -81,10 +77,7 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
             const Padding(
               padding: EdgeInsets.all(16),
               child: Center(
-                child: Text(
-                  'Choose Deck',
-                  style: TextStyle(fontSize: 20),
-                ),
+                child: Text('Choose Deck', style: AppText.listHeading),
               ),
             ),
             const Divider(),
@@ -198,17 +191,11 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
             child: Text(
               entry.kanji.isEmpty ? '' : entry.kanji.substring(0, 1),
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 78,
-                height: 1,
-                fontWeight: FontWeight.w400,
-              ),
+              style: AppText.kanjiHero,
             ),
           ),
           const SizedBox(width: 14),
-          Expanded(
-            child: _strokePreview(entry),
-          ),
+          Expanded(child: _strokePreview(entry)),
         ],
       ),
     );
@@ -231,10 +218,10 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
               child: Center(
                 child: Text(
                   kanji,
-                  style: TextStyle(
-                    fontSize: 27,
-                    color: Colors.black.withValues(alpha: 0.25 + (index * 0.18)),
-                    fontWeight: FontWeight.w400,
+                  style: AppText.kanjiStroke.copyWith(
+                    color: Colors.black.withValues(
+                      alpha: 0.25 + (index * 0.18),
+                    ),
                   ),
                 ),
               ),
@@ -271,26 +258,8 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 72,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 18,
-                color: Colors.grey,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 20,
-                height: 1.25,
-                color: Colors.black,
-              ),
-            ),
-          ),
+          SizedBox(width: 72, child: Text(label, style: AppText.detailLabel)),
+          Expanded(child: Text(value, style: AppText.detailValue)),
         ],
       ),
     );
@@ -305,8 +274,7 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
           padding: const EdgeInsets.fromLTRB(18, 21, 18, 25),
           child: Text(
             entry.note ?? 'Write a note',
-            style: TextStyle(
-              fontSize: 18,
+            style: AppText.detailValue.copyWith(
               color: entry.note == null ? accentGreen : Colors.black,
             ),
           ),
@@ -341,26 +309,8 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 92,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 18,
-                color: Colors.grey,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 19,
-                height: 1.25,
-                color: Colors.black,
-              ),
-            ),
-          ),
+          SizedBox(width: 92, child: Text(label, style: AppText.detailLabel)),
+          Expanded(child: Text(value, style: AppText.detailValue)),
         ],
       ),
     );
@@ -376,21 +326,12 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
         if (compounds.isEmpty)
           const Padding(
             padding: EdgeInsets.fromLTRB(18, 20, 18, 20),
-            child: Text(
-              'No compounds yet',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
+            child: Text('No compounds yet', style: AppText.emptyState),
           )
         else
           ...compounds.asMap().entries.map((entryMap) {
             final isLast = entryMap.key == compounds.length - 1;
-            return _compoundRow(
-              compound: entryMap.value,
-              showDivider: !isLast,
-            );
+            return _compoundRow(compound: entryMap.value, showDivider: !isLast);
           }),
       ],
     );
@@ -416,20 +357,15 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
                     width: 88,
                     child: Text(
                       compound.kanji,
-                      style: const TextStyle(
-                        fontSize: 23,
-                        color: Colors.black,
+                      style: AppText.cardTitle.copyWith(
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ),
                   Expanded(
                     child: Text(
                       '【${compound.reading}】 ${compound.meaning}',
-                      style: const TextStyle(
-                        fontSize: 19,
-                        height: 1.2,
-                        color: Colors.black,
-                      ),
+                      style: AppText.detailValue,
                     ),
                   ),
                   Icon(
@@ -442,11 +378,7 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
               if (showDivider)
                 const Padding(
                   padding: EdgeInsets.only(top: 12),
-                  child: Divider(
-                    height: 1,
-                    thickness: 1,
-                    color: dividerColor,
-                  ),
+                  child: Divider(height: 1, thickness: 1, color: dividerColor),
                 ),
             ],
           ),
@@ -460,14 +392,7 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
       width: double.infinity,
       color: sectionColor,
       padding: const EdgeInsets.fromLTRB(18, 6, 18, 6),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w700,
-          height: 1,
-        ),
-      ),
+      child: Text(title, style: AppText.cardTitle),
     );
   }
 
@@ -485,11 +410,7 @@ class _KanjiDictionaryDetailPageState extends State<KanjiDictionaryDetailPage> {
         child: InkWell(
           customBorder: const CircleBorder(),
           onTap: onTap,
-          child: Icon(
-            icon,
-            size: 28,
-            color: iconColor,
-          ),
+          child: Icon(icon, size: 28, color: iconColor),
         ),
       ),
     );

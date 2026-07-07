@@ -10,6 +10,7 @@ import '../services/deck_storage.dart';
 import '../services/prompt_converter.dart';
 import '../services/writing_answer_checker.dart';
 import '../services/writing_recognition_service.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'deck_edit_page.dart';
 
@@ -34,11 +35,9 @@ class WritingStudyPage extends StatefulWidget {
    ========================= */
 
 class WritingSessionController {
-  WritingSessionController({
-    required List<Term> terms,
-    required this.deckId,
-  })  : allTerms = List<Term>.from(terms),
-        activeTerms = List<Term>.from(terms) {
+  WritingSessionController({required List<Term> terms, required this.deckId})
+    : allTerms = List<Term>.from(terms),
+      activeTerms = List<Term>.from(terms) {
     _initSlots();
   }
 
@@ -159,10 +158,7 @@ class WritingSessionController {
 
   void _initSlots() {
     if (activeTerms.isEmpty || isComplete) {
-      slotStrokes = List.generate(
-        1,
-        (_) => <List<WritingPoint>>[],
-      );
+      slotStrokes = List.generate(1, (_) => <List<WritingPoint>>[]);
 
       slotAnswers = [];
       activeSlotIndex = 0;
@@ -172,10 +168,7 @@ class WritingSessionController {
 
     final count = current.slotCount;
 
-    slotStrokes = List.generate(
-      count,
-      (_) => <List<WritingPoint>>[],
-    );
+    slotStrokes = List.generate(count, (_) => <List<WritingPoint>>[]);
 
     slotAnswers = List<String?>.filled(count, null);
 
@@ -183,10 +176,7 @@ class WritingSessionController {
     hasChecked = false;
   }
 
-  void restoreProgress(
-    int index, {
-    required bool shuffle,
-  }) {
+  void restoreProgress(int index, {required bool shuffle}) {
     if (allTerms.isEmpty) {
       answeredTerms.clear();
       activeTerms = [];
@@ -246,10 +236,7 @@ class WritingSessionController {
     _saveProgress(saveProgress);
   }
 
-  void updateShuffle({
-    required bool shuffled,
-    required bool saveProgress,
-  }) {
+  void updateShuffle({required bool shuffled, required bool saveProgress}) {
     if (activeTerms.isEmpty) return;
 
     if (shuffled) {
@@ -328,20 +315,12 @@ class WritingSessionController {
 
   bool isStarred() => starred.contains(current.id);
 
-  void answer(
-    bool correct, {
-    bool saveProgress = true,
-  }) {
+  void answer(bool correct, {bool saveProgress = true}) {
     if (activeTerms.isEmpty) return;
 
     final answeredTerm = activeTerms.first;
 
-    history.add(
-      WritingHistoryEntry(
-        term: answeredTerm,
-        correct: correct,
-      ),
-    );
+    history.add(WritingHistoryEntry(term: answeredTerm, correct: correct));
 
     answeredTerms.add(answeredTerm);
     activeTerms.removeAt(0);
@@ -358,19 +337,12 @@ class WritingSessionController {
     _saveProgress(saveProgress);
   }
 
-  void skip({
-    bool saveProgress = true,
-  }) {
+  void skip({bool saveProgress = true}) {
     if (activeTerms.isEmpty) return;
 
     final skippedTerm = activeTerms.first;
 
-    history.add(
-      WritingHistoryEntry(
-        term: skippedTerm,
-        correct: false,
-      ),
-    );
+    history.add(WritingHistoryEntry(term: skippedTerm, correct: false));
 
     answeredTerms.add(skippedTerm);
     activeTerms.removeAt(0);
@@ -383,9 +355,7 @@ class WritingSessionController {
     _saveProgress(saveProgress);
   }
 
-  void previousCard({
-    bool saveProgress = true,
-  }) {
+  void previousCard({bool saveProgress = true}) {
     if (history.isEmpty) return;
 
     final last = history.removeLast();
@@ -462,10 +432,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     );
 
     if (isShuffled) {
-      controller.updateShuffle(
-        shuffled: true,
-        saveProgress: false,
-      );
+      controller.updateShuffle(shuffled: true, saveProgress: false);
     }
 
     _swipeController = AnimationController(
@@ -515,10 +482,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     if (!mounted || isReviewingIncorrect) return;
 
     setState(() {
-      controller.restoreProgress(
-        saved,
-        shuffle: isShuffled,
-      );
+      controller.restoreProgress(saved, shuffle: isShuffled);
 
       if (savedGridVisible != null) {
         controller.showGrid = savedGridVisible;
@@ -531,10 +495,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   Future<void> _saveGridPreference() async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setBool(
-      writingGridPreferenceKey,
-      controller.showGrid,
-    );
+    await prefs.setBool(writingGridPreferenceKey, controller.showGrid);
   }
 
   Future<void> exitDeck() async {
@@ -561,8 +522,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   }
 
   double get swipeFeedbackOpacity {
-    final opacity =
-        ((revealDragOffset.dx.abs() - 30) / 90).clamp(0.0, 1.0);
+    final opacity = ((revealDragOffset.dx.abs() - 30) / 90).clamp(0.0, 1.0);
 
     return opacity.toDouble();
   }
@@ -620,9 +580,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   void startIncorrectReview() {
     if (controller.incorrectReviewTerms.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No incorrect answers to review.'),
-        ),
+        const SnackBar(content: Text('No incorrect answers to review.')),
       );
       return;
     }
@@ -686,9 +644,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => DeckEditPage(deck: widget.deck),
-      ),
+      MaterialPageRoute(builder: (context) => DeckEditPage(deck: widget.deck)),
     );
 
     if (!mounted) return;
@@ -714,9 +670,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     _cardContentController.stop();
 
     setState(() {
-      controller.previousCard(
-        saveProgress: !isReviewingIncorrect,
-      );
+      controller.previousCard(saveProgress: !isReviewingIncorrect);
       resetRevealState();
     });
   }
@@ -728,9 +682,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     _cardContentController.stop();
 
     setState(() {
-      controller.skip(
-        saveProgress: !isReviewingIncorrect,
-      );
+      controller.skip(saveProgress: !isReviewingIncorrect);
       resetRevealState();
     });
   }
@@ -745,10 +697,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     }
 
     setState(() {
-      controller.answer(
-        correct,
-        saveProgress: !isReviewingIncorrect,
-      );
+      controller.answer(correct, saveProgress: !isReviewingIncorrect);
       resetRevealState(resetContentOpacity: false);
     });
 
@@ -798,15 +747,10 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
     _swipeController.duration = _cardReturnDuration;
 
-    _swipeAnimation = Tween<Offset>(
-      begin: startOffset,
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _swipeController,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    _swipeAnimation = Tween<Offset>(begin: startOffset, end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _swipeController, curve: Curves.easeOutCubic),
+        );
 
     _swipeController.reset();
 
@@ -825,9 +769,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     });
   }
 
-  Future<void> animateRevealCardOffscreen({
-    required bool correct,
-  }) async {
+  Future<void> animateRevealCardOffscreen({required bool correct}) async {
     final screenWidth = MediaQuery.of(context).size.width;
 
     _swipeController.duration = _cardExitDuration;
@@ -837,15 +779,10 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       revealDragOffset.dy * 0.45,
     );
 
-    _swipeAnimation = Tween<Offset>(
-      begin: revealDragOffset,
-      end: endOffset,
-    ).animate(
-      CurvedAnimation(
-        parent: _swipeController,
-        curve: Curves.easeOutQuad,
-      ),
-    );
+    _swipeAnimation = Tween<Offset>(begin: revealDragOffset, end: endOffset)
+        .animate(
+          CurvedAnimation(parent: _swipeController, curve: Curves.easeOutQuad),
+        );
 
     _swipeController.reset();
 
@@ -872,9 +809,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
     if (!hasInput) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Write in the selected box first'),
-        ),
+        const SnackBar(content: Text('Write in the selected box first')),
       );
 
       return;
@@ -885,8 +820,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       isCheckingAnswer = true;
     });
 
-    final recognizedCharacter =
-        await WritingRecognitionService.recognizeSlot(
+    final recognizedCharacter = await WritingRecognitionService.recognizeSlot(
       slotStrokes: activeSlotStrokes,
       mockCharacter: controller.activeCorrectCharacter,
     );
@@ -908,18 +842,14 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     }
 
     setState(() {
-      controller.setSlotAnswer(
-        controller.activeSlotIndex,
-        recognizedCharacter,
-      );
+      controller.setSlotAnswer(controller.activeSlotIndex, recognizedCharacter);
 
       final allSlotsFilled = WritingRecognitionService.areAllSlotsFilled(
         controller.slotAnswers,
       );
 
       if (allSlotsFilled) {
-        final submittedAnswer =
-            WritingRecognitionService.buildSubmittedAnswer(
+        final submittedAnswer = WritingRecognitionService.buildSubmittedAnswer(
           controller.slotAnswers,
         );
 
@@ -942,15 +872,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     if (controller.allTerms.isEmpty && controller.activeTerms.isEmpty) {
       return const Scaffold(
         backgroundColor: Colors.white,
-        body: Center(
-          child: Text(
-            'No terms',
-            style: TextStyle(
-              fontSize: 18,
-              color: textGray,
-            ),
-          ),
-        ),
+        body: Center(child: Text('No terms', style: AppText.emptyState)),
       );
     }
 
@@ -978,10 +900,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                     onLeftTap: exitDeck,
                     title:
                         '${controller.currentIndex + 1}/${controller.totalSessionCount}',
-                    titleStyle: const TextStyle(
-                      fontSize: 24,
+                    titleStyle: AppText.topBarTitle.copyWith(
                       fontWeight: FontWeight.w500,
-                      color: Colors.black,
                     ),
                     rightIcon: Icons.more_horiz,
                     onRightTap: () {
@@ -1005,9 +925,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                     ],
                   ),
                   const SizedBox(height: 28),
-                  Expanded(
-                    child: _studyCardArea(prompt),
-                  ),
+                  Expanded(child: _studyCardArea(prompt)),
                   const SizedBox(height: 22),
                   Padding(
                     padding: const EdgeInsets.only(
@@ -1034,8 +952,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   }
 
   Widget _studyCardArea(WritingPrompt prompt) {
-    final rotation =
-        (revealDragOffset.dx / 700).clamp(-0.35, 0.35).toDouble();
+    final rotation = (revealDragOffset.dx / 700).clamp(-0.35, 0.35).toDouble();
 
     final feedbackText = swipeFeedbackText;
     final feedbackColor = swipeFeedbackColor;
@@ -1058,7 +975,12 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         else
           Transform(
             transform: Matrix4.identity()
-              ..translateByDouble(revealDragOffset.dx, revealDragOffset.dy, 0, 1)
+              ..translateByDouble(
+                revealDragOffset.dx,
+                revealDragOffset.dy,
+                0,
+                1,
+              )
               ..rotateZ(rotation),
             alignment: Alignment.center,
             child: GestureDetector(
@@ -1121,10 +1043,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         color: cardGray,
         borderRadius: BorderRadius.circular(24),
         border: hasSwipeFeedback
-            ? Border.all(
-                color: swipeColor,
-                width: 5,
-              )
+            ? Border.all(color: swipeColor, width: 5)
             : null,
         boxShadow: const [
           BoxShadow(
@@ -1159,13 +1078,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                     swipeLabel,
                     textAlign: TextAlign.center,
                     textScaler: TextScaler.noScaling,
-                    style: TextStyle(
-                      color: swipeColor,
-                      fontSize: 34,
-                      height: 1,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.6,
-                    ),
+                    style: AppText.screenTitle.copyWith(color: swipeColor),
                   ),
                 ),
               ),
@@ -1181,7 +1094,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         Text(
           prompt.reading,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(fontSize: 20),
+          style: AppText.detailValue,
         ),
         const SizedBox(height: 20),
         _answerSlotRow(prompt),
@@ -1190,7 +1103,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
           prompt.meaning,
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(fontSize: 18),
+          style: AppText.detailValue,
         ),
         const Spacer(),
         Row(
@@ -1210,8 +1123,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
               label: isCheckingAnswer
                   ? 'Checking...'
                   : isCheckingFinalSlot
-                      ? 'Submit'
-                      : 'Check',
+                  ? 'Submit'
+                  : 'Check',
               color: deckBlue,
               textColor: Colors.white,
               width: isCheckingAnswer ? 104 : 74,
@@ -1236,25 +1149,16 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                     return GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onPanStart: (details) {
-                        final box =
-                            context.findRenderObject() as RenderBox;
-                        final point = box.globalToLocal(
-                          details.globalPosition,
-                        );
+                        final box = context.findRenderObject() as RenderBox;
+                        final point = box.globalToLocal(details.globalPosition);
 
                         setState(() {
-                          controller.addStroke(
-                            point,
-                            isStart: true,
-                          );
+                          controller.addStroke(point, isStart: true);
                         });
                       },
                       onPanUpdate: (details) {
-                        final box =
-                            context.findRenderObject() as RenderBox;
-                        final point = box.globalToLocal(
-                          details.globalPosition,
-                        );
+                        final box = context.findRenderObject() as RenderBox;
+                        final point = box.globalToLocal(details.globalPosition);
 
                         setState(() {
                           controller.addStroke(point);
@@ -1263,8 +1167,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                       child: CustomPaint(
                         painter: _Painter(
                           controller.slotStrokes.isNotEmpty
-                              ? controller
-                                  .slotStrokes[controller.activeSlotIndex]
+                              ? controller.slotStrokes[controller
+                                    .activeSlotIndex]
                               : <List<WritingPoint>>[],
                           controller.showGrid,
                         ),
@@ -1278,14 +1182,13 @@ class _WritingStudyPageState extends State<WritingStudyPage>
           ),
         ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'Please write your answer in the box above',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 11,
+          style: AppText.smallLabel.copyWith(
             height: 1,
             fontWeight: FontWeight.w500,
             color: textGray,
@@ -1303,7 +1206,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         Text(
           prompt.reading,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(fontSize: 20),
+          style: AppText.detailValue,
         ),
         const SizedBox(height: 24),
         _answerSlotRow(prompt),
@@ -1312,21 +1215,16 @@ class _WritingStudyPageState extends State<WritingStudyPage>
           prompt.meaning,
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(fontSize: 18),
+          style: AppText.detailValue,
         ),
         const SizedBox(height: 90),
-        Container(
-          width: double.infinity,
-          height: 3,
-          color: Colors.black,
-        ),
+        Container(width: double.infinity, height: 3, color: Colors.black),
         const SizedBox(height: 40),
         Text(
           result?.correctAnswer ?? prompt.answer,
           textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 48,
-            color: Color(0xFF6C78FF),
+          style: AppText.kanjiGlyphLarge.copyWith(
+            color: const Color(0xFF6C78FF),
           ),
         ),
         const Spacer(),
@@ -1334,10 +1232,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
           'Swipe left for incorrect · Swipe right for correct',
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.grey,
-          ),
+          style: AppText.emptyState,
         ),
       ],
     );
@@ -1349,8 +1244,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       children: List.generate(prompt.slotCount, (index) {
         final active = index == controller.activeSlotIndex;
         final slotAnswer = controller.slotAnswers[index];
-        final slotColor =
-            active && !isAnswerRevealed ? deckBlue : Colors.black;
+        final slotColor = active && !isAnswerRevealed ? deckBlue : Colors.black;
 
         return GestureDetector(
           behavior: HitTestBehavior.translucent,
@@ -1379,9 +1273,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                 : Text(
                     slotAnswer,
                     textScaler: TextScaler.noScaling,
-                    style: TextStyle(
-                      fontSize: 30,
-                      height: 1,
+                    style: AppText.kanjiCandidate.copyWith(
                       fontWeight: FontWeight.w600,
                       color: slotColor,
                     ),
@@ -1431,9 +1323,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                   child: Text(
                     label,
                     textScaler: TextScaler.noScaling,
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1,
+                    style: AppText.buttonLabel.copyWith(
                       fontWeight: FontWeight.w800,
                       color: textColor,
                     ),
@@ -1449,8 +1339,9 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
   Widget _completeScreen() {
     final total = controller.correctCount + controller.incorrectCount;
-    final percent =
-        total == 0 ? 0 : ((controller.correctCount / total) * 100).round();
+    final percent = total == 0
+        ? 0
+        : ((controller.correctCount / total) * 100).round();
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -1473,7 +1364,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                     builder: (context, constraints) {
                       final compact =
                           constraints.maxWidth < 390 ||
-                              constraints.maxHeight < 720;
+                          constraints.maxHeight < 720;
 
                       final donutSize = compact ? 142.0 : 164.0;
                       final statWidth = compact ? 112.0 : 132.0;
@@ -1489,13 +1380,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                             const Text(
                               'Complete!',
                               textScaler: TextScaler.noScaling,
-                              style: TextStyle(
-                                fontSize: 48,
-                                height: 1,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -1.2,
-                                color: Colors.black,
-                              ),
+                              style: AppText.displayTitle,
                             ),
                             const Spacer(flex: 3),
                             Row(
@@ -1511,8 +1396,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                                       CustomPaint(
                                         size: Size(donutSize, donutSize),
                                         painter: _CompletionDonutPainter(
-                                          correctCount:
-                                              controller.correctCount,
+                                          correctCount: controller.correctCount,
                                           incorrectCount:
                                               controller.incorrectCount,
                                           correctColor: correctGreen,
@@ -1610,9 +1494,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
               label,
               overflow: TextOverflow.ellipsis,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 19,
-                height: 1,
+              style: AppText.listTitle.copyWith(
                 fontWeight: FontWeight.w800,
                 color: textColor,
               ),
@@ -1622,9 +1504,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
           Text(
             '$value',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 19,
-              height: 1,
+            style: AppText.listTitle.copyWith(
               fontWeight: FontWeight.w800,
               color: textColor,
             ),
@@ -1667,11 +1547,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                 child: Text(
                   label,
                   textScaler: TextScaler.noScaling,
-                  style: const TextStyle(
-                    fontSize: 26,
-                    height: 1,
+                  style: AppText.buttonLarge.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
                   ),
                 ),
               ),
@@ -1717,8 +1594,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                         ? Icons.visibility
                         : Icons.visibility_off,
                     label: controller.showGrid ? 'Hide Grid' : 'Show Grid',
-                    iconColor:
-                        controller.showGrid ? Colors.black : Colors.grey,
+                    iconColor: controller.showGrid ? Colors.black : Colors.grey,
                     onTap: toggleGridFromMenu,
                   ),
                   const Divider(height: 1, color: dividerGray),
@@ -1753,25 +1629,15 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: iconColor,
-            ),
+            Icon(icon, color: iconColor),
             const SizedBox(width: 12),
             Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: Colors.black,
-              ),
+              style: AppText.body.copyWith(fontWeight: FontWeight.w500),
             ),
           ],
         ),
@@ -1779,11 +1645,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     );
   }
 
-  Widget _pill(
-    int count,
-    Color color, {
-    required bool alignLeft,
-  }) {
+  Widget _pill(int count, Color color, {required bool alignLeft}) {
     final isIncorrect = color == incorrectRed;
 
     return Container(
@@ -1797,12 +1659,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       decoration: BoxDecoration(
         color: color,
         borderRadius: alignLeft
-            ? const BorderRadius.horizontal(
-                right: Radius.circular(30),
-              )
-            : const BorderRadius.horizontal(
-                left: Radius.circular(30),
-              ),
+            ? const BorderRadius.horizontal(right: Radius.circular(30))
+            : const BorderRadius.horizontal(left: Radius.circular(30)),
         border: Border.all(
           color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
           width: 3,
@@ -1811,8 +1669,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       child: Text(
         '$count',
         textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 24,
+        style: AppText.buttonLarge.copyWith(
           height: 1,
           fontWeight: FontWeight.w700,
           color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
@@ -1842,11 +1699,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                     ),
                   ],
           ),
-          child: Icon(
-            icon,
-            size: 25,
-            color: Colors.black,
-          ),
+          child: Icon(icon, size: 25, color: Colors.black),
         );
       },
     );
@@ -1935,10 +1788,7 @@ class WritingHistoryEntry {
   final Term term;
   final bool correct;
 
-  const WritingHistoryEntry({
-    required this.term,
-    required this.correct,
-  });
+  const WritingHistoryEntry({required this.term, required this.correct});
 }
 
 /* =========================
@@ -2027,26 +1877,14 @@ class _CompletionDonutPainter extends CustomPainter {
       ..strokeWidth = strokeWidth;
 
     if (total == 0) {
-      canvas.drawArc(
-        rect,
-        -math.pi / 2,
-        math.pi * 2,
-        false,
-        incorrectPaint,
-      );
+      canvas.drawArc(rect, -math.pi / 2, math.pi * 2, false, incorrectPaint);
       return;
     }
 
     final correctSweep = (correctCount / total) * math.pi * 2;
     final incorrectSweep = math.pi * 2 - correctSweep;
 
-    canvas.drawArc(
-      rect,
-      -math.pi / 2,
-      correctSweep,
-      false,
-      correctPaint,
-    );
+    canvas.drawArc(rect, -math.pi / 2, correctSweep, false, correctPaint);
 
     canvas.drawArc(
       rect,

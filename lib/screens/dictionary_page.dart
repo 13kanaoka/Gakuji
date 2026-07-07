@@ -7,6 +7,7 @@ import '../models/term.dart';
 import '../models/writing_point.dart';
 import '../services/dictionary_service.dart';
 import '../services/writing_recognition_service.dart';
+import '../theme/app_text_styles.dart';
 import 'dictionary_detail_page.dart';
 
 enum DictionaryInputMode { keyboard, writing }
@@ -507,12 +508,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
             'Dictionary',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 18,
-              height: 1,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
+            style: AppText.pageTitle,
           ),
         ],
       ),
@@ -531,7 +527,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
           child: Text(
             isDictionaryLoading ? 'Loading dictionary...' : 'Search for a word',
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(color: Colors.grey, fontSize: 16),
+            style: AppText.emptyState,
           ),
         ),
       );
@@ -544,7 +540,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
           child: Text(
             'Searching...',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(color: Colors.grey, fontSize: 16),
+            style: AppText.emptyState,
           ),
         ),
       );
@@ -557,7 +553,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
           child: Text(
             'No results found',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(color: Colors.grey, fontSize: 16),
+            style: AppText.emptyState,
           ),
         ),
       );
@@ -571,11 +567,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
           const Text(
             'Recent Searches',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 20,
-              height: 1,
-              fontWeight: FontWeight.bold,
-            ),
+            style: AppText.listHeading,
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -671,21 +663,11 @@ class _DictionaryPageState extends State<DictionaryPage> {
                   textInputAction: TextInputAction.search,
                   decoration: const InputDecoration(
                     hintText: 'Search',
-                    hintStyle: TextStyle(
-                      color: Color(0xFF7A7A7A),
-                      fontSize: 17,
-                      height: 1,
-                      fontWeight: FontWeight.w400,
-                    ),
+                    hintStyle: AppText.inputHint,
                     border: InputBorder.none,
                     isCollapsed: true,
                   ),
-                  style: const TextStyle(
-                    fontSize: 17,
-                    height: 1.1,
-                    color: Colors.black,
-                    fontWeight: FontWeight.w400,
-                  ),
+                  style: AppText.input,
                 ),
               ),
               if (searchText.isNotEmpty)
@@ -799,10 +781,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
               Text(
                 label,
                 textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1,
-                  fontWeight: FontWeight.w700,
+                style: AppText.buttonLabel.copyWith(
                   color: isSelected ? Colors.white : accentBlue,
                 ),
               ),
@@ -872,9 +851,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                       : 'Keep writing'
                 : 'Write a character',
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
-              fontSize: 16,
-              height: 1,
+            style: AppText.body.copyWith(
               color: Colors.black45,
               fontWeight: FontWeight.w500,
             ),
@@ -907,12 +884,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
               child: Text(
                 candidate,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 33,
-                  height: 1,
-                  color: Colors.black,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: AppText.kanjiCandidate,
               ),
             ),
           );
@@ -942,12 +914,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
             ),
             const Spacer(),
             if (isRecognizingHandwriting)
-              const Text(
+              Text(
                 'Checking...',
                 textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1,
+                style: AppText.cardCaption.copyWith(
                   color: Colors.black38,
                   fontWeight: FontWeight.w600,
                 ),
@@ -956,9 +926,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
               Text(
                 'Searching: $handwritingResult',
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1,
+                style: AppText.cardCaption.copyWith(
                   color: Colors.black38,
                   fontWeight: FontWeight.w600,
                 ),
@@ -982,11 +950,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
         child: Text(
           label,
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 16,
-            height: 1,
+          style: AppText.buttonLabel.copyWith(
             color: enabled ? accentBlue : Colors.black26,
-            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -1039,11 +1004,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
             ),
             child: Center(
               child: handwritingStrokes.isEmpty
-                  ? const Text(
+                  ? Text(
                       'Write here',
                       textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 18,
+                      style: AppText.body.copyWith(
                         color: Colors.black38,
                         fontWeight: FontWeight.w500,
                       ),
@@ -1058,8 +1022,6 @@ class _DictionaryPageState extends State<DictionaryPage> {
 }
 
 class _DictionaryTermTile extends StatelessWidget {
-  static const Color accentBlue = Color(0xFF4D7EF7);
-
   final Term word;
   final VoidCallback onTap;
 
@@ -1089,23 +1051,13 @@ class _DictionaryTermTile extends StatelessWidget {
                   Text(
                     titleText,
                     textScaler: TextScaler.noScaling,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      height: 1,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
-                    ),
+                    style: AppText.cardTitle,
                   ),
                   if (subtitleText.isNotEmpty)
                     Text(
                       '【$subtitleText】',
                       textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 19,
-                        height: 1,
-                        fontWeight: FontWeight.w600,
-                        color: accentBlue,
-                      ),
+                      style: AppText.cardReading,
                     ),
                 ],
               ),
@@ -1115,11 +1067,7 @@ class _DictionaryTermTile extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1,
-                  color: Colors.black,
-                ),
+                style: AppText.cardCaption,
               ),
             ],
           ),

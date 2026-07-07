@@ -5,6 +5,7 @@ import '../data/pinned_deck_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
 import '../services/deck_storage.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'deck_edit_page.dart';
 import 'deck_term_list_page.dart';
@@ -14,10 +15,7 @@ import 'writing_study_page.dart';
 class DeckPage extends StatefulWidget {
   final Deck deck;
 
-  const DeckPage({
-    super.key,
-    required this.deck,
-  });
+  const DeckPage({super.key, required this.deck});
 
   @override
   State<DeckPage> createState() => _DeckPageState();
@@ -76,10 +74,7 @@ class _DeckPageState extends State<DeckPage> {
   Future<void> saveWritingGridPreference() async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setBool(
-      writingGridPreferenceKey,
-      showWritingGrid,
-    );
+    await prefs.setBool(writingGridPreferenceKey, showWritingGrid);
   }
 
   Future<void> openTermList() async {
@@ -126,14 +121,10 @@ class _DeckPageState extends State<DeckPage> {
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
           backgroundColor: Colors.black.withValues(alpha: 0.86),
-          content: const Text(
+          content: Text(
             'You can pin up to 3 decks',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
+            style: AppText.fieldLabel.copyWith(color: Colors.white),
           ),
         ),
       );
@@ -191,10 +182,8 @@ class _DeckPageState extends State<DeckPage> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => WritingStudyPage(
-            terms: studyTerms,
-            deck: widget.deck,
-          ),
+          builder: (context) =>
+              WritingStudyPage(terms: studyTerms, deck: widget.deck),
         ),
       );
     } else {
@@ -268,9 +257,7 @@ class _DeckPageState extends State<DeckPage> {
 
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => DeckEditPage(deck: widget.deck),
-      ),
+      MaterialPageRoute(builder: (context) => DeckEditPage(deck: widget.deck)),
     );
 
     if (!mounted) return;
@@ -289,8 +276,9 @@ class _DeckPageState extends State<DeckPage> {
 
     final terms = widget.deck.terms;
 
-    final visibleTerms =
-        showStarredOnly ? terms.where((term) => term.marked).toList() : terms;
+    final visibleTerms = showStarredOnly
+        ? terms.where((term) => term.marked).toList()
+        : terms;
 
     final hasProgress = lastIndex > 0;
     final studyButtonText = hasProgress ? 'Resume' : 'Study';
@@ -343,10 +331,7 @@ class _DeckPageState extends State<DeckPage> {
                                       showStarredOnly
                                           ? 'No starred terms yet'
                                           : 'No terms yet',
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 16,
-                                      ),
+                                      style: AppText.emptyState,
                                     ),
                                   )
                                 : _fadedTermList(visibleTerms),
@@ -383,13 +368,7 @@ class _DeckPageState extends State<DeckPage> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textScaler: TextScaler.noScaling,
-                  style: const TextStyle(
-                    fontSize: 38,
-                    height: 0.95,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1.1,
-                    color: Colors.black,
-                  ),
+                  style: AppText.screenTitle,
                 ),
                 const SizedBox(height: 16),
                 _metadataText('Created by: You'),
@@ -411,12 +390,7 @@ class _DeckPageState extends State<DeckPage> {
     return Text(
       text,
       textScaler: TextScaler.noScaling,
-      style: const TextStyle(
-        fontSize: 16,
-        height: 1.08,
-        fontWeight: FontWeight.w400,
-        color: metadataGray,
-      ),
+      style: AppText.body.copyWith(height: 1.08, color: metadataGray),
     );
   }
 
@@ -427,10 +401,7 @@ class _DeckPageState extends State<DeckPage> {
       decoration: BoxDecoration(
         color: deckBlue.withValues(alpha: 0.84),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: deckBlue,
-          width: 2,
-        ),
+        border: Border.all(color: deckBlue, width: 2),
         boxShadow: const [
           BoxShadow(
             color: Color(0x26000000),
@@ -449,11 +420,7 @@ class _DeckPageState extends State<DeckPage> {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
+              style: AppText.buttonLarge,
             ),
           ),
         ),
@@ -492,21 +459,14 @@ class _DeckPageState extends State<DeckPage> {
         child: Material(
           color: const Color(0xD64D7EF7),
           shape: const CircleBorder(
-            side: BorderSide(
-              color: deckBlue,
-              width: 5,
-            ),
+            side: BorderSide(color: deckBlue, width: 5),
           ),
           clipBehavior: Clip.antiAlias,
           child: Center(
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 46,
-                fontWeight: FontWeight.w400,
-                color: Colors.white,
-              ),
+              style: AppText.kanjiGlyphLarge,
             ),
           ),
         ),
@@ -527,12 +487,7 @@ class _DeckPageState extends State<DeckPage> {
             Colors.black,
             Color(0x00000000),
           ],
-          stops: [
-            0.0,
-            0.06,
-            0.92,
-            1.0,
-          ],
+          stops: [0.0, 0.06, 0.92, 1.0],
         ).createShader(bounds);
       },
       child: _termList(visibleTerms),
@@ -544,11 +499,7 @@ class _DeckPageState extends State<DeckPage> {
       padding: const EdgeInsets.only(bottom: 8),
       itemCount: visibleTerms.length,
       separatorBuilder: (context, index) {
-        return const Divider(
-          height: 1,
-          thickness: 1,
-          color: Color(0xFFC8C8C8),
-        );
+        return const Divider(height: 1, thickness: 1, color: Color(0xFFC8C8C8));
       },
       itemBuilder: (context, index) {
         final term = visibleTerms[index];
@@ -569,22 +520,12 @@ class _DeckPageState extends State<DeckPage> {
                         Text(
                           term.kanji,
                           textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black,
-                          ),
+                          style: AppText.cardTitle,
                         ),
                         Text(
                           '【${term.reading}】',
                           textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 19,
-                            height: 1,
-                            fontWeight: FontWeight.w600,
-                            color: deckBlue,
-                          ),
+                          style: AppText.cardReading,
                         ),
                       ],
                     ),
@@ -594,11 +535,7 @@ class _DeckPageState extends State<DeckPage> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.1,
-                        color: Colors.black,
-                      ),
+                      style: AppText.cardCaption.copyWith(height: 1.1),
                     ),
                   ],
                 ),
@@ -628,15 +565,9 @@ class _DeckPageState extends State<DeckPage> {
                 showMenu = false;
               });
             },
-            child: Container(
-              color: Colors.transparent,
-            ),
+            child: Container(color: Colors.transparent),
           ),
-          Positioned(
-            top: 58,
-            right: 22,
-            child: _deckMenuCard(),
-          ),
+          Positioned(top: 58, right: 22, child: _deckMenuCard()),
         ],
       ),
     );
@@ -660,11 +591,7 @@ class _DeckPageState extends State<DeckPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _menuItem(
-            icon: Icons.edit,
-            label: 'Edit Deck',
-            onTap: openDeckEdit,
-          ),
+          _menuItem(icon: Icons.edit, label: 'Edit Deck', onTap: openDeckEdit),
           const Divider(height: 1, color: dividerGray),
           _menuItem(
             icon: Icons.format_list_bulleted_rounded,
@@ -741,21 +668,13 @@ class _DeckPageState extends State<DeckPage> {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
           children: [
             SizedBox(
               width: 28,
               child: Center(
-                child: customIcon ??
-                    Icon(
-                      icon,
-                      color: iconColor,
-                      size: 24,
-                    ),
+                child: customIcon ?? Icon(icon, color: iconColor, size: 24),
               ),
             ),
             const SizedBox(width: 12),
@@ -763,12 +682,7 @@ class _DeckPageState extends State<DeckPage> {
               child: Text(
                 label,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black,
-                ),
+                style: AppText.body.copyWith(fontWeight: FontWeight.w500),
               ),
             ),
           ],
@@ -786,10 +700,7 @@ class _DeckPageState extends State<DeckPage> {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         child: Row(
           children: [
             SizedBox(
@@ -798,12 +709,7 @@ class _DeckPageState extends State<DeckPage> {
                 child: Text(
                   textIcon,
                   textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 22,
-                    height: 1,
-                    fontWeight: FontWeight.w800,
-                    color: iconColor,
-                  ),
+                  style: AppText.kanjiGlyphSmall.copyWith(color: iconColor),
                 ),
               ),
             ),
@@ -812,12 +718,7 @@ class _DeckPageState extends State<DeckPage> {
               child: Text(
                 label,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black,
-                ),
+                style: AppText.body.copyWith(fontWeight: FontWeight.w500),
               ),
             ),
           ],
@@ -839,9 +740,7 @@ class _DeckPageState extends State<DeckPage> {
 }
 
 class _ShuffleMenuIcon extends StatelessWidget {
-  const _ShuffleMenuIcon({
-    required this.color,
-  });
+  const _ShuffleMenuIcon({required this.color});
 
   final Color color;
 
@@ -855,11 +754,7 @@ class _ShuffleMenuIcon extends StatelessWidget {
       color: color,
       colorBlendMode: BlendMode.srcIn,
       errorBuilder: (context, error, stackTrace) {
-        return Icon(
-          Icons.shuffle,
-          size: 24,
-          color: color,
-        );
+        return Icon(Icons.shuffle, size: 24, color: color);
       },
     );
   }

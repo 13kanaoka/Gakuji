@@ -33,12 +33,8 @@ class _MainShellState extends State<MainShell> {
 
     pages = [
       const HomePage(),
-      DictionaryPage(
-        onHandwritingInputActive: setDictionaryInputActive,
-      ),
-      LibraryPage(
-        onDeleteModeChanged: setLibraryDeleteModeActive,
-      ),
+      DictionaryPage(onHandwritingInputActive: setDictionaryInputActive),
+      LibraryPage(onDeleteModeChanged: setLibraryDeleteModeActive),
     ];
   }
 

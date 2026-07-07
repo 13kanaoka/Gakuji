@@ -7,10 +7,7 @@ import '../models/term.dart';
 class ReadingCardEditStorage {
   const ReadingCardEditStorage._();
 
-  static String preferenceKeyFor({
-    required Deck deck,
-    required Term term,
-  }) {
+  static String preferenceKeyFor({required Deck deck, required Term term}) {
     return ReadingCardEditData.preferenceKeyFor(
       deckId: deck.id,
       termId: term.id,
@@ -22,10 +19,7 @@ class ReadingCardEditStorage {
     required Term term,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final key = preferenceKeyFor(
-      deck: deck,
-      term: term,
-    );
+    final key = preferenceKeyFor(deck: deck, term: term);
 
     final savedValue = prefs.getString(key);
 
@@ -63,24 +57,13 @@ class ReadingCardEditStorage {
       termId: data.termId,
     );
 
-    await prefs.setString(
-      key,
-      data.toJsonString(),
-    );
+    await prefs.setString(key, data.toJsonString());
   }
 
-  static Future<void> delete({
-    required Deck deck,
-    required Term term,
-  }) async {
+  static Future<void> delete({required Deck deck, required Term term}) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.remove(
-      preferenceKeyFor(
-        deck: deck,
-        term: term,
-      ),
-    );
+    await prefs.remove(preferenceKeyFor(deck: deck, term: term));
   }
 
   static Future<bool> hasSavedEdit({
@@ -89,11 +72,6 @@ class ReadingCardEditStorage {
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
-    return prefs.containsKey(
-      preferenceKeyFor(
-        deck: deck,
-        term: term,
-      ),
-    );
+    return prefs.containsKey(preferenceKeyFor(deck: deck, term: term));
   }
 }
