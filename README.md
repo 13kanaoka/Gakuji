@@ -34,25 +34,18 @@ We built this app to help learners practice writing kanji in a structured, consi
 # Setup and Run Guide
 ### Mac
 **Setup**  
-0) Install Flutter SDK (if you don't already have it):  
-```
-https://docs.flutter.dev/install
-```  
-1) Clone the repository and install dependencies:  
+1) Install Flutter SDK [here](https://docs.flutter.dev/install) (if you don't already have it)  
+2) Clone the repository and install dependencies:  
 ```  
 git clone git@github.com:13kanaoka/Gakuji.git
 cd Gakuji
 flutter pub get
 ```   
-2) Download `dictionary.db` from the [Releases page](https://github.com/13kanaoka/Gakuji/releases/tag/assets-dictionary) and place it at:  
+3) Download `dictionary.db` from the [Releases page](https://github.com/13kanaoka/Gakuji/releases/tag/assets-dictionary) and place it at:  
 ```
 assets/dictionary/dictionary.db
 ```  
-3) (Contributors) Activate the git hooks so commit messages are checked locally:  
-```
-git config core.hooksPath .githooks
-```  
-4) Install Xcode to your computer. Then, in the terminal, run:
+4) Install Xcode to your computer through the App Store on Mac. Then, in the terminal, run:
 ```
 sudo sh -c 'xcode-select -s /Applications/Xcode.app/Contents/Developer && xcodebuild -runFirstLaunch'
 ```
