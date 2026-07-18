@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "970161125324",
+    "project_id": "fudebako-dev",
+    "storage_bucket": "fudebako-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:970161125324:android:0567769dc9bc73c98c8f69",
+        "android_client_info": {
+          "package_name": "com.mattrohde.gakuji"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "970161125324-h9ejkbtq6b8a5rn1v90ntt98atg24bjq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGa6IY3wN600mBiytal8ga9OOQ7zeCUKU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "970161125324-h9ejkbtq6b8a5rn1v90ntt98atg24bjq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "970161125324-ujk8musude4uukc5ifvpt06dee4srl5s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mattrohde.gakuji"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

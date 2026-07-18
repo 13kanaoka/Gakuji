@@ -1,13 +1,19 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'firebase_options.dart';
 import 'screens/main_shell.dart';
 import 'services/dictionary_service.dart';
 import 'services/writing_recognition_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   // Start loading the dictionary database in the background.
   // This does not block the app from opening.
