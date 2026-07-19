@@ -157,39 +157,3 @@ asset. This exists because the app copies the bundled asset into permanent
 on-device storage the first time it runs — without bumping the version,
 a device that already extracted an older copy would keep using the stale
 one indefinitely rather than picking up the new database.
-
-## Known dead code
-
-These files exist in the repo but are not imported or referenced by
-anything else, confirmed by checking for their names/exports across the
-whole codebase. Don't spend time trying to understand how they fit in —
-they don't, currently:
-
-- `lib/widgets/daily_card.dart`
-- `lib/widgets/flashcard_row.dart`
-- `lib/widgets/small_card.dart`
-- `lib/screens/term.dart` (a stray duplicate name — the real `Term` model is `lib/models/term.dart`)
-- `lib/screens/study_spaced_repetition_page.dart`
-- `lib/models/flashcard.dart`
-- `lib/models/sample_data.dart`
-- `lib/data/default_deck.dart` (superseded by `deck_data.dart`)
-- `lib/data/dictionary_helpers.dart` (superseded by direct use of `dictionary_data.dart` / `DictionaryService`)
-
-## Other loose ends
-
-- **`GoogleService-Info.plist` at the repo root** is a redundant leftover
-  from initial Firebase console setup — the copy that actually matters is
-  `ios/Runner/GoogleService-Info.plist`, placed there by `flutterfire
-  configure`. The root one isn't read by anything; safe to delete.
-- **`test/widget_test.dart`** is a real smoke test (confirms the app boots
-  into `MainShell` with its three nav icons present), not Flutter's default
-  boilerplate counter-app test.
-
-## Where this is headed
-
-Google Sign-In (Firebase Auth) plus full cloud sync of decks/folders/
-progress to Firestore is in active development, replacing the local-only
-data layer described above. This doc reflects the codebase as it exists
-today; it's worth a short update once that migration lands, since
-`lib/data/deck_data.dart` and `lib/services/deck_storage.dart` in
-particular are expected to change shape substantially.
