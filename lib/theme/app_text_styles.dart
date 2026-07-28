@@ -49,6 +49,12 @@ abstract final class AppText {
     color: _ink,
   );
 
+  static const TextStyle appTitle = TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.bold,
+    color: _ink,
+  );
+
   static const TextStyle screenTitle = TextStyle(
     fontSize: 29,
     height: 0.98,

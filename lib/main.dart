@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'firebase_options.dart';
 import 'screens/main_shell.dart';
+import 'screens/login_page.dart';
 import 'services/dictionary_service.dart';
 import 'services/writing_recognition_service.dart';
 
@@ -14,6 +17,8 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  await GoogleSignIn.instance.initialize();
 
   // Start loading the dictionary database in the background.
   // This does not block the app from opening.
@@ -40,7 +45,22 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Gakuji',
       theme: ThemeData(useMaterial3: true),
-      home: const MainShell(),
+      home: StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasData) {
+          return const MainShell();
+        }
+
+        return const LoginPage();
+      },
+    ),
       builder: (context, child) {
         Widget app = child ?? const SizedBox.shrink();
 
