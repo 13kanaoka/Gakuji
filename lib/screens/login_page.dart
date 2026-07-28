@@ -32,7 +32,6 @@ class _LoginPageState extends State<LoginPage> {
 
       await FirebaseAuth.instance.signInWithCredential(credential);
     } catch(e) {
-      print('Google sign-in error: $e');
       setState(() {
         errorMessage = 'Sign-in failed. Please try again.';
       });
