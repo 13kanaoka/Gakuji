@@ -127,7 +127,10 @@ class ReadingCardEditData {
   }
 
   static String exampleKeyFor(DictionaryExample example) {
-    return jsonEncode([example.japanese, example.english]);
+    return jsonEncode([
+      example.japanese,
+      example.english,
+    ]);
   }
 
   static List<DictionaryExample> examplesFromKeys({

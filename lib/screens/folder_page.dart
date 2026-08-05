@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../data/deck_data.dart';
 import '../models/deck.dart';
 import '../models/folder.dart';
-import '../theme/app_text_styles.dart';
+import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_deck_card.dart';
+import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_search_bar.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'deck_page.dart';
@@ -12,7 +13,10 @@ import 'deck_page.dart';
 class FolderPage extends StatefulWidget {
   final Folder folder;
 
-  const FolderPage({super.key, required this.folder});
+  const FolderPage({
+    super.key,
+    required this.folder,
+  });
 
   @override
   State<FolderPage> createState() => _FolderPageState();
@@ -36,6 +40,7 @@ class _FolderPageState extends State<FolderPage> {
   @override
   void dispose() {
     searchController.dispose();
+
     super.dispose();
   }
 
@@ -43,6 +48,10 @@ class _FolderPageState extends State<FolderPage> {
     return decks.where((deck) {
       return widget.folder.deckIds.contains(deck.id);
     }).toList();
+  }
+
+  void scheduleUserDataSave() {
+    GakujiUserDataStore.scheduleSave();
   }
 
   void closeMenu() {
@@ -91,6 +100,8 @@ class _FolderPageState extends State<FolderPage> {
       selectedDeckIds.clear();
       isRemovingDecks = false;
     });
+
+    scheduleUserDataSave();
   }
 
   @override
@@ -106,6 +117,7 @@ class _FolderPageState extends State<FolderPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
+        bottom: false,
         child: Stack(
           children: [
             GestureDetector(
@@ -119,7 +131,8 @@ class _FolderPageState extends State<FolderPage> {
               child: Column(
                 children: [
                   GakujiTopBar(
-                    leftIcon: Icons.arrow_back_ios_new,
+                    leftIcon: GakujiTopBar.backIcon,
+                    leftIconSize: GakujiTopBar.backIconSize,
                     onLeftTap: () {
                       if (isRemovingDecks) {
                         cancelRemoveMode();
@@ -129,7 +142,11 @@ class _FolderPageState extends State<FolderPage> {
                       Navigator.pop(context);
                     },
                     title: widget.folder.name,
-                    titleStyle: AppText.topBarTitleSmall,
+                    titleStyle: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w400,
+                      color: Colors.black,
+                    ),
                     rightIcon: isRemovingDecks ? null : Icons.more_horiz,
                     onRightTap: isRemovingDecks
                         ? null
@@ -170,27 +187,32 @@ class _FolderPageState extends State<FolderPage> {
                                           ? 'No decks in this folder yet'
                                           : 'No decks found',
                                       textScaler: TextScaler.noScaling,
-                                      style: AppText.emptyState,
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                        fontSize: 16,
+                                      ),
                                     ),
                                   )
-                                : ListView.separated(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      0,
-                                      12,
-                                      0,
-                                      190,
-                                    ),
-                                    itemCount: visibleDecks.length,
-                                    separatorBuilder: (context, index) {
-                                      return const SizedBox(height: 18);
-                                    },
-                                    itemBuilder: (context, index) {
-                                      final deck = visibleDecks[index];
-                                      final isSelected = selectedDeckIds
-                                          .contains(deck.id);
+                                : GakujiFadedScroll(
+                                    child: ListView.separated(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        0,
+                                        12,
+                                        0,
+                                        190,
+                                      ),
+                                      itemCount: visibleDecks.length,
+                                      separatorBuilder: (context, index) {
+                                        return const SizedBox(height: 18);
+                                      },
+                                      itemBuilder: (context, index) {
+                                        final deck = visibleDecks[index];
+                                        final isSelected =
+                                            selectedDeckIds.contains(deck.id);
 
-                                      return _deckCard(deck, isSelected);
-                                    },
+                                        return _deckCard(deck, isSelected);
+                                      },
+                                    ),
                                   ),
                           ),
                         ],
@@ -234,12 +256,15 @@ class _FolderPageState extends State<FolderPage> {
 
           await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => DeckPage(deck: deck)),
+            MaterialPageRoute(
+              builder: (context) => DeckPage(deck: deck),
+            ),
           );
 
           if (!mounted) return;
 
           setState(() {});
+          scheduleUserDataSave();
         },
       ),
     );
@@ -251,7 +276,9 @@ class _FolderPageState extends State<FolderPage> {
         children: [
           GestureDetector(
             onTap: closeMenu,
-            child: Container(color: Colors.transparent),
+            child: Container(
+              color: Colors.transparent,
+            ),
           ),
           Positioned(
             top: 48,
@@ -323,7 +350,8 @@ class _FolderPageState extends State<FolderPage> {
                     alignment: Alignment.topCenter,
                     heightFactor: hasSelection ? 1 : 0,
                     child: AnimatedSlide(
-                      offset: hasSelection ? Offset.zero : const Offset(0, 1.2),
+                      offset:
+                          hasSelection ? Offset.zero : const Offset(0, 1.2),
                       duration: deleteAnimationDuration,
                       curve: Curves.easeOutCubic,
                       child: AnimatedOpacity(
@@ -360,15 +388,22 @@ class _FolderPageState extends State<FolderPage> {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
         child: Row(
           children: [
-            Icon(icon, color: iconColor),
+            Icon(
+              icon,
+              color: iconColor,
+            ),
             const SizedBox(width: 12),
             Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: AppText.body.copyWith(
+              style: TextStyle(
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
                 color: textColor,
               ),
@@ -394,7 +429,10 @@ class _FolderPageState extends State<FolderPage> {
         borderRadius: BorderRadius.circular(14),
         border: borderColor == null
             ? null
-            : Border.all(color: borderColor, width: 1.5),
+            : Border.all(
+                color: borderColor,
+                width: 1.5,
+              ),
         boxShadow: const [
           BoxShadow(
             color: Color(0x33000000),
@@ -413,7 +451,12 @@ class _FolderPageState extends State<FolderPage> {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: AppText.primaryButton.copyWith(color: textColor),
+              style: TextStyle(
+                fontSize: 20,
+                height: 1,
+                fontWeight: FontWeight.w700,
+                color: textColor,
+              ),
             ),
           ),
         ),

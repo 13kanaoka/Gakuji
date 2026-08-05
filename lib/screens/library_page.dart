@@ -5,15 +5,22 @@ import '../data/folder_data.dart';
 import '../data/pinned_deck_data.dart';
 import '../models/deck.dart';
 import '../models/folder.dart';
-import '../theme/app_text_styles.dart';
+import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_deck_card.dart';
+import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_folder_card.dart';
 import '../widgets/gakuji_search_bar.dart';
+import '../widgets/gakuji_styles.dart';
+import '../widgets/gakuji_top_bar.dart';
+import 'create_deck_page.dart';
 import 'deck_page.dart';
 import 'folder_page.dart';
 
 class LibraryPage extends StatefulWidget {
-  const LibraryPage({super.key, this.onDeleteModeChanged});
+  const LibraryPage({
+    super.key,
+    this.onDeleteModeChanged,
+  });
 
   final ValueChanged<bool>? onDeleteModeChanged;
 
@@ -22,9 +29,7 @@ class LibraryPage extends StatefulWidget {
 }
 
 class _LibraryPageState extends State<LibraryPage> {
-  static const Color deckBlue = Color(0xFF4D7EF7);
   static const Color dividerGray = Color(0xFFE1E1E1);
-  static const Color outlineGray = Color(0xFFD8D8D8);
   static const Color textGray = Color(0xFF6F6F6F);
   static const Color fieldGray = Color(0xFFEDEDED);
   static const Color deleteRed = Color(0xFFFF6F6F);
@@ -32,16 +37,16 @@ class _LibraryPageState extends State<LibraryPage> {
   static const Duration deleteAnimationDuration = Duration(milliseconds: 260);
 
   bool showDecks = true;
-  bool showMenu = false;
   bool isDeletingItems = false;
 
   final Set<String> selectedDeckIds = <String>{};
   final Set<String> selectedFolderIds = <String>{};
 
   final TextEditingController searchController = TextEditingController();
+  final FocusNode searchFocusNode = FocusNode();
+
   final TextEditingController deckNameController = TextEditingController();
   final TextEditingController folderNameController = TextEditingController();
-  final FocusNode searchFocusNode = FocusNode();
 
   String searchQuery = '';
 
@@ -55,18 +60,19 @@ class _LibraryPageState extends State<LibraryPage> {
 
   @override
   void dispose() {
+    searchFocusNode.dispose();
     searchController.dispose();
     deckNameController.dispose();
     folderNameController.dispose();
-    searchFocusNode.dispose();
+
     super.dispose();
   }
 
-  Future<void> openNewDeckPopup() async {
-    setState(() {
-      showMenu = false;
-    });
+  void scheduleUserDataSave() {
+    GakujiUserDataStore.scheduleSave();
+  }
 
+  Future<void> openNewDeckPopup() async {
     FocusScope.of(context).unfocus();
     deckNameController.clear();
 
@@ -77,9 +83,9 @@ class _LibraryPageState extends State<LibraryPage> {
       context: context,
       useRootNavigator: true,
       barrierDismissible: true,
-      barrierLabel: 'New Deck',
+      barrierLabel: 'Create New Deck',
       barrierColor: Colors.black.withValues(alpha: 0.72),
-      transitionDuration: const Duration(milliseconds: 280),
+      transitionDuration: const Duration(milliseconds: 320),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -107,33 +113,32 @@ class _LibraryPageState extends State<LibraryPage> {
               Navigator.of(dialogContext, rootNavigator: true).pop(true);
             }
 
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              insetPadding: const EdgeInsets.symmetric(horizontal: 36),
-              child: AnimatedPadding(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(dialogContext).viewInsets.bottom,
-                ),
-                child: _newDeckCard(
-                  selectedType: dialogSelectedType,
-                  deckNameError: deckNameError,
-                  onNameChanged: (_) {
-                    if (deckNameError == null) return;
+            return AnimatedPadding(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeOut,
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(dialogContext).viewInsets.bottom,
+              ),
+              child: _newDeckCard(
+                selectedType: dialogSelectedType,
+                deckNameError: deckNameError,
+                onClose: () {
+                  FocusScope.of(dialogContext).unfocus();
+                  Navigator.of(dialogContext, rootNavigator: true).pop(false);
+                },
+                onNameChanged: (_) {
+                  if (deckNameError == null) return;
 
-                    setDialogState(() {
-                      deckNameError = null;
-                    });
-                  },
-                  onTypeChanged: (value) {
-                    setDialogState(() {
-                      dialogSelectedType = value;
-                    });
-                  },
-                  onCreate: createDeckFromDialog,
-                ),
+                  setDialogState(() {
+                    deckNameError = null;
+                  });
+                },
+                onTypeChanged: (value) {
+                  setDialogState(() {
+                    dialogSelectedType = value;
+                  });
+                },
+                onCreate: createDeckFromDialog,
               ),
             );
           },
@@ -148,10 +153,13 @@ class _LibraryPageState extends State<LibraryPage> {
 
         return SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0, 1.1),
+            begin: const Offset(0, 1),
             end: Offset.zero,
           ).animate(curvedAnimation),
-          child: FadeTransition(opacity: curvedAnimation, child: child),
+          child: FadeTransition(
+            opacity: curvedAnimation,
+            child: child,
+          ),
         );
       },
     );
@@ -164,14 +172,12 @@ class _LibraryPageState extends State<LibraryPage> {
       setState(() {
         showDecks = true;
       });
+
+      scheduleUserDataSave();
     }
   }
 
   Future<void> openNewFolderPopup() async {
-    setState(() {
-      showMenu = false;
-    });
-
     FocusScope.of(context).unfocus();
     folderNameController.clear();
 
@@ -248,7 +254,10 @@ class _LibraryPageState extends State<LibraryPage> {
             begin: const Offset(0, 1.1),
             end: Offset.zero,
           ).animate(curvedAnimation),
-          child: FadeTransition(opacity: curvedAnimation, child: child),
+          child: FadeTransition(
+            opacity: curvedAnimation,
+            child: child,
+          ),
         );
       },
     );
@@ -261,13 +270,54 @@ class _LibraryPageState extends State<LibraryPage> {
       setState(() {
         showDecks = false;
       });
+
+      scheduleUserDataSave();
     }
   }
 
-  void closeMenu() {
+  Future<void> openCreateDeckPage() async {
+    final created = await Navigator.push<bool>(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 260),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return const CreateDeckPage();
+        },
+        transitionsBuilder: (
+          context,
+          animation,
+          secondaryAnimation,
+          child,
+        ) {
+          final curvedAnimation = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: child,
+          );
+        },
+      ),
+    );
+
+    if (!mounted || created != true) return;
+
     setState(() {
-      showMenu = false;
+      showDecks = true;
     });
+
+    scheduleUserDataSave();
+  }
+
+  void exitSearch() {
+    FocusScope.of(context).unfocus();
   }
 
   void toggleLibraryView() {
@@ -278,7 +328,6 @@ class _LibraryPageState extends State<LibraryPage> {
 
   void startDeleteMode() {
     setState(() {
-      showMenu = false;
       isDeletingItems = true;
       selectedDeckIds.clear();
       selectedFolderIds.clear();
@@ -356,6 +405,7 @@ class _LibraryPageState extends State<LibraryPage> {
     });
 
     widget.onDeleteModeChanged?.call(false);
+    scheduleUserDataSave();
   }
 
   @override
@@ -375,33 +425,23 @@ class _LibraryPageState extends State<LibraryPage> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: GakujiColors.warmBackground,
       body: Stack(
         children: [
           GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onTap: () {
-              FocusScope.of(context).unfocus();
-              if (showMenu) {
-                setState(() {
-                  showMenu = false;
-                });
-              }
-            },
+            onTap: exitSearch,
             child: Column(
               children: [
                 _libraryHeader(),
                 Expanded(
                   child: Stack(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
-                        child: showDecks
-                            ? _deckContent(visibleDecks)
-                            : _folderContent(visibleFolders),
-                      ),
+                      showDecks
+                          ? _deckContent(visibleDecks)
+                          : _folderContent(visibleFolders),
                       Positioned(
-                        top: 8,
+                        top: 18,
                         left: 18,
                         right: 18,
                         child: GakujiSearchBar(
@@ -429,84 +469,50 @@ class _LibraryPageState extends State<LibraryPage> {
             ),
           ),
           _deleteModeControls(),
-          if (showMenu) _menuOverlay(),
         ],
       ),
     );
   }
 
   Widget _libraryHeader() {
-    final topInset = MediaQuery.of(context).padding.top;
-
-    return Container(
-      height: topInset + 58,
-      color: deckBlue,
-      padding: EdgeInsets.fromLTRB(28, topInset + 18, 28, 18),
-      child: Stack(
-        alignment: Alignment.center,
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Align(alignment: Alignment.centerLeft, child: _viewSwitchButton()),
-          const Text(
-            'Library',
-            textAlign: TextAlign.center,
-            textScaler: TextScaler.noScaling,
-            style: AppText.pageTitle,
+          GakujiTopBar(
+            title: 'Library',
+            titleStyle: GakujiText.large.copyWith(
+              color: GakujiColors.darkGray,
+            ),
+            rightWidget: _headerAddDeckButton(),
           ),
-          Align(alignment: Alignment.centerRight, child: _headerMenuButton()),
+          const SizedBox(height: 36),
         ],
       ),
     );
   }
 
-  Widget _viewSwitchButton() {
-    return _Pushable(
-      onTap: toggleLibraryView,
-      pressedOffset: 4,
-      child: Container(
-        width: 76,
-        height: 34,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: outlineGray, width: 2.5),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x4D000000),
-              blurRadius: 0,
-              offset: Offset(0, 4),
+  Widget _headerAddDeckButton() {
+    return Opacity(
+      opacity: isDeletingItems ? 0 : 1,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: isDeletingItems
+            ? null
+            : () {
+                FocusScope.of(context).unfocus();
+                openCreateDeckPage();
+              },
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            child: Icon(
+              Icons.add_rounded,
+              color: GakujiColors.darkGray,
+              size: 36,
             ),
-          ],
-        ),
-        child: Text(
-          showDecks ? 'Decks' : 'Folders',
-          textAlign: TextAlign.center,
-          textScaler: TextScaler.noScaling,
-          style: AppText.buttonLabel.copyWith(color: const Color(0xFF666666)),
-        ),
-      ),
-    );
-  }
-
-  Widget _headerMenuButton() {
-    return Transform.translate(
-      offset: const Offset(8, 0),
-      child: Opacity(
-        opacity: isDeletingItems ? 0 : 1,
-        child: _Pushable(
-          onTap: isDeletingItems
-              ? null
-              : () {
-                  setState(() {
-                    showMenu = !showMenu;
-                  });
-                },
-          pressedOffset: 4,
-          child: Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            child: const Icon(Icons.edit, color: Colors.white, size: 23),
           ),
         ),
       ),
@@ -520,16 +526,18 @@ class _LibraryPageState extends State<LibraryPage> {
           isDeletingItems
               ? 'No decks to delete'
               : searchQuery.trim().isEmpty
-              ? 'No decks yet'
-              : 'No decks found',
-          style: AppText.emptyState,
+                  ? 'No decks yet'
+                  : 'No decks found',
+          style: GakujiText.small.copyWith(
+            color: GakujiColors.mediumGray,
+          ),
         ),
       );
     }
 
-    return _fadedScrollContent(
+    return GakujiFadedScroll.withBottomNavigation(
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(0, 82, 0, 190),
+        padding: const EdgeInsets.fromLTRB(18, 82, 18, 190),
         itemCount: visibleDecks.length,
         separatorBuilder: (context, index) {
           return const SizedBox(height: 18);
@@ -551,6 +559,7 @@ class _LibraryPageState extends State<LibraryPage> {
       subtitle: _deckTypeLabel(deck.type),
       watermark: _watermarkForDeckType(deck.type),
       watermarkAssetPath: _watermarkAssetForDeckType(deck.type),
+      patternAssetPath: _patternAssetForDeckType(deck.type),
       shellColor: isSelected ? deleteRed : null,
       isPinned: isDeckPinned(deck),
       onTap: () async {
@@ -561,12 +570,15 @@ class _LibraryPageState extends State<LibraryPage> {
 
         await Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => DeckPage(deck: deck)),
+          MaterialPageRoute(
+            builder: (context) => DeckPage(deck: deck),
+          ),
         );
 
         if (!mounted) return;
 
         setState(() {});
+        scheduleUserDataSave();
       },
     );
   }
@@ -578,9 +590,11 @@ class _LibraryPageState extends State<LibraryPage> {
           isDeletingItems
               ? 'No folders to delete'
               : searchQuery.trim().isEmpty
-              ? 'No folders yet'
-              : 'No folders found',
-          style: AppText.emptyState,
+                  ? 'No folders yet'
+                  : 'No folders found',
+          style: GakujiText.small.copyWith(
+            color: GakujiColors.mediumGray,
+          ),
         ),
       );
     }
@@ -589,9 +603,9 @@ class _LibraryPageState extends State<LibraryPage> {
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth < 330 ? 2 : 3;
 
-        return _fadedScrollContent(
+        return GakujiFadedScroll.withBottomNavigation(
           child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(0, 82, 0, 190),
+            padding: const EdgeInsets.fromLTRB(18, 82, 18, 190),
             itemCount: visibleFolders.length,
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: crossAxisCount,
@@ -622,12 +636,15 @@ class _LibraryPageState extends State<LibraryPage> {
 
         await Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => FolderPage(folder: folder)),
+          MaterialPageRoute(
+            builder: (context) => FolderPage(folder: folder),
+          ),
         );
 
         if (!mounted) return;
 
         setState(() {});
+        scheduleUserDataSave();
       },
       pressedOffset: 4,
       child: AnimatedContainer(
@@ -635,7 +652,7 @@ class _LibraryPageState extends State<LibraryPage> {
         curve: Curves.easeOutCubic,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: GakujiColors.warmCard,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isSelected ? deleteRed : Colors.transparent,
@@ -643,87 +660,11 @@ class _LibraryPageState extends State<LibraryPage> {
           ),
         ),
         child: IgnorePointer(
-          child: GakujiFolderCard(title: folder.name, onTap: () {}),
+          child: GakujiFolderCard(
+            title: folder.name,
+            onTap: () {},
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _fadedScrollContent({required Widget child}) {
-    return ShaderMask(
-      shaderCallback: (bounds) {
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.transparent,
-            Colors.black,
-            Colors.black,
-            Colors.transparent,
-          ],
-          stops: [0.0, 0.055, 0.76, 1.0],
-        ).createShader(bounds);
-      },
-      blendMode: BlendMode.dstIn,
-      child: child,
-    );
-  }
-
-  Widget _menuOverlay() {
-    final topInset = MediaQuery.of(context).padding.top;
-
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          GestureDetector(
-            onTap: closeMenu,
-            child: Container(color: Colors.transparent),
-          ),
-          Positioned(
-            top: topInset + 58,
-            right: 28,
-            child: Container(
-              width: 214,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x26000000),
-                    blurRadius: 0,
-                    offset: Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _menuItem(
-                    icon: Icons.add,
-                    label: 'New Deck',
-                    onTap: openNewDeckPopup,
-                  ),
-                  const Divider(height: 1, color: dividerGray),
-                  _menuItem(
-                    icon: Icons.create_new_folder_rounded,
-                    label: 'New Folder',
-                    iconColor: Colors.grey,
-                    onTap: openNewFolderPopup,
-                  ),
-                  const Divider(height: 1, color: dividerGray),
-                  _menuItem(
-                    icon: Icons.delete_outline_rounded,
-                    label: 'Delete',
-                    iconColor: deleteRed,
-                    textColor: deleteRed,
-                    onTap: startDeleteMode,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -748,7 +689,7 @@ class _LibraryPageState extends State<LibraryPage> {
               children: [
                 _bottomActionButton(
                   label: 'Cancel',
-                  backgroundColor: Colors.white,
+                  backgroundColor: GakujiColors.warmCard,
                   textColor: Colors.black,
                   borderColor: dividerGray,
                   onTap: cancelDeleteMode,
@@ -797,56 +738,121 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget _newDeckCard({
     required DeckType selectedType,
     required String? deckNameError,
+    required VoidCallback onClose,
     required ValueChanged<String> onNameChanged,
     required ValueChanged<DeckType> onTypeChanged,
     required VoidCallback onCreate,
   }) {
-    final screenSize = MediaQuery.of(context).size;
-    final cardWidth = (screenSize.width - 72).clamp(300.0, 360.0).toDouble();
-    final cardHeight = (screenSize.height * 0.66)
-        .clamp(500.0, 620.0)
-        .toDouble();
-
-    return Container(
-      width: cardWidth,
-      height: cardHeight,
-      padding: const EdgeInsets.fromLTRB(24, 42, 24, 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: deckBlue, width: 6),
+    return Material(
+      color: GakujiColors.warmBackground,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(32, 22, 32, 26),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onClose,
+                  child: SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: Center(
+                      child: Icon(
+                        Icons.close_rounded,
+                        color: GakujiColors.darkGray,
+                        size: 42,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 66),
+              Center(
+                child: _deckCreationIcon(),
+              ),
+              const SizedBox(height: 30),
+              Text(
+                'Create New Deck',
+                textAlign: TextAlign.center,
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.large.copyWith(
+                  color: GakujiColors.darkGray,
+                  fontSize: 34,
+                  height: 1,
+                  letterSpacing: -0.8,
+                ),
+              ),
+              const SizedBox(height: 82),
+              _fieldLabel('Deck Name'),
+              const SizedBox(height: 10),
+              _nameField(
+                controller: deckNameController,
+                hintText: 'Enter deck name',
+                hasError: deckNameError != null,
+                onChanged: onNameChanged,
+                onSubmit: onCreate,
+              ),
+              if (deckNameError != null) ...[
+                const SizedBox(height: 8),
+                _errorText(deckNameError),
+              ],
+              const SizedBox(height: 28),
+              _fieldLabel('Deck Type'),
+              const SizedBox(height: 10),
+              _deckTypeDropdown(
+                selectedType: selectedType,
+                onChanged: onTypeChanged,
+              ),
+              const Spacer(),
+              _createActionButton(
+                label: 'Create Deck',
+                onTap: onCreate,
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Column(
+    );
+  }
+
+  Widget _deckCreationIcon() {
+    return SizedBox(
+      width: 54,
+      height: 54,
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          const Text(
-            'New Deck',
-            textAlign: TextAlign.center,
-            textScaler: TextScaler.noScaling,
-            style: AppText.dialogTitle,
+          Positioned(
+            top: 7,
+            left: 18,
+            child: Container(
+              width: 28,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2F5268),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
           ),
-          const SizedBox(height: 44),
-          _fieldLabel('Deck Name'),
-          const SizedBox(height: 8),
-          _nameField(
-            controller: deckNameController,
-            hintText: 'Enter deck name',
-            hasError: deckNameError != null,
-            onChanged: onNameChanged,
-            onSubmit: onCreate,
+          Positioned(
+            top: 12,
+            left: 10,
+            child: Container(
+              width: 31,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFF5B8DB0),
+                borderRadius: BorderRadius.circular(3),
+                border: Border.all(
+                  color: const Color(0xFF456F8A),
+                  width: 1.5,
+                ),
+              ),
+            ),
           ),
-          if (deckNameError != null) ...[
-            const SizedBox(height: 7),
-            _errorText(deckNameError),
-          ],
-          const SizedBox(height: 22),
-          _fieldLabel('Deck Type'),
-          const SizedBox(height: 8),
-          _deckTypeDropdown(
-            selectedType: selectedType,
-            onChanged: onTypeChanged,
-          ),
-          const Spacer(),
-          _createActionButton(label: 'Create Deck', onTap: onCreate),
         ],
       ),
     );
@@ -859,18 +865,20 @@ class _LibraryPageState extends State<LibraryPage> {
   }) {
     final screenSize = MediaQuery.of(context).size;
     final cardWidth = (screenSize.width - 72).clamp(300.0, 360.0).toDouble();
-    final cardHeight = (screenSize.height * 0.66)
-        .clamp(500.0, 620.0)
-        .toDouble();
+    final cardHeight =
+        (screenSize.height * 0.66).clamp(500.0, 620.0).toDouble();
 
     return Container(
       width: cardWidth,
       height: cardHeight,
       padding: const EdgeInsets.fromLTRB(24, 42, 24, 24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: GakujiColors.warmCard,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: deckBlue, width: 6),
+        border: Border.all(
+          color: GakujiColors.deckBlue,
+          width: 6,
+        ),
       ),
       child: Column(
         children: [
@@ -878,7 +886,13 @@ class _LibraryPageState extends State<LibraryPage> {
             'New Folder',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: AppText.dialogTitle,
+            style: TextStyle(
+              fontSize: 36,
+              height: 1,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.8,
+              color: Colors.black,
+            ),
           ),
           const SizedBox(height: 44),
           _fieldLabel('Folder Name'),
@@ -895,7 +909,10 @@ class _LibraryPageState extends State<LibraryPage> {
             _errorText(folderNameError),
           ],
           const Spacer(),
-          _createActionButton(label: 'Create Folder', onTap: onCreate),
+          _createActionButton(
+            label: 'Create Folder',
+            onTap: onCreate,
+          ),
         ],
       ),
     );
@@ -907,7 +924,12 @@ class _LibraryPageState extends State<LibraryPage> {
       child: Text(
         label,
         textScaler: TextScaler.noScaling,
-        style: AppText.fieldLabel,
+        style: TextStyle(
+          fontSize: 17,
+          height: 1,
+          fontWeight: FontWeight.w700,
+          color: GakujiColors.darkGray,
+        ),
       ),
     );
   }
@@ -918,7 +940,11 @@ class _LibraryPageState extends State<LibraryPage> {
       child: Text(
         text ?? '',
         textScaler: TextScaler.noScaling,
-        style: AppText.smallLabel.copyWith(color: deleteRed),
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: deleteRed,
+        ),
       ),
     );
   }
@@ -931,22 +957,39 @@ class _LibraryPageState extends State<LibraryPage> {
     required VoidCallback onSubmit,
   }) {
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       decoration: BoxDecoration(
         color: fieldGray,
-        borderRadius: BorderRadius.circular(14),
-        border: hasError ? Border.all(color: deleteRed, width: 2) : null,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: hasError ? deleteRed : GakujiColors.warmDivider,
+          width: hasError ? 2 : 1.5,
+        ),
       ),
-      child: TextField(
-        controller: controller,
-        textInputAction: TextInputAction.done,
-        onChanged: onChanged,
-        onSubmitted: (_) => onSubmit(),
-        decoration: InputDecoration(
-          border: InputBorder.none,
-          hintText: hintText,
-          hintStyle: const TextStyle(color: textGray),
+      child: Center(
+        child: TextField(
+          controller: controller,
+          textInputAction: TextInputAction.done,
+          onChanged: onChanged,
+          onSubmitted: (_) => onSubmit(),
+          cursorColor: GakujiColors.darkGray,
+          style: TextStyle(
+            fontSize: 20,
+            height: 1,
+            fontWeight: FontWeight.w500,
+            color: GakujiColors.darkGray,
+          ),
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            isCollapsed: true,
+            hintText: hintText,
+            hintStyle: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: textGray,
+            ),
+          ),
         ),
       ),
     );
@@ -957,20 +1000,33 @@ class _LibraryPageState extends State<LibraryPage> {
     required ValueChanged<DeckType> onChanged,
   }) {
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       decoration: BoxDecoration(
         color: fieldGray,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: GakujiColors.warmDivider,
+          width: 1.5,
+        ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<DeckType>(
           value: selectedType,
           isExpanded: true,
-          borderRadius: BorderRadius.circular(14),
-          dropdownColor: Colors.white,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded),
-          style: AppText.body,
+          borderRadius: BorderRadius.circular(18),
+          dropdownColor: GakujiColors.warmCard,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: GakujiColors.mediumGray,
+            size: 30,
+          ),
+          style: TextStyle(
+            fontSize: 20,
+            height: 1,
+            fontWeight: FontWeight.w500,
+            color: GakujiColors.darkGray,
+          ),
           items: DeckType.values.map((type) {
             return DropdownMenuItem(
               value: type,
@@ -994,31 +1050,34 @@ class _LibraryPageState extends State<LibraryPage> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return Container(
-      width: 230,
-      height: 54,
-      decoration: BoxDecoration(
-        color: deckBlue,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 0,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Center(
-            child: Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: AppText.primaryButton,
+    return SizedBox(
+      width: double.infinity,
+      height: 58,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: GakujiColors.deckBlue,
+          borderRadius: BorderRadius.circular(GakujiRadius.pill),
+          boxShadow: [GakujiShadows.soft],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(GakujiRadius.pill),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            splashColor: Colors.white.withValues(alpha: 0.10),
+            highlightColor: Colors.white.withValues(alpha: 0.05),
+            child: Center(
+              child: Text(
+                label,
+                textScaler: TextScaler.noScaling,
+                style: const TextStyle(
+                  fontSize: 20,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ),
         ),
@@ -1041,7 +1100,10 @@ class _LibraryPageState extends State<LibraryPage> {
         borderRadius: BorderRadius.circular(14),
         border: borderColor == null
             ? null
-            : Border.all(color: borderColor, width: 1.5),
+            : Border.all(
+                color: borderColor,
+                width: 1.5,
+              ),
         boxShadow: const [
           BoxShadow(
             color: Color(0x33000000),
@@ -1060,38 +1122,14 @@ class _LibraryPageState extends State<LibraryPage> {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: AppText.primaryButton.copyWith(color: textColor),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _menuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Color iconColor = Colors.black,
-    Color textColor = Colors.black,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        child: Row(
-          children: [
-            Icon(icon, color: iconColor),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: AppText.body.copyWith(
-                fontWeight: FontWeight.w500,
+              style: TextStyle(
+                fontSize: 20,
+                height: 1,
+                fontWeight: FontWeight.w700,
                 color: textColor,
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1129,6 +1167,17 @@ class _LibraryPageState extends State<LibraryPage> {
         return 'assets/images/deck_watermark_1.png';
     }
   }
+
+  String _patternAssetForDeckType(DeckType type) {
+    switch (type) {
+      case DeckType.writing:
+        return 'assets/images/deck_pattern_writing.png';
+      case DeckType.reading:
+        return 'assets/images/deck_pattern_reading.png';
+      case DeckType.hybrid:
+        return 'assets/images/deck_pattern_hybrid.png';
+    }
+  }
 }
 
 class _Pushable extends StatefulWidget {
@@ -1136,12 +1185,12 @@ class _Pushable extends StatefulWidget {
     required this.child,
     required this.onTap,
     this.pressedOffset = 4,
-  }) : duration = const Duration(milliseconds: 90);
+  });
 
   final Widget child;
   final VoidCallback? onTap;
   final double pressedOffset;
-  final Duration duration;
+  static const Duration duration = Duration(milliseconds: 90);
 
   @override
   State<_Pushable> createState() => _PushableState();
@@ -1209,7 +1258,7 @@ class _PushableState extends State<_Pushable> {
       onTapCancel: releaseAfterMinimumPress,
       onTap: handleTap,
       child: AnimatedContainer(
-        duration: widget.duration,
+        duration: _Pushable.duration,
         curve: Curves.easeOutCubic,
         transform: Matrix4.translationValues(
           0,

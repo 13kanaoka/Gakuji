@@ -7,10 +7,14 @@ import '../data/reading_card_edit_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
 import '../services/deck_storage.dart';
+import '../services/dictionary_service.dart';
+import '../services/gakuji_user_data_store.dart';
 import '../services/reading_card_edit_storage.dart';
-import '../theme/app_text_styles.dart';
+import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'deck_edit_page.dart';
+import '../widgets/gakuji_options_sheet.dart';
+import '../widgets/reading_card_back.dart';
 
 class StudyPage extends StatefulWidget {
   final List<Term> terms;
@@ -36,19 +40,14 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   static const Duration _cardReturnDuration = Duration(milliseconds: 320);
   static const Duration _cardExitDuration = Duration(milliseconds: 140);
   static const Duration _cardContentFadeDuration = Duration(milliseconds: 120);
-  static const Duration _previousCardReturnDuration = Duration(
-    milliseconds: 180,
-  );
+  static const Duration _previousCardReturnDuration =
+      Duration(milliseconds: 180);
 
-  static const Color deckBlue = Color(0xFF4D7EF7);
-  static const Color cardGray = Color(0xFFEDEDED);
-  static const Color dividerGray = Color(0xFFE1E1E1);
-  static const Color textGray = Color(0xFF6F6F6F);
+  static const Color incorrectRed = Color(0xFFF6A3A3);
+  static const Color incorrectRedOutline = Color(0xFFE06F6F);
 
-  static const Color incorrectRed = Color(0xFFFF8C8C);
-  static const Color incorrectRedOutline = Color(0xFFFF6F6F);
-  static const Color correctGreen = Color(0xFFC8F29D);
-  static const Color correctGreenOutline = Color(0xFFA9E67E);
+  static const Color correctGreen = Color(0xFFC5E7A5);
+  static const Color correctGreenOutline = Color(0xFF8DBB66);
 
   late List<Term> allTerms;
   late List<Term> activeTerms;
@@ -58,6 +57,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   final List<Term> incorrectReviewTerms = [];
 
   final Map<String, ReadingCardEditData> readingCardEdits = {};
+  final Map<String, Term> readingSourceTerms = {};
   final Set<String> savedReadingCardEditTermIds = {};
 
   int correctCount = 0;
@@ -91,6 +91,47 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   bool isShuffled = false;
   bool showFurigana = true;
   bool termFirst = true;
+  bool showStarredOnly = false;
+
+  int get totalSessionCount => answeredTerms.length + activeTerms.length;
+
+  bool get isComplete => activeTerms.isEmpty && allTerms.isNotEmpty;
+
+  double get deckProgress {
+    final total = totalSessionCount;
+
+    if (total <= 0) return 0;
+
+    return (answeredTerms.length / total).clamp(0.0, 1.0).toDouble();
+  }
+
+  List<Term> get filteredStudyTerms {
+    if (showStarredOnly) {
+      return widget.terms.where((term) => term.marked).toList();
+    }
+
+    return List<Term>.from(widget.terms);
+  }
+
+  String? get swipeFeedbackText {
+    if (dragOffset.dx > 32) return 'Know';
+    if (dragOffset.dx < -32) return 'Still learning';
+
+    return null;
+  }
+
+  Color? get swipeFeedbackColor {
+    if (dragOffset.dx > 32) return correctGreenOutline;
+    if (dragOffset.dx < -32) return incorrectRedOutline;
+
+    return null;
+  }
+
+  double get swipeFeedbackOpacity {
+    final opacity = ((dragOffset.dx.abs() - 30) / 90).clamp(0.0, 1.0);
+
+    return opacity.toDouble();
+  }
 
   @override
   void initState() {
@@ -100,8 +141,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     showFurigana = widget.initialShowFurigana;
     termFirst = widget.initialTermFirst;
 
-    allTerms = List.from(widget.terms);
-    activeTerms = List.from(allTerms);
+    allTerms = List<Term>.from(filteredStudyTerms);
+    activeTerms = List<Term>.from(allTerms);
 
     if (isShuffled) {
       activeTerms.shuffle();
@@ -112,8 +153,14 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 260),
     );
 
-    _flipAnimation = Tween<double>(begin: 0, end: math.pi).animate(
-      CurvedAnimation(parent: _flipController, curve: Curves.easeInOut),
+    _flipAnimation = Tween<double>(
+      begin: 0,
+      end: math.pi,
+    ).animate(
+      CurvedAnimation(
+        parent: _flipController,
+        curve: Curves.easeInOut,
+      ),
     );
 
     _swipeController = AnimationController(
@@ -206,11 +253,24 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
   Future<void> _loadReadingCardEdits() async {
     final loadedEdits = <String, ReadingCardEditData>{};
+    final loadedSourceTerms = <String, Term>{};
     final loadedSavedIds = <String>{};
 
     final termsToLoad = List<Term>.from(widget.deck.terms);
 
     for (final term in termsToLoad) {
+      var sourceTerm = term;
+      final dictionaryTermId = term.sourceId ?? term.id;
+
+      try {
+        sourceTerm = await DictionaryService.getTermByIdAsync(
+          dictionaryTermId,
+        );
+      } catch (_) {
+        // Keep the deck copy as a fallback if the dictionary source cannot
+        // be loaded. Normal cards should resolve through sourceId.
+      }
+
       final hasSavedEdit = await ReadingCardEditStorage.hasSavedEdit(
         deck: widget.deck,
         term: term,
@@ -221,6 +281,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
         term: term,
       );
 
+      loadedSourceTerms[term.id] = sourceTerm;
       loadedEdits[term.id] = editData;
 
       if (hasSavedEdit) {
@@ -231,6 +292,10 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     if (!mounted) return;
 
     setState(() {
+      readingSourceTerms
+        ..clear()
+        ..addAll(loadedSourceTerms);
+
       readingCardEdits
         ..clear()
         ..addAll(loadedEdits);
@@ -241,10 +306,15 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     });
   }
 
+  void scheduleUserDataSave() {
+    GakujiUserDataStore.scheduleSave();
+  }
+
   void _saveProgress() {
     if (isReviewingIncorrect) return;
 
     DeckStorage.saveProgress(widget.deck.id, answeredTerms.length);
+    scheduleUserDataSave();
   }
 
   bool _isSameTerm(Term first, Term second) {
@@ -306,30 +376,6 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     }
   }
 
-  int get totalSessionCount => answeredTerms.length + activeTerms.length;
-
-  bool get isComplete => activeTerms.isEmpty && allTerms.isNotEmpty;
-
-  String? get swipeFeedbackText {
-    if (dragOffset.dx > 32) return 'Know';
-    if (dragOffset.dx < -32) return 'Still learning';
-
-    return null;
-  }
-
-  Color? get swipeFeedbackColor {
-    if (dragOffset.dx > 32) return correctGreenOutline;
-    if (dragOffset.dx < -32) return incorrectRedOutline;
-
-    return null;
-  }
-
-  double get swipeFeedbackOpacity {
-    final opacity = ((dragOffset.dx.abs() - 30) / 90).clamp(0.0, 1.0);
-
-    return opacity.toDouble();
-  }
-
   bool _hasSavedCardEdit(Term term) {
     return savedReadingCardEditTermIds.contains(term.id);
   }
@@ -338,45 +384,214 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     return readingCardEdits[term.id];
   }
 
+  Term _studySourceTermFor(Term term) {
+    return readingSourceTerms[term.id] ?? term;
+  }
+
+  bool _studySourceIsReady(Term term) {
+    return term.sourceId == null || readingSourceTerms.containsKey(term.id);
+  }
+
+  String _limitStudyNote(String value) {
+    if (value.runes.length <= 35) return value;
+
+    return String.fromCharCodes(value.runes.take(35));
+  }
+
+  List<String> _defaultStudyGlossesFor(Term term) {
+    if (!_studySourceIsReady(term)) return const [];
+
+    final sourceTerm = _studySourceTermFor(term);
+    final glossBySenseIndex = <int, String>{};
+
+    for (final sense in sourceTerm.senses) {
+      final definition = sense.displayDefinition.trim();
+
+      if (definition.isNotEmpty) {
+        glossBySenseIndex[sense.index] = definition;
+      }
+    }
+
+    final selectedSenseIndexes = term.selectedGlosses
+        .map((selection) => selection.senseIndex)
+        .toSet();
+    final selectedGlosses = <String>[];
+
+    for (final sense in sourceTerm.senses) {
+      if (!selectedSenseIndexes.contains(sense.index)) continue;
+
+      final definition = glossBySenseIndex[sense.index];
+
+      if (definition != null && !selectedGlosses.contains(definition)) {
+        selectedGlosses.add(definition);
+      }
+
+      if (selectedGlosses.length >= 3) break;
+    }
+
+    if (selectedGlosses.isNotEmpty) {
+      return selectedGlosses;
+    }
+
+    final defaults = glossBySenseIndex.values.take(3).toList();
+
+    if (defaults.isNotEmpty) {
+      return defaults;
+    }
+
+    final fallback = sourceTerm.cardMeaning.trim();
+
+    if (fallback.isEmpty) return const [];
+
+    return [fallback];
+  }
+
+  List<String> _resolvedStudyGlossesFor(
+    Term term,
+    List<String> storedGlosses,
+  ) {
+    if (storedGlosses.isEmpty) {
+      return _defaultStudyGlossesFor(term);
+    }
+
+    final sourceTerm = _studySourceTermFor(term);
+    final resolved = <String>[];
+    final usedSenseIndexes = <int>{};
+
+    for (final storedGloss in storedGlosses) {
+      final cleanedGloss = storedGloss.trim();
+
+      if (cleanedGloss.isEmpty) continue;
+
+      DictionarySense? matchedSense;
+
+      for (final sense in sourceTerm.senses) {
+        final matchesSense =
+            sense.displayDefinition.trim() == cleanedGloss;
+        final matchesLegacyGloss = sense.glosses.any(
+          (gloss) => gloss.trim() == cleanedGloss,
+        );
+
+        if (matchesSense || matchesLegacyGloss) {
+          matchedSense = sense;
+          break;
+        }
+      }
+
+      if (matchedSense == null ||
+          !usedSenseIndexes.add(matchedSense.index)) {
+        continue;
+      }
+
+      final definition = matchedSense.displayDefinition.trim();
+
+      if (definition.isNotEmpty) {
+        resolved.add(definition);
+      }
+
+      if (resolved.length >= 3) break;
+    }
+
+    if (resolved.isNotEmpty) {
+      return resolved;
+    }
+
+    return _defaultStudyGlossesFor(term);
+  }
+
+  Set<int> _studySenseIndexesForGlosses(
+    Term term,
+    List<String> glosses,
+  ) {
+    final sourceTerm = _studySourceTermFor(term);
+    final indexes = <int>{};
+
+    for (final displayedGloss in glosses) {
+      final cleanedGloss = displayedGloss.trim();
+
+      if (cleanedGloss.isEmpty) continue;
+
+      for (final sense in sourceTerm.senses) {
+        final matchesSense =
+            sense.displayDefinition.trim() == cleanedGloss;
+        final matchesLegacyGloss = sense.glosses.any(
+          (gloss) => gloss.trim() == cleanedGloss,
+        );
+
+        if (matchesSense || matchesLegacyGloss) {
+          indexes.add(sense.index);
+          break;
+        }
+      }
+    }
+
+    return indexes;
+  }
+
+  List<DictionaryExample> _studyEligibleExamplesFor(
+    Term term,
+    List<String> glosses,
+  ) {
+    final sourceTerm = _studySourceTermFor(term);
+    final senseIndexes = _studySenseIndexesForGlosses(
+      term,
+      glosses,
+    );
+    final examples = <DictionaryExample>[];
+    final seen = <String>{};
+
+    for (final sense in sourceTerm.senses) {
+      if (!senseIndexes.contains(sense.index)) continue;
+
+      for (final example in sense.examples) {
+        final key = '${example.japanese}\u0000${example.english}';
+
+        if (!seen.add(key)) continue;
+
+        examples.add(example);
+      }
+    }
+
+    return examples;
+  }
+
   List<String> _studyGlossesFor(Term term) {
     final editData = _cardEditFor(term);
 
-    if (_hasSavedCardEdit(term)) {
-      return editData?.selectedGlosses ?? const [];
+    if (_hasSavedCardEdit(term) && editData != null) {
+      return _resolvedStudyGlossesFor(
+        term,
+        editData.selectedGlosses,
+      );
     }
 
-    final meaning = term.meaning.trim();
-
-    if (meaning.isNotEmpty) {
-      return [meaning];
-    }
-
-    final cardMeaning = term.cardMeaning.trim();
-
-    if (cardMeaning.isNotEmpty) {
-      return [cardMeaning];
-    }
-
-    return const [];
+    return _defaultStudyGlossesFor(term);
   }
 
   String _studyNoteFor(Term term) {
-    if (!_hasSavedCardEdit(term)) return '';
+    final note = _hasSavedCardEdit(term)
+        ? _cardEditFor(term)?.note ?? ''
+        : term.note ?? '';
 
-    return _cardEditFor(term)?.note.trim() ?? '';
+    return _limitStudyNote(note.trim());
   }
 
   List<DictionaryExample> _studyExamplesFor(Term term) {
     final editData = _cardEditFor(term);
+    final glosses = _studyGlossesFor(term);
+    final eligibleExamples = _studyEligibleExamplesFor(
+      term,
+      glosses,
+    );
 
-    if (!_hasSavedCardEdit(term) || editData == null) {
-      return const [];
+    if (_hasSavedCardEdit(term) && editData != null) {
+      return ReadingCardEditData.examplesFromKeys(
+        examples: eligibleExamples,
+        selectedExampleKeys: editData.selectedExampleKeys,
+      ).take(1).toList();
     }
 
-    return ReadingCardEditData.examplesFromKeys(
-      examples: term.examples,
-      selectedExampleKeys: editData.selectedExampleKeys,
-    );
+    return eligibleExamples.take(1).toList();
   }
 
   bool _studyPhotoEnabledFor(Term term) {
@@ -412,8 +627,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     _cardContentController.value = 1;
 
     setState(() {
-      allTerms = List.from(widget.terms);
-      activeTerms = List.from(allTerms);
+      allTerms = List<Term>.from(filteredStudyTerms);
+      activeTerms = List<Term>.from(allTerms);
 
       if (isShuffled) {
         activeTerms.shuffle();
@@ -442,9 +657,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
   void startIncorrectReview() {
     if (incorrectReviewTerms.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No incorrect answers to review.')),
-      );
+      _showFloatingMessage('No incorrect answers to review.');
       return;
     }
 
@@ -558,7 +771,12 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     _previousCardReturnRunId++;
 
     setState(() {
-      history.add(_StudyHistoryEntry(term: answeredTerm, correct: correct));
+      history.add(
+        _StudyHistoryEntry(
+          term: answeredTerm,
+          correct: correct,
+        ),
+      );
 
       answeredTerms.add(answeredTerm);
       activeTerms.removeAt(0);
@@ -644,10 +862,15 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
     _swipeController.duration = _cardReturnDuration;
 
-    _swipeAnimation = Tween<Offset>(begin: startOffset, end: Offset.zero)
-        .animate(
-          CurvedAnimation(parent: _swipeController, curve: Curves.easeOutCubic),
-        );
+    _swipeAnimation = Tween<Offset>(
+      begin: startOffset,
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _swipeController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
 
     _swipeController.reset();
 
@@ -666,7 +889,9 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     });
   }
 
-  Future<void> animateCardOffscreen({required bool correct}) async {
+  Future<void> animateCardOffscreen({
+    required bool correct,
+  }) async {
     if (activeTerms.isEmpty) return;
 
     final screenWidth = MediaQuery.of(context).size.width;
@@ -678,8 +903,14 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       dragOffset.dy * 0.45,
     );
 
-    _swipeAnimation = Tween<Offset>(begin: dragOffset, end: endOffset).animate(
-      CurvedAnimation(parent: _swipeController, curve: Curves.easeOutQuad),
+    _swipeAnimation = Tween<Offset>(
+      begin: dragOffset,
+      end: endOffset,
+    ).animate(
+      CurvedAnimation(
+        parent: _swipeController,
+        curve: Curves.easeOutQuad,
+      ),
     );
 
     _swipeController.reset();
@@ -698,11 +929,68 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   Future<void> handleExit() async {
     if (hasCompletedDeck && !isReviewingIncorrect) {
       await DeckStorage.saveProgress(widget.deck.id, 0);
+      scheduleUserDataSave();
     }
 
     if (!mounted) return;
 
     Navigator.pop(context);
+  }
+
+  void toggleStarredTermFilter() {
+    if (isSwipingAway || isReturningPreviousCard) return;
+
+    final nextShowStarredOnly = !showStarredOnly;
+    final nextTerms = nextShowStarredOnly
+        ? widget.terms.where((term) => term.marked).toList()
+        : List<Term>.from(widget.terms);
+
+    if (nextTerms.isEmpty) {
+      setState(() {
+        showMenu = false;
+      });
+
+      _showFloatingMessage('No starred terms to study');
+      return;
+    }
+
+    _previousCardReturnRunId++;
+    _swipeController.stop();
+    _previousCardReturnController.stop();
+    _previousCardReturnController.reset();
+    _cardContentController.stop();
+    _cardContentController.value = 1;
+
+    setState(() {
+      showStarredOnly = nextShowStarredOnly;
+
+      allTerms = List<Term>.from(nextTerms);
+      activeTerms = List<Term>.from(allTerms);
+
+      if (isShuffled) {
+        activeTerms.shuffle();
+      }
+
+      answeredTerms.clear();
+      history.clear();
+      incorrectReviewTerms.clear();
+
+      correctCount = 0;
+      incorrectCount = 0;
+
+      dragOffset = Offset.zero;
+      isDragging = false;
+      isSwipingAway = false;
+      isReturningPreviousCard = false;
+      outgoingCardTerm = null;
+      showMenu = false;
+      _flipController.value = 0;
+      hasCompletedDeck = false;
+      isReviewingIncorrect = false;
+    });
+
+    DeckStorage.saveProgress(widget.deck.id, 0);
+    scheduleUserDataSave();
   }
 
   void toggleShuffle() {
@@ -733,6 +1021,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       hasCompletedDeck = activeTerms.isEmpty && allTerms.isNotEmpty;
     });
 
+    DeckStorage.saveShuffle(widget.deck.id, isShuffled);
     _saveProgress();
   }
 
@@ -743,6 +1032,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       showFurigana = !showFurigana;
       showMenu = false;
     });
+
+    scheduleUserDataSave();
   }
 
   void toggleCardOrientation() {
@@ -753,6 +1044,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       showMenu = false;
       _flipController.value = 0;
     });
+
+    scheduleUserDataSave();
   }
 
   Future<void> openDeckEdit() async {
@@ -764,7 +1057,9 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => DeckEditPage(deck: widget.deck)),
+      MaterialPageRoute(
+        builder: (context) => DeckEditPage(deck: widget.deck),
+      ),
     );
 
     if (!mounted) return;
@@ -776,8 +1071,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     _cardContentController.value = 1;
 
     setState(() {
-      allTerms = List.from(widget.terms);
-      activeTerms = List.from(allTerms);
+      allTerms = List<Term>.from(filteredStudyTerms);
+      activeTerms = List<Term>.from(allTerms);
 
       if (isShuffled) {
         activeTerms.shuffle();
@@ -804,16 +1099,97 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     await _loadReadingCardEdits();
   }
 
+  void openStudyOptions() {
+    showGakujiOptionsSheet(
+      context: context,
+      title: 'Study Options',
+      sectionsBuilder: (context) => [
+        GakujiOptionsSheetSection(
+          title: 'Study Set',
+          items: [
+            GakujiOptionsSheetItem(
+              icon: showStarredOnly
+                  ? Icons.star_rounded
+                  : Icons.star_border_rounded,
+              label: showStarredOnly ? 'Starred terms only' : 'All terms',
+              iconColor: showStarredOnly
+                  ? GakujiColors.darkGray
+                  : GakujiColors.mediumGray,
+              onTap: toggleStarredTermFilter,
+            ),
+          ],
+        ),
+        GakujiOptionsSheetSection(
+          title: 'Display',
+          items: [
+            GakujiOptionsSheetItem(
+              textIcon: 'あ',
+              label: showFurigana ? 'Hide Furigana' : 'Show Furigana',
+              iconColor: showFurigana
+                  ? GakujiColors.darkGray
+                  : GakujiColors.mediumGray,
+              onTap: toggleFurigana,
+            ),
+            GakujiOptionsSheetItem(
+              icon: Icons.swap_horiz_rounded,
+              label: termFirst ? 'Term First' : 'Definition First',
+              iconColor: termFirst
+                  ? GakujiColors.mediumGray
+                  : GakujiColors.darkGray,
+              onTap: toggleCardOrientation,
+            ),
+          ],
+        ),
+        GakujiOptionsSheetSection(
+          title: 'Session',
+          items: [
+            GakujiOptionsSheetItem(
+              icon: Icons.shuffle_rounded,
+              label: isShuffled ? 'Shuffled' : 'Unshuffled',
+              iconColor: isShuffled
+                  ? GakujiColors.darkGray
+                  : GakujiColors.mediumGray,
+              onTap: toggleShuffle,
+            ),
+            GakujiOptionsSheetItem(
+              icon: Icons.refresh_rounded,
+              label: 'Reset Deck',
+              iconColor: GakujiColors.mediumGray,
+              onTap: restart,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _showFloatingMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1500),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
+          content: Text(
+            message,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.snackBar,
+          ),
+        ),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (allTerms.isEmpty && activeTerms.isEmpty) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
+      return Scaffold(
+        backgroundColor: GakujiColors.warmBackground,
         body: Center(
           child: Text(
             'No terms',
             textScaler: TextScaler.noScaling,
-            style: AppText.emptyState,
+            style: GakujiText.small,
           ),
         ),
       );
@@ -837,8 +1213,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
     final returningOffsetX = isReturningPreviousCard
         ? previousCardReturnDirection *
-              screenWidth *
-              (1 - previousReturnProgress)
+            screenWidth *
+            (1 - previousReturnProgress)
         : 0.0;
 
     final outgoingOffsetX =
@@ -850,7 +1226,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     final totalPosition = totalSessionCount;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: GakujiColors.warmBackground,
       body: GestureDetector(
         onTap: () {
           if (showMenu) {
@@ -862,29 +1238,34 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
             children: [
               Column(
                 children: [
-                  GakujiTopBar(
-                    leftIcon: Icons.close,
+                  _studyTopBar(
+                    leftIcon: Icons.close_rounded,
                     onLeftTap: handleExit,
                     title: '$currentPosition/$totalPosition',
-                    titleStyle: AppText.topBarTitle.copyWith(
-                      fontWeight: FontWeight.w500,
-                    ),
-                    rightIcon: Icons.more_horiz,
-                    onRightTap: () {
-                      setState(() => showMenu = !showMenu);
-                    },
+                    rightIcon: Icons.menu_rounded,
+                    onRightTap: openStudyOptions,
                   ),
-                  const SizedBox(height: 22),
+                  _progressBar(deckProgress),
+                  const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _pill(incorrectCount, incorrectRed, alignLeft: true),
-                      _pill(correctCount, correctGreen, alignLeft: false),
+                      _pill(
+                        incorrectCount,
+                        incorrectRed,
+                        alignLeft: true,
+                      ),
+                      _pill(
+                        correctCount,
+                        correctGreen,
+                        alignLeft: false,
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
                   Expanded(
                     child: Stack(
+                      fit: StackFit.expand,
                       children: [
                         if (hasCardBehind) _blankCardBehind(),
                         if (isReturningPreviousCard && outgoingCardTerm != null)
@@ -892,7 +1273,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                             opacity: outgoingOpacity,
                             child: Transform(
                               transform: Matrix4.identity()
-                                ..translateByDouble(outgoingOffsetX, 0, 0, 1),
+                                ..translateByDouble(outgoingOffsetX, 0.0, 0.0, 1.0),
                               alignment: Alignment.center,
                               child: _card(
                                 outgoingCardTerm!,
@@ -908,10 +1289,12 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                                   ? returningOffsetX
                                   : dragOffset.dx,
                               isReturningPreviousCard ? 0.0 : dragOffset.dy,
-                              0,
-                              1,
+                              0.0,
+                              1.0,
                             )
-                            ..rotateZ(isReturningPreviousCard ? 0.0 : rotation),
+                            ..rotateZ(
+                              isReturningPreviousCard ? 0.0 : rotation,
+                            ),
                           alignment: Alignment.center,
                           child: GestureDetector(
                             onTap: flip,
@@ -966,21 +1349,115 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 28),
                   Padding(
-                    padding: const EdgeInsets.only(left: 22, bottom: 22),
-                    child: Align(
-                      alignment: Alignment.bottomLeft,
-                      child: _circle(Icons.undo_rounded, goBack),
+                    padding: const EdgeInsets.only(
+                      left: 24,
+                      right: 24,
+                      bottom: 10,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _circle(Icons.undo_rounded, goBack),
+                        const SizedBox(
+                          width: 46,
+                          height: 46,
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              if (showMenu) _menuOverlay(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _studyTopBar({
+    required IconData leftIcon,
+    required VoidCallback onLeftTap,
+    required String title,
+    required IconData rightIcon,
+    required VoidCallback onRightTap,
+  }) {
+    return GakujiTopBar(
+      leftIcon: leftIcon,
+      leftIconSize: 34,
+      leftIconColor: GakujiColors.darkGray,
+      onLeftTap: onLeftTap,
+      title: title,
+      titleStyle: TextStyle(
+        fontSize: 20,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
+        color: GakujiColors.darkGray,
+      ),
+      rightIcon: rightIcon,
+      rightIconSize: 36,
+      rightIconColor: GakujiColors.darkGray,
+      onRightTap: onRightTap,
+    );
+  }
+
+  Widget _progressBar(double progress) {
+    return SizedBox(
+      height: 4,
+      width: double.infinity,
+      child: Stack(
+        children: [
+          Container(
+            width: double.infinity,
+            height: 4,
+            color: GakujiColors.softBorder,
+          ),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(
+              begin: 0,
+              end: progress,
+            ),
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return FractionallySizedBox(
+                widthFactor: value,
+                alignment: Alignment.centerLeft,
+                child: child,
+              );
+            },
+            child: Container(
+              height: 4,
+              color: GakujiColors.darkGray,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fadingProgressBar(double progress) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(
+        begin: 1,
+        end: 0,
+      ),
+      duration: const Duration(milliseconds: 850),
+      curve: Curves.easeOutCubic,
+      builder: (context, opacity, child) {
+        return ClipRect(
+          child: Align(
+            heightFactor: opacity,
+            child: Opacity(
+              opacity: opacity,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: _progressBar(progress),
     );
   }
 
@@ -989,112 +1466,106 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     final percent = total == 0 ? 0 : ((correctCount / total) * 100).round();
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: GakujiColors.warmBackground,
       body: SafeArea(
         child: Stack(
           children: [
             Column(
               children: [
-                GakujiTopBar(
-                  leftIcon: Icons.close,
+                _studyTopBar(
+                  leftIcon: Icons.close_rounded,
                   onLeftTap: handleExit,
                   title: '',
-                  rightIcon: Icons.more_horiz,
-                  onRightTap: () {
-                    setState(() => showMenu = !showMenu);
-                  },
+                  rightIcon: Icons.menu_rounded,
+                  onRightTap: openStudyOptions,
                 ),
+                _fadingProgressBar(1),
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final compact =
-                          constraints.maxWidth < 390 ||
+                      final compact = constraints.maxWidth < 390 ||
                           constraints.maxHeight < 720;
 
-                      final donutSize = compact ? 142.0 : 164.0;
-                      final statWidth = compact ? 112.0 : 132.0;
-                      final statGap = compact ? 16.0 : 24.0;
-                      final titleTopGap = compact ? 64.0 : 92.0;
-                      final bottomReserve = compact ? 78.0 : 92.0;
+                      final titleTopGap = compact ? 48.0 : 68.0;
+                      final gaugeSize = compact ? 246.0 : 286.0;
+                      final gaugeTopGap = compact ? 42.0 : 52.0;
+                      final legendGap = compact ? 18.0 : 22.0;
+                      final buttonHeight = compact ? 56.0 : 62.0;
+                      final buttonGap = compact ? 18.0 : 22.0;
+                      final bottomGap = compact ? 52.0 : 64.0;
 
                       return Padding(
-                        padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
                         child: Column(
                           children: [
                             SizedBox(height: titleTopGap),
-                            const Text(
+                             Text(
                               'Complete!',
                               textScaler: TextScaler.noScaling,
-                              style: AppText.displayTitle,
+                              style: GakujiText.xLarge,
                             ),
-                            const Spacer(flex: 3),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                SizedBox(
-                                  width: donutSize,
-                                  height: donutSize,
-                                  child: Stack(
+                            SizedBox(height: gaugeTopGap),
+                            SizedBox(
+                              width: gaugeSize,
+                              height: gaugeSize,
+                              child: TweenAnimationBuilder<double>(
+                                tween: Tween<double>(
+                                  begin: 0,
+                                  end: 1,
+                                ),
+                                duration: const Duration(milliseconds: 1050),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, animationProgress, child) {
+                                  return Stack(
                                     alignment: Alignment.center,
                                     children: [
                                       CustomPaint(
-                                        size: Size(donutSize, donutSize),
-                                        painter: _CompletionDonutPainter(
+                                        size: Size(gaugeSize, gaugeSize),
+                                        painter: _CompletionGaugePainter(
                                           correctCount: correctCount,
                                           incorrectCount: incorrectCount,
-                                          correctColor: correctGreen,
+                                          baseColor: GakujiColors.darkGray,
+                                          correctColor: correctGreenOutline,
                                           incorrectColor: incorrectRedOutline,
+                                          animationProgress: animationProgress,
                                         ),
                                       ),
                                       Text(
                                         '$percent%',
                                         textScaler: TextScaler.noScaling,
                                         style: TextStyle(
-                                          fontSize: compact ? 36 : 40,
+                                          fontSize: compact ? 50 : 58,
                                           height: 1,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.black,
+                                          fontWeight: FontWeight.w700,
+                                          color: GakujiColors.darkGray,
                                         ),
                                       ),
                                     ],
-                                  ),
-                                ),
-                                SizedBox(width: statGap),
-                                Column(
-                                  children: [
-                                    _completeStatPill(
-                                      label: 'Correct',
-                                      value: correctCount,
-                                      fillColor: correctGreen,
-                                      textColor: const Color(0xFF5DCB38),
-                                      width: statWidth,
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _completeStatPill(
-                                      label: 'Incorrect',
-                                      value: incorrectCount,
-                                      fillColor: incorrectRed,
-                                      textColor: incorrectRedOutline,
-                                      width: statWidth,
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                  );
+                                },
+                              ),
                             ),
-                            const Spacer(flex: 4),
-                            _completeActionButton(
-                              label: 'Restart Deck',
-                              color: deckBlue,
-                              onTap: restart,
-                            ),
-                            const SizedBox(height: 22),
+                            SizedBox(height: legendGap),
+                            _completionLegend(),
+                            const Spacer(),
                             _completeActionButton(
                               label: 'Review Incorrect Answers',
-                              color: incorrectRedOutline,
+                              color: GakujiColors.deckBlue,
+                              height: buttonHeight,
                               onTap: startIncorrectReview,
                             ),
-                            SizedBox(height: bottomReserve),
+                            SizedBox(height: buttonGap),
+                            _completeActionButton(
+                              label: 'Restart Deck',
+                              color: GakujiColors.whiteCard,
+                              textColor: GakujiColors.mediumGray,
+                              outlined: true,
+                              height: buttonHeight,
+                              onTap: restart,
+                            ),
+                            const SizedBox(height: 10),
+                            _returnLastCardButton(),
+                            SizedBox(height: bottomGap),
                           ],
                         ),
                       );
@@ -1103,58 +1574,67 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                 ),
               ],
             ),
-            Positioned(
-              left: 22,
-              bottom: 18,
-              child: _circle(Icons.undo_rounded, goBack),
-            ),
-            if (showMenu) _menuOverlay(),
           ],
         ),
       ),
     );
   }
 
-  Widget _completeStatPill({
+  Widget _completionLegend() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _completionStat(
+          label: 'Correct',
+          count: correctCount,
+          color: correctGreenOutline,
+        ),
+        const SizedBox(width: 28),
+        _completionStat(
+          label: 'Incorrect',
+          count: incorrectCount,
+          color: incorrectRedOutline,
+        ),
+      ],
+    );
+  }
+
+  Widget _completionStat({
     required String label,
-    required int value,
-    required Color fillColor,
-    required Color textColor,
-    required double width,
+    required int count,
+    required Color color,
   }) {
-    return Container(
-      width: width,
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: fillColor,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Flexible(
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              textScaler: TextScaler.noScaling,
-              style: AppText.listTitle.copyWith(
-                fontWeight: FontWeight.w800,
-                color: textColor,
-              ),
-            ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.xSmall.copyWith(
+            color: color,
           ),
-          const SizedBox(width: 8),
-          Text(
-            '$value',
+        ),
+        const SizedBox(width: 8),
+        Container(
+          width: 34,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(GakujiRadius.pill),
+          ),
+          child: Text(
+            '$count',
             textScaler: TextScaler.noScaling,
-            style: AppText.listTitle.copyWith(
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1,
               fontWeight: FontWeight.w800,
-              color: textColor,
+              color: Colors.white,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1162,37 +1642,43 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     required String label,
     required Color color,
     required VoidCallback onTap,
+    Color textColor = Colors.white,
+    bool outlined = false,
+    double height = 62,
   }) {
     return Container(
       width: double.infinity,
-      height: 64,
+      height: height,
+      margin: const EdgeInsets.symmetric(horizontal: 22),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 0,
-            offset: Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(GakujiRadius.pill),
+        border: outlined
+            ? Border.all(
+                color: GakujiColors.softBorder,
+                width: 1.5,
+              )
+            : null,
+        boxShadow: [GakujiShadows.soft],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(GakujiRadius.pill),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
+          splashColor: Colors.white.withValues(alpha: 0.10),
+          highlightColor: Colors.white.withValues(alpha: 0.05),
           child: Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
                   label,
                   textScaler: TextScaler.noScaling,
-                  style: AppText.buttonLarge.copyWith(
-                    fontWeight: FontWeight.w700,
+                  style: GakujiText.small.copyWith(
+                    color: textColor,
                   ),
                 ),
               ),
@@ -1203,167 +1689,37 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _menuOverlay() {
-    return Positioned.fill(
-      child: GestureDetector(
-        onTap: () => setState(() => showMenu = false),
-        child: Container(
-          color: Colors.black.withValues(alpha: 0.16),
-          child: Center(
-            child: Container(
-              width: 264,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x26000000),
-                    blurRadius: 0,
-                    offset: Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _menuItem(
-                    icon: Icons.edit,
-                    label: 'Edit Deck',
-                    onTap: openDeckEdit,
-                  ),
-                  const Divider(height: 1, color: dividerGray),
-                  InkWell(
-                    onTap: toggleFurigana,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 13,
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            'あ',
-                            textScaler: TextScaler.noScaling,
-                            style: AppText.kanjiGlyphSmall.copyWith(
-                              color: showFurigana ? Colors.black : Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            showFurigana ? 'Hide Furigana' : 'Show Furigana',
-                            textScaler: TextScaler.noScaling,
-                            style: AppText.body.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1, color: dividerGray),
-                  InkWell(
-                    onTap: toggleCardOrientation,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 13,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.swap_horiz,
-                            color: termFirst ? Colors.black : Colors.grey,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Card Orientation:',
-                                  textScaler: TextScaler.noScaling,
-                                  style: AppText.body.copyWith(
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 3),
-                                Text(
-                                  termFirst ? 'Term -> Def.' : 'Def. -> Term',
-                                  textScaler: TextScaler.noScaling,
-                                  style: AppText.cardCaption.copyWith(
-                                    color: textGray,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1, color: dividerGray),
-                  InkWell(
-                    onTap: toggleShuffle,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 13,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.shuffle,
-                            color: isShuffled ? Colors.black : Colors.grey,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            isShuffled ? 'Unshuffle' : 'Shuffle',
-                            textScaler: TextScaler.noScaling,
-                            style: AppText.body.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1, color: dividerGray),
-                  _menuItem(
-                    icon: Icons.refresh,
-                    label: 'Reset Deck',
-                    iconColor: Colors.grey,
-                    onTap: restart,
-                  ),
-                ],
-              ),
-            ),
+  Widget _returnLastCardButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: goBack,
+        borderRadius: BorderRadius.circular(20),
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 8,
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _menuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Color iconColor = Colors.black,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        child: Row(
-          children: [
-            Icon(icon, color: iconColor),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: AppText.body.copyWith(fontWeight: FontWeight.w500),
-            ),
-          ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.arrow_back_rounded,
+                size: 22,
+                color: GakujiColors.mediumGray,
+              ),
+              SizedBox(width: 6),
+              Text(
+                'Return to Last Card',
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.xSmall.copyWith(
+                  color: GakujiColors.mediumGray,
+                )
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1371,20 +1727,10 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
   Widget _blankCardBehind() {
     return IgnorePointer(
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(horizontal: 28),
-        decoration: BoxDecoration(
-          color: cardGray,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x22000000),
-              blurRadius: 0,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
+      child: ReadingCardFrame(
+        margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
+        boxShadow: [GakujiShadows.soft],
+        child: const SizedBox.expand(),
       ),
     );
   }
@@ -1402,59 +1748,31 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
     final showDefinition = termFirst ? showBack : !showBack;
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(horizontal: 28),
-      decoration: BoxDecoration(
-        color: cardGray,
-        borderRadius: BorderRadius.circular(24),
-        border: hasSwipeFeedback
-            ? Border.all(color: swipeColor, width: 5)
-            : null,
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x22000000),
-            blurRadius: 0,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
+    return ReadingCardFrame(
+      margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
+      borderColor:
+          hasSwipeFeedback ? swipeColor : GakujiColors.softBorder,
+      borderWidth: hasSwipeFeedback ? 5 : 1.2,
       child: Stack(
         children: [
           Center(
             child: Opacity(
               opacity: contentOpacity,
-              child: _cardContent(term, showDefinition: showDefinition),
-            ),
-          ),
-          if (hasSwipeFeedback)
-            Center(
-              child: Opacity(
-                opacity: swipeOpacity,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 22,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Text(
-                    swipeLabel,
-                    textAlign: TextAlign.center,
-                    textScaler: TextScaler.noScaling,
-                    style: AppText.screenTitle.copyWith(color: swipeColor),
-                  ),
-                ),
+              child: _cardContent(
+                term,
+                showDefinition: showDefinition,
               ),
             ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _cardContent(Term term, {required bool showDefinition}) {
+  Widget _cardContent(
+    Term term, {
+    required bool showDefinition,
+  }) {
     if (showDefinition) {
       return _definitionCardContent(term);
     }
@@ -1463,183 +1781,72 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }
 
   Widget _definitionCardContent(Term term) {
-    final glosses = _studyGlossesFor(term);
-    final note = _studyNoteFor(term);
-    final examples = _studyExamplesFor(term);
-    final photoPath = _studyPhotoPathFor(term);
-    final hasPhoto = _studyPhotoExistsFor(term) && photoPath != null;
+    final readingText = term.reading.trim();
+    final photoPath = _studyPhotoExistsFor(term)
+        ? _studyPhotoPathFor(term)
+        : null;
 
-    final hasNote = note.isNotEmpty;
-    final hasExamples = examples.isNotEmpty;
-    final hasExtras = hasNote || hasExamples || hasPhoto;
-
-    final glossText = _glossTextForStudy(glosses);
-
-    final glossFontSize = glosses.length <= 1 && !hasExtras
-        ? 34.0
-        : hasPhoto
-        ? 18.0
-        : glosses.length <= 3
-        ? 23.0
-        : 20.0;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(25, 24, 25, 24),
-      child: Center(
-        child: SingleChildScrollView(
-          physics: const NeverScrollableScrollPhysics(),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                glossText,
-                maxLines: hasPhoto
-                    ? 4
-                    : hasExtras
-                    ? 6
-                    : 8,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontSize: glossFontSize,
-                  height: 1.14,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.35,
-                  color: Colors.black,
-                ),
-              ),
-              if (hasNote) ...[
-                SizedBox(height: hasPhoto ? 12 : 18),
-                _studyCardDivider(),
-                SizedBox(height: hasPhoto ? 10 : 14),
-                Text(
-                  note,
-                  maxLines: hasPhoto ? 2 : 3,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: hasPhoto ? 14.5 : 16,
-                    height: 1.16,
-                    fontWeight: FontWeight.w600,
-                    color: textGray,
-                  ),
-                ),
-              ],
-              if (hasExamples) ...[
-                SizedBox(height: hasPhoto ? 12 : 18),
-                _studyCardDivider(),
-                SizedBox(height: hasPhoto ? 10 : 14),
-                _studyExamplesBlock(examples, compact: hasPhoto),
-              ],
-              if (hasPhoto) ...[
-                const SizedBox(height: 14),
-                _studyPhotoBlock(photoPath),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _studyPhotoBlock(String photoPath) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: Image.file(
-        File(photoPath),
-        width: 188,
-        height: 132,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            width: 188,
-            height: 132,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              'Photo unavailable',
-              textAlign: TextAlign.center,
-              textScaler: TextScaler.noScaling,
-              style: AppText.buttonLabel.copyWith(
-                height: 1.15,
-                color: textGray,
-              ),
-            ),
-          );
-        },
-      ),
+    return ReadingCardBackContent(
+      glosses: _studyGlossesFor(term),
+      note: _studyNoteFor(term),
+      examples: _studyExamplesFor(term),
+      photoPath: photoPath,
+      readingText: readingText,
+      showReadingOnBack: !showFurigana && readingText.isNotEmpty,
     );
   }
 
   Widget _termCardContent(Term term) {
-    final kanjiText = term.kanji.trim().isNotEmpty
-        ? term.kanji.trim()
-        : term.reading.trim();
+    final kanjiText =
+        term.kanji.trim().isNotEmpty ? term.kanji.trim() : term.reading.trim();
     final readingText = term.reading.trim();
+    final showReadingAbove = showFurigana && readingText.isNotEmpty;
 
-    return Center(
+    return SizedBox.expand(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 26),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            if (showFurigana && readingText.isNotEmpty)
-              Text(
-                readingText,
-                textAlign: TextAlign.center,
-                textScaler: TextScaler.noScaling,
-                style: AppText.listHeading.copyWith(
-                  fontWeight: FontWeight.w500,
-                  color: textGray,
-                ),
-              ),
-            if (showFurigana && readingText.isNotEmpty)
-              const SizedBox(height: 8),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                kanjiText,
-                textAlign: TextAlign.center,
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontSize: _termFontSizeFor(kanjiText),
-                  height: 1,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.8,
-                  color: Colors.black,
+            Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  kanjiText,
+                  textAlign: TextAlign.center,
+                  textScaler: TextScaler.noScaling,
+                  style: TextStyle(
+                    fontSize: _termFontSizeFor(kanjiText),
+                    height: 1,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.8,
+                    color: GakujiColors.darkGray,
+                  ),
                 ),
               ),
             ),
+            if (showReadingAbove)
+              Align(
+                alignment: Alignment.center,
+                child: Transform.translate(
+                  offset: const Offset(0, -52),
+                  child: Text(
+                    readingText,
+                    textAlign: TextAlign.center,
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      fontSize: 20,
+                      height: 1,
+                      fontWeight: FontWeight.w600,
+                      color: GakujiColors.mediumGray,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
-  }
-
-  String _glossTextForStudy(List<String> glosses) {
-    if (glosses.isEmpty) {
-      return 'No glosses selected';
-    }
-
-    if (glosses.length == 1) {
-      return glosses.first;
-    }
-
-    return glosses
-        .asMap()
-        .entries
-        .map((entry) {
-          final label = String.fromCharCode(65 + entry.key);
-          return '$label. ${entry.value}';
-        })
-        .join('\n');
   }
 
   double _termFontSizeFor(String text) {
@@ -1650,68 +1857,11 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     return 56;
   }
 
-  Widget _studyCardDivider() {
-    return Container(
-      width: 54,
-      height: 3,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(999),
-      ),
-    );
-  }
-
-  Widget _studyExamplesBlock(
-    List<DictionaryExample> examples, {
-    bool compact = false,
+  Widget _pill(
+    int count,
+    Color color, {
+    required bool alignLeft,
   }) {
-    final visibleExamples = examples.take(compact ? 1 : 2).toList();
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: visibleExamples.map((example) {
-        final english = example.english.trim();
-
-        return Padding(
-          padding: EdgeInsets.only(bottom: compact ? 6 : 9),
-          child: Column(
-            children: [
-              Text(
-                example.japanese,
-                maxLines: compact ? 1 : 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontSize: compact ? 13.5 : 15.5,
-                  height: 1.16,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black,
-                ),
-              ),
-              if (english.isNotEmpty && !compact) ...[
-                const SizedBox(height: 3),
-                Text(
-                  english,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  textScaler: TextScaler.noScaling,
-                  style: AppText.cardCaption.copyWith(
-                    height: 1.15,
-                    fontWeight: FontWeight.w600,
-                    color: textGray,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _pill(int count, Color color, {required bool alignLeft}) {
     final isIncorrect = color == incorrectRed;
 
     return Container(
@@ -1725,8 +1875,12 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       decoration: BoxDecoration(
         color: color,
         borderRadius: alignLeft
-            ? const BorderRadius.horizontal(right: Radius.circular(30))
-            : const BorderRadius.horizontal(left: Radius.circular(30)),
+            ? const BorderRadius.horizontal(
+                right: Radius.circular(30),
+              )
+            : const BorderRadius.horizontal(
+                left: Radius.circular(30),
+              ),
         border: Border.all(
           color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
           width: 3,
@@ -1735,7 +1889,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       child: Text(
         '$count',
         textScaler: TextScaler.noScaling,
-        style: AppText.buttonLarge.copyWith(
+        style: TextStyle(
+          fontSize: 24,
           height: 1,
           fontWeight: FontWeight.w700,
           color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
@@ -1745,27 +1900,23 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }
 
   Widget _circle(IconData icon, VoidCallback onTap) {
-    return Container(
-      width: 46,
-      height: 46,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x1F000000),
-            blurRadius: 0,
-            offset: Offset(0, 5),
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 46,
+          height: 46,
+          child: Icon(
+            icon,
+            size: 31,
+            color: GakujiColors.darkGray,
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: IconButton(
-          onPressed: onTap,
-          icon: Icon(icon, size: 25, color: Colors.black),
         ),
       ),
     );
@@ -1776,68 +1927,118 @@ class _StudyHistoryEntry {
   final Term term;
   final bool correct;
 
-  const _StudyHistoryEntry({required this.term, required this.correct});
+  const _StudyHistoryEntry({
+    required this.term,
+    required this.correct,
+  });
 }
 
-class _CompletionDonutPainter extends CustomPainter {
+class _CompletionGaugePainter extends CustomPainter {
   final int correctCount;
   final int incorrectCount;
+  final Color baseColor;
   final Color correctColor;
   final Color incorrectColor;
+  final double animationProgress;
 
-  const _CompletionDonutPainter({
+  const _CompletionGaugePainter({
     required this.correctCount,
     required this.incorrectCount,
+    required this.baseColor,
     required this.correctColor,
     required this.incorrectColor,
+    this.animationProgress = 1,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final total = correctCount + incorrectCount;
+
+    final strokeWidth = size.width * 0.032;
+    final radius = (size.width - strokeWidth) / 2;
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    final strokeWidth = size.width * 0.19;
 
     final rect = Rect.fromCircle(
       center: center,
-      radius: radius - strokeWidth / 2,
+      radius: radius,
     );
+
+    final basePaint = Paint()
+      ..color = baseColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
 
     final correctPaint = Paint()
       ..color = correctColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
 
     final incorrectPaint = Paint()
       ..color = incorrectColor
       ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth;
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
 
-    if (total == 0) {
-      canvas.drawArc(rect, -math.pi / 2, math.pi * 2, false, incorrectPaint);
-      return;
-    }
-
-    final correctSweep = (correctCount / total) * math.pi * 2;
-    final incorrectSweep = math.pi * 2 - correctSweep;
-
-    canvas.drawArc(rect, -math.pi / 2, correctSweep, false, correctPaint);
+    // Bottom-centered opening matching the completion design.
+    const gapSweep = math.pi * 0.34;
+    const startAngle = math.pi / 2 + gapSweep / 2;
+    const totalSweep = math.pi * 2 - gapSweep;
 
     canvas.drawArc(
       rect,
-      -math.pi / 2 + correctSweep,
-      incorrectSweep,
+      startAngle,
+      totalSweep,
       false,
-      incorrectPaint,
+      basePaint,
     );
+
+    if (total == 0) return;
+
+    final progress = animationProgress.clamp(0.0, 1.0);
+
+    final correctSweep = (correctCount / total) * totalSweep;
+    final visibleSweep = totalSweep * progress;
+
+    final animatedCorrect = math.min(
+      visibleSweep,
+      correctSweep,
+    );
+
+    final animatedIncorrect = math.max(
+      0.0,
+      visibleSweep - correctSweep,
+    );
+
+    if (animatedCorrect > 0) {
+      canvas.drawArc(
+        rect,
+        startAngle,
+        animatedCorrect,
+        false,
+        correctPaint,
+      );
+    }
+
+    if (animatedIncorrect > 0) {
+      canvas.drawArc(
+        rect,
+        startAngle + correctSweep,
+        animatedIncorrect,
+        false,
+        incorrectPaint,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _CompletionDonutPainter oldDelegate) {
+  bool shouldRepaint(covariant _CompletionGaugePainter oldDelegate) {
     return oldDelegate.correctCount != correctCount ||
         oldDelegate.incorrectCount != incorrectCount ||
+        oldDelegate.baseColor != baseColor ||
         oldDelegate.correctColor != correctColor ||
-        oldDelegate.incorrectColor != incorrectColor;
+        oldDelegate.incorrectColor != incorrectColor ||
+        oldDelegate.animationProgress != animationProgress;
   }
 }

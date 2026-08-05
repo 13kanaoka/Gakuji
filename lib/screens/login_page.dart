@@ -64,19 +64,12 @@ class _LoginPageState extends State<LoginPage> {
               else
                 ElevatedButton(
                   onPressed: _signInWithGoogle,
-                  child: const Text('Sign-in with Google'),
-                ),
-              if (errorMessage != null) ...[
-                const SizedBox(height: 16),
-                Text(
-                  errorMessage!,
-                  style: const TextStyle(color: Colors.red)
+                  child: const Text('Sign in with Google'),
                 ),
               ],
-            ],
+          ),
           ),
         ),
-      ),
-    );
+      );
   }
 }

@@ -2,14 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../models/deck.dart';
 import '../models/term.dart';
-import '../theme/app_text_styles.dart';
+import '../services/gakuji_user_data_store.dart';
+import '../widgets/gakuji_faded_scroll.dart';
+import '../widgets/gakuji_search_bar.dart';
+import '../widgets/gakuji_styles.dart';
+import '../widgets/gakuji_term_row.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'reading_card_edit_page.dart';
 
 class DeckEditPage extends StatefulWidget {
   final Deck deck;
 
-  const DeckEditPage({super.key, required this.deck});
+  const DeckEditPage({
+    super.key,
+    required this.deck,
+  });
 
   @override
   State<DeckEditPage> createState() => _DeckEditPageState();
@@ -27,9 +34,11 @@ class _DeckEditPageState extends State<DeckEditPage> {
 
   static const Duration _snapDuration = Duration(milliseconds: 220);
   static const Duration _deleteSlideDuration = Duration(milliseconds: 240);
+  static const Duration _headerCollapseDuration = Duration(milliseconds: 400);
 
   bool showMenu = false;
   bool showStarredOnly = false;
+  bool deckInfoCollapsed = false;
 
   String searchQuery = '';
 
@@ -43,18 +52,41 @@ class _DeckEditPageState extends State<DeckEditPage> {
   final Set<String> selectedTerms = {};
 
   final TextEditingController searchController = TextEditingController();
-  final FocusNode searchFocusNode = FocusNode();
+  final ScrollController cardsScrollController = ScrollController();
 
   bool get supportsReadingCardEdit {
     return widget.deck.type == DeckType.reading;
   }
 
   @override
+  void initState() {
+    super.initState();
+
+    cardsScrollController.addListener(handleCardListScroll);
+  }
+
+  @override
   void dispose() {
     searchController.dispose();
-    searchFocusNode.dispose();
+    cardsScrollController.dispose();
 
     super.dispose();
+  }
+
+  void scheduleUserDataSave() {
+    GakujiUserDataStore.scheduleSave();
+  }
+
+  void handleCardListScroll() {
+    if (!cardsScrollController.hasClients) return;
+
+    final shouldCollapse = cardsScrollController.offset > 14;
+
+    if (deckInfoCollapsed == shouldCollapse) return;
+
+    setState(() {
+      deckInfoCollapsed = shouldCollapse;
+    });
   }
 
   void closeMenu() {
@@ -84,7 +116,9 @@ class _DeckEditPageState extends State<DeckEditPage> {
     });
   }
 
-  void setTermFilter({required bool starredOnly}) {
+  void setTermFilter({
+    required bool starredOnly,
+  }) {
     setState(() {
       showStarredOnly = starredOnly;
       showMenu = false;
@@ -96,6 +130,20 @@ class _DeckEditPageState extends State<DeckEditPage> {
     });
   }
 
+  void toggleStarred(Term term) {
+    if (deletingTermIds.contains(term.id)) return;
+
+    setState(() {
+      showMenu = false;
+      revealedTermId = null;
+      draggingTermId = null;
+      dragDistance = 0;
+      term.marked = !term.marked;
+    });
+
+    scheduleUserDataSave();
+  }
+
   void showReadingOnlyMessage() {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -104,10 +152,14 @@ class _DeckEditPageState extends State<DeckEditPage> {
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1400),
           backgroundColor: Colors.black.withValues(alpha: 0.86),
-          content: Text(
+          content: const Text(
             'Reading card editing is only for reading decks right now',
             textScaler: TextScaler.noScaling,
-            style: AppText.fieldLabel.copyWith(color: Colors.white),
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
           ),
         ),
       );
@@ -136,6 +188,8 @@ class _DeckEditPageState extends State<DeckEditPage> {
       widget.deck.terms.removeWhere((deckTerm) => deckTerm.id == term.id);
       deletingTermIds.remove(term.id);
     });
+
+    scheduleUserDataSave();
   }
 
   void toggleSelect(Term term) {
@@ -161,8 +215,12 @@ class _DeckEditPageState extends State<DeckEditPage> {
   }
 
   void deleteSelected() {
+    if (selectedTerms.isEmpty) return;
+
     setState(() {
-      widget.deck.terms.removeWhere((term) => selectedTerms.contains(term.id));
+      widget.deck.terms.removeWhere(
+        (term) => selectedTerms.contains(term.id),
+      );
 
       selectedTerms.clear();
       selectionMode = false;
@@ -171,9 +229,11 @@ class _DeckEditPageState extends State<DeckEditPage> {
       dragDistance = 0;
       showMenu = false;
     });
+
+    scheduleUserDataSave();
   }
 
-  void openCardSettings(Term term) {
+  Future<void> openCardSettings(Term term) async {
     if (deletingTermIds.contains(term.id)) return;
 
     if (selectionMode) {
@@ -181,7 +241,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
       return;
     }
 
-    searchFocusNode.unfocus();
+    FocusScope.of(context).unfocus();
     closeMenu();
     closeRevealedTerm();
 
@@ -190,13 +250,20 @@ class _DeckEditPageState extends State<DeckEditPage> {
       return;
     }
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            ReadingCardEditPage(deck: widget.deck, term: term),
+        builder: (context) => ReadingCardEditPage(
+          deck: widget.deck,
+          term: term,
+        ),
       ),
     );
+
+    if (!mounted) return;
+
+    setState(() {});
+    scheduleUserDataSave();
   }
 
   void handleSwipeStart(Term term) {
@@ -297,8 +364,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
     final normalizedSearch = searchQuery.trim().toLowerCase();
 
     return cards.where((term) {
-      final matchesSearch =
-          normalizedSearch.isEmpty ||
+      final matchesSearch = normalizedSearch.isEmpty ||
           term.kanji.toLowerCase().contains(normalizedSearch) ||
           term.reading.toLowerCase().contains(normalizedSearch) ||
           term.meaning.toLowerCase().contains(normalizedSearch) ||
@@ -317,40 +383,48 @@ class _DeckEditPageState extends State<DeckEditPage> {
     final visibleCards = visibleCardsFrom(cards);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: GakujiColors.warmBackground,
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () {
-          searchFocusNode.unfocus();
+          FocusScope.of(context).unfocus();
           closeMenu();
           closeRevealedTerm();
           clearSelection();
         },
         child: SafeArea(
+          bottom: false,
           child: Stack(
             children: [
               Column(
                 children: [
                   GakujiTopBar(
-                    leftIcon: Icons.arrow_back_ios_new,
+                    leftIcon: GakujiTopBar.backIcon,
+                    leftIconSize: GakujiTopBar.backIconSize,
+                    leftIconColor: GakujiColors.darkGray,
                     onLeftTap: () => Navigator.pop(context),
-                    title: 'Edit Deck',
-                    titleStyle: AppText.topBarTitleSmall.copyWith(
+                    title: 'Card Settings',
+                    titleStyle: GakujiText.medium.copyWith(
+                      color: GakujiColors.darkGray,
                       fontWeight: FontWeight.w700,
                     ),
-                    rightIcon: selectionMode ? Icons.delete : null,
-                    onRightTap: selectionMode ? deleteSelected : null,
-                    rightIconColor: Colors.red,
-                    showOptionsButton: !selectionMode,
-                    optionsSelected: showMenu,
-                    onOptionsTap: () {
-                      setState(() {
-                        showMenu = !showMenu;
-                        revealedTermId = null;
-                        draggingTermId = null;
-                        dragDistance = 0;
-                      });
-                    },
+                    rightIcon: selectionMode
+                        ? Icons.delete
+                        : showStarredOnly
+                            ? Icons.star
+                            : Icons.star_border,
+                    rightIconSize: selectionMode ? 28 : 31,
+                    onRightTap: selectionMode
+                        ? deleteSelected
+                        : () {
+                            setTermFilter(starredOnly: !showStarredOnly);
+                          },
+                    rightIconColor: selectionMode
+                        ? Colors.red
+                        : showStarredOnly
+                            ? accentBlue
+                            : rowDividerGray,
+                    showOptionsButton: false,
                   ),
                   Expanded(
                     child: Padding(
@@ -358,12 +432,14 @@ class _DeckEditPageState extends State<DeckEditPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _deckHeader(cards.length),
-                          const SizedBox(height: 16),
+                          _collapsingDeckHeader(cards.length),
+                          AnimatedContainer(
+                            duration: _headerCollapseDuration,
+                            curve: Curves.easeOutCubic,
+                            height: deckInfoCollapsed ? 8 : 18,
+                          ),
                           _searchBar(),
-                          const SizedBox(height: 14),
-                          _filterStatusLine(visibleCards.length),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 12),
                           Expanded(
                             child: visibleCards.isEmpty
                                 ? _emptyState()
@@ -375,7 +451,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
                   ),
                 ],
               ),
-              if (showMenu) _menuOverlay(),
             ],
           ),
         ),
@@ -383,118 +458,85 @@ class _DeckEditPageState extends State<DeckEditPage> {
     );
   }
 
-  Widget _deckHeader(int totalCards) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          widget.deck.name,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textScaler: TextScaler.noScaling,
-          style: AppText.screenTitle,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '$totalCards cards',
-          textScaler: TextScaler.noScaling,
-          style: AppText.body.copyWith(
-            fontWeight: FontWeight.w500,
-            color: softTextGray,
+  Widget _collapsingDeckHeader(int totalCards) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(
+        begin: deckInfoCollapsed ? 0 : 1,
+        end: deckInfoCollapsed ? 0 : 1,
+      ),
+      duration: _headerCollapseDuration,
+      curve: Curves.easeOutCubic,
+      child: _deckHeader(totalCards),
+      builder: (context, value, child) {
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: value,
+            child: Opacity(
+              opacity: value.clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: 0.92 + (0.08 * value),
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
+            ),
           ),
-        ),
-      ],
+        );
+      },
+    );
+  }
+
+  Widget _deckHeader(int totalCards) {
+    final countLabel = totalCards == 1 ? '1 card' : '$totalCards cards';
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            widget.deck.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.large.copyWith(
+              color: GakujiColors.darkGray,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            countLabel,
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: const TextStyle(
+              fontSize: 16,
+              height: 1,
+              color: softTextGray,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _searchBar() {
-    return Container(
-      height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 18,
-            spreadRadius: 0,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.search, size: 22, color: Colors.black),
-          const SizedBox(width: 10),
-          Expanded(
-            child: TextField(
-              controller: searchController,
-              focusNode: searchFocusNode,
-              onTap: closeMenu,
-              onChanged: (value) {
-                setState(() {
-                  searchQuery = value;
-                });
-              },
-              cursorColor: accentBlue,
-              textInputAction: TextInputAction.search,
-              decoration: const InputDecoration(
-                hintText: 'Search cards',
-                hintStyle: AppText.inputHint,
-                border: InputBorder.none,
-                isCollapsed: true,
-              ),
-              style: AppText.input,
-            ),
-          ),
-          if (searchQuery.isNotEmpty)
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: IconButton(
-                padding: EdgeInsets.zero,
-                icon: const Icon(Icons.close, size: 18, color: Colors.black45),
-                onPressed: () {
-                  setState(() {
-                    searchController.clear();
-                    searchQuery = '';
-                  });
-                },
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _filterStatusLine(int visibleCount) {
-    final label = showStarredOnly ? 'Starred cards' : 'All cards';
-
-    return Row(
-      children: [
-        Text(
-          label,
-          textScaler: TextScaler.noScaling,
-          style: AppText.buttonLabel.copyWith(color: softTextGray),
-        ),
-        const SizedBox(width: 7),
-        Text(
-          '$visibleCount',
-          textScaler: TextScaler.noScaling,
-          style: AppText.body.copyWith(
-            fontWeight: FontWeight.w500,
-            color: softTextGray,
-          ),
-        ),
-        const Spacer(),
-        if (selectionMode)
-          Text(
-            '${selectedTerms.length} selected',
-            textScaler: TextScaler.noScaling,
-            style: AppText.buttonLabel.copyWith(color: Colors.red),
-          ),
-      ],
+    return GakujiSearchBar(
+      controller: searchController,
+      hintText: 'Search cards',
+      showClearButton: searchQuery.isNotEmpty,
+      onChanged: (value) {
+        setState(() {
+          searchQuery = value;
+        });
+      },
+      onClear: () {
+        setState(() {
+          searchController.clear();
+          searchQuery = '';
+        });
+      },
     );
   }
 
@@ -503,33 +545,27 @@ class _DeckEditPageState extends State<DeckEditPage> {
       child: Text(
         showStarredOnly ? 'No starred cards yet' : 'No cards yet',
         textScaler: TextScaler.noScaling,
-        style: AppText.emptyState,
+        style: const TextStyle(
+          color: Colors.grey,
+          fontSize: 16,
+        ),
       ),
     );
   }
 
   Widget _termList(List<Term> visibleCards) {
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (bounds) {
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0x00000000),
-            Colors.black,
-            Colors.black,
-            Color(0x00000000),
-          ],
-          stops: [0.0, 0.035, 0.94, 1.0],
-        ).createShader(bounds);
-      },
+    return GakujiFadedScroll(
       child: ListView.separated(
+        controller: cardsScrollController,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.only(bottom: 120),
         itemCount: visibleCards.length,
         separatorBuilder: (context, index) {
-          return const Divider(height: 1, thickness: 1, color: rowDividerGray);
+          return const Divider(
+            height: 1,
+            thickness: 1,
+            color: GakujiTermRow.dividerColor,
+          );
         },
         itemBuilder: (context, index) {
           final term = visibleCards[index];
@@ -553,7 +589,9 @@ class _DeckEditPageState extends State<DeckEditPage> {
       curve: Curves.easeOutCubic,
       child: GestureDetector(
         onLongPress: () => toggleSelect(term),
-        onTap: () => openCardSettings(term),
+        onTap: () {
+          openCardSettings(term);
+        },
         onHorizontalDragStart: (_) => handleSwipeStart(term),
         onHorizontalDragUpdate: handleSwipeUpdate,
         onHorizontalDragEnd: (_) => handleSwipeEnd(term),
@@ -569,7 +607,10 @@ class _DeckEditPageState extends State<DeckEditPage> {
                       color: Colors.redAccent,
                       alignment: Alignment.centerRight,
                       padding: const EdgeInsets.only(right: 24),
-                      child: const Icon(Icons.delete, color: Colors.white),
+                      child: const Icon(
+                        Icons.delete,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -577,30 +618,44 @@ class _DeckEditPageState extends State<DeckEditPage> {
                 duration: duration,
                 curve: Curves.easeOutCubic,
                 transform: Matrix4.translationValues(offset, 0, 0),
-                child: Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.fromLTRB(0, 9, 0, 10),
-                  child: Row(
-                    children: [
-                      if (selectionMode)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 10),
-                          child: Icon(
-                            isSelected
-                                ? Icons.check_circle
-                                : Icons.circle_outlined,
-                            color: isSelected ? Colors.red : softTextGray,
-                            size: 24,
-                          ),
+                child: GakujiTermRow(
+                  term: term,
+                  titleText: term.kanjiBracketText.isNotEmpty
+                      ? term.kanjiBracketText
+                      : term.kanji,
+                  readingText: term.reading,
+                  isSelected: isSelected,
+                  showChevron: false,
+                  leading: selectionMode
+                      ? Icon(
+                          isSelected
+                              ? Icons.check_circle
+                              : Icons.circle_outlined,
+                          color: isSelected ? Colors.red : softTextGray,
+                          size: 24,
+                        )
+                      : null,
+                  trailing: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (selectionMode) {
+                        toggleSelect(term);
+                        return;
+                      }
+
+                      toggleStarred(term);
+                    },
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Center(
+                        child: Icon(
+                          term.marked ? Icons.star : Icons.star_border,
+                          color: term.marked ? accentBlue : rowDividerGray,
+                          size: 26,
                         ),
-                      Expanded(child: _termText(term, isSelected)),
-                      const SizedBox(width: 8),
-                      Icon(
-                        term.marked ? Icons.star : Icons.star_border,
-                        color: term.marked ? accentBlue : rowDividerGray,
-                        size: 26,
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -611,120 +666,5 @@ class _DeckEditPageState extends State<DeckEditPage> {
     );
   }
 
-  Widget _termText(Term term, bool isSelected) {
-    final titleText = term.kanjiBracketText.isNotEmpty
-        ? term.kanjiBracketText
-        : term.kanji;
-    final readingText = term.reading.trim();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.end,
-          spacing: 10,
-          runSpacing: 0,
-          children: [
-            Text(
-              titleText,
-              textScaler: TextScaler.noScaling,
-              style: AppText.cardTitle.copyWith(
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
-              ),
-            ),
-            if (readingText.isNotEmpty)
-              Text(
-                '【$readingText】',
-                textScaler: TextScaler.noScaling,
-                style: AppText.cardReading,
-              ),
-          ],
-        ),
-        const SizedBox(height: 3),
-        Text(
-          term.cardMeaning,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textScaler: TextScaler.noScaling,
-          style: AppText.cardCaption.copyWith(height: 1.1),
-        ),
-      ],
-    );
-  }
-
-  Widget _menuOverlay() {
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: closeMenu,
-            child: Container(color: Colors.transparent),
-          ),
-          Positioned(top: 58, right: 22, child: _deckEditMenuCard()),
-        ],
-      ),
-    );
-  }
-
-  Widget _deckEditMenuCard() {
-    return Container(
-      width: 234,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 0,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _menuItem(
-            icon: showStarredOnly ? Icons.star_border : Icons.star,
-            label: showStarredOnly ? 'All terms' : 'Starred terms',
-            iconColor: showStarredOnly ? Colors.grey : accentBlue,
-            onTap: () {
-              setTermFilter(starredOnly: !showStarredOnly);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _menuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Color iconColor = Colors.black,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 28,
-              child: Center(child: Icon(icon, color: iconColor, size: 24)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                textScaler: TextScaler.noScaling,
-                style: AppText.body.copyWith(fontWeight: FontWeight.w500),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

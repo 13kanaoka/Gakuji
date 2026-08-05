@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 
 import 'gakuji_styles.dart';
 
-enum GakujiDeckCardSize { large, compact }
+enum GakujiDeckCardSize {
+  large,
+  compact,
+}
 
-class GakujiDeckCard extends StatefulWidget {
+class GakujiDeckCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final String watermark;
   final String? watermarkAssetPath;
+  final String? patternAssetPath;
+  final String? pinAssetPath;
   final VoidCallback onTap;
   final GakujiDeckCardSize size;
   final Color? shellColor;
@@ -16,245 +21,253 @@ class GakujiDeckCard extends StatefulWidget {
   final bool showShell;
   final bool isPinned;
 
+  /// Kept for compatibility with older calls.
+  /// The redesigned deck card no longer displays these counts.
+  final int? newCount;
+  final int? learnCount;
+  final int? reviewCount;
+
   const GakujiDeckCard({
     super.key,
     required this.title,
     this.subtitle = '',
     required this.watermark,
     this.watermarkAssetPath,
+    this.patternAssetPath,
+    this.pinAssetPath,
     required this.onTap,
     this.size = GakujiDeckCardSize.large,
     this.shellColor,
     this.cardColor,
     this.showShell = true,
     this.isPinned = false,
+    this.newCount,
+    this.learnCount,
+    this.reviewCount,
   });
 
-  @override
-  State<GakujiDeckCard> createState() => _GakujiDeckCardState();
-}
-
-class _GakujiDeckCardState extends State<GakujiDeckCard> {
-  static const Color defaultShellBlue = Color(0xFF7EA2FF);
-  static const Color pinRed = Color(0xFFFF4B4B);
-
-  bool isPressed = false;
-  bool isTapLocked = false;
+  static const Color readingBlue = Color(0xFF5B84B8);
+  static const Color writingGreen = Color(0xFF7C8F3A);
+  static const Color hybridRed = Color(0xFFA57A48);
+  Color get deckCircle => resolvedCardColor;
 
   bool get hasSubtitle {
-    return widget.subtitle.trim().isNotEmpty;
+    return subtitle.trim().isNotEmpty;
   }
 
-  double get innerHeight {
-    switch (widget.size) {
+  bool get isHybrid {
+    return subtitle.toLowerCase().trim() == 'hybrid';
+  }
+
+  int get titleCharacterLimit {
+    switch (size) {
       case GakujiDeckCardSize.large:
-        return 66;
-      case GakujiDeckCardSize.compact:
-        return 58;
-    }
-  }
-
-  double get shellPadding {
-    if (!widget.showShell) return 0;
-
-    switch (widget.size) {
-      case GakujiDeckCardSize.large:
-        return 6;
-      case GakujiDeckCardSize.compact:
-        return 5;
-    }
-  }
-
-  double get totalHeight {
-    return innerHeight + shellPadding * 2;
-  }
-
-  double get titleSize {
-    switch (widget.size) {
-      case GakujiDeckCardSize.large:
-        return 20;
-      case GakujiDeckCardSize.compact:
-        return 17;
-    }
-  }
-
-  double get subtitleSize {
-    switch (widget.size) {
-      case GakujiDeckCardSize.large:
-        return 13;
+        return 14;
       case GakujiDeckCardSize.compact:
         return 12;
     }
   }
 
-  double get textWatermarkSize {
-    switch (widget.size) {
-      case GakujiDeckCardSize.large:
-        return 82;
-      case GakujiDeckCardSize.compact:
-        return 68;
+  String get displayedTitle {
+    final cleanTitle = title.trim();
+
+    if (cleanTitle.length <= titleCharacterLimit) {
+      return cleanTitle;
     }
+
+    return '${cleanTitle.substring(0, titleCharacterLimit)}...';
   }
 
-  double get imageWatermarkSize {
-    switch (widget.size) {
+  double get cardHeight {
+    switch (size) {
       case GakujiDeckCardSize.large:
-        return 104;
-      case GakujiDeckCardSize.compact:
         return 86;
+      case GakujiDeckCardSize.compact:
+        return 74;
     }
   }
 
-  EdgeInsetsGeometry get contentPadding {
-    switch (widget.size) {
+  double get borderRadius {
+    switch (size) {
       case GakujiDeckCardSize.large:
-        return const EdgeInsets.fromLTRB(16, 7, 16, 13);
+        return 18;
       case GakujiDeckCardSize.compact:
-        return const EdgeInsets.fromLTRB(14, 6, 14, 11);
+        return 16;
     }
   }
 
-  double get watermarkTop {
-    switch (widget.size) {
+  double get leftInset {
+    switch (size) {
       case GakujiDeckCardSize.large:
-        return -17;
+        return 18;
       case GakujiDeckCardSize.compact:
-        return -13;
+        return 15;
     }
   }
 
-  double get watermarkRight {
-    switch (widget.size) {
+  double get rightInset {
+    switch (size) {
       case GakujiDeckCardSize.large:
-        return 24;
+        return 18;
       case GakujiDeckCardSize.compact:
-        return 20;
+        return 16;
     }
   }
 
-  double get contentYOffset {
-    switch (widget.size) {
+  double get circleSize {
+    switch (size) {
       case GakujiDeckCardSize.large:
-        return 3;
+        return 66;
       case GakujiDeckCardSize.compact:
-        return 2;
+        return 57;
     }
   }
 
-  double get pinDotSize {
-    switch (widget.size) {
+  double get watermarkTextSize {
+    switch (size) {
       case GakujiDeckCardSize.large:
-        return 11;
+        return 48;
       case GakujiDeckCardSize.compact:
-        return 10;
+        return 40;
     }
   }
 
-  double get pinDotOffset {
-    switch (widget.size) {
+  double get watermarkImageSize {
+    switch (size) {
       case GakujiDeckCardSize.large:
-        return 9;
+        return 54;
       case GakujiDeckCardSize.compact:
+        return 46;
+    }
+  }
+
+  double get patternSize {
+    switch (size) {
+      case GakujiDeckCardSize.large:
+        return isHybrid ? 450 : 340;
+      case GakujiDeckCardSize.compact:
+        return isHybrid ? 320 : 280;
+    }
+  }
+
+  double get patternRightOffset {
+    switch (size) {
+      case GakujiDeckCardSize.large:
+        return isHybrid ? -210 : -122;
+      case GakujiDeckCardSize.compact:
+        return isHybrid ? -185 : -102;
+    }
+  }
+
+  double get patternTopOffset {
+    switch (size) {
+      case GakujiDeckCardSize.large:
+        return isHybrid ? -165 : -127;
+      case GakujiDeckCardSize.compact:
+        return isHybrid ? -122 : -102;
+    }
+  }
+
+  double get titleLeftPadding {
+    switch (size) {
+      case GakujiDeckCardSize.large:
+        return 94;
+      case GakujiDeckCardSize.compact:
+        return 80;
+    }
+  }
+
+  double get pinIconSize {
+    switch (size) {
+      case GakujiDeckCardSize.large:
+        return 22;
+      case GakujiDeckCardSize.compact:
+        return 18;
+    }
+  }
+
+  double get pinIconTop {
+    switch (size) {
+      case GakujiDeckCardSize.large:
         return 8;
-    }
-  }
-
-  BorderRadius get shellBorderRadius {
-    switch (widget.size) {
-      case GakujiDeckCardSize.large:
-        return BorderRadius.circular(20);
       case GakujiDeckCardSize.compact:
-        return BorderRadius.circular(18);
+        return 6;
     }
   }
 
-  BorderRadius get cardBorderRadius {
-    switch (widget.size) {
+  double get pinIconRight {
+    switch (size) {
       case GakujiDeckCardSize.large:
-        return BorderRadius.circular(18);
+        return 8;
       case GakujiDeckCardSize.compact:
-        return BorderRadius.circular(16);
+        return 7;
     }
   }
 
-  Color get shellColor {
-    return widget.shellColor ?? defaultShellBlue;
+  Color get deckTypeColor {
+    switch (subtitle.toLowerCase().trim()) {
+      case 'reading':
+        return readingBlue;
+      case 'writing':
+        return writingGreen;
+      case 'hybrid':
+        return hybridRed;
+      default:
+        return GakujiColors.deckBlue;
+    }
   }
 
-  Color get cardColor {
-    return widget.cardColor ?? GakujiColors.deckBlue;
-  }
-
-  void setPressed(bool value) {
-    if (!mounted || isPressed == value) return;
-
-    setState(() {
-      isPressed = value;
-    });
-  }
-
-  Future<void> handleTap() async {
-    if (isTapLocked) return;
-
-    isTapLocked = true;
-    setPressed(true);
-
-    await Future.delayed(const Duration(milliseconds: 75));
-
-    if (!mounted) return;
-
-    setPressed(false);
-
-    await Future.delayed(const Duration(milliseconds: 35));
-
-    if (!mounted) return;
-
-    isTapLocked = false;
-    widget.onTap();
+  Color get resolvedCardColor {
+    return cardColor ?? GakujiColors.warmCard;
   }
 
   @override
   Widget build(BuildContext context) {
-    final outerRadius = widget.showShell ? shellBorderRadius : cardBorderRadius;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setPressed(true),
-      onTapCancel: () => setPressed(false),
-      onTap: handleTap,
-      child: AnimatedContainer(
-        height: totalHeight,
-        duration: const Duration(milliseconds: 55),
-        curve: Curves.easeOut,
-        transform: Matrix4.translationValues(0, isPressed ? 7 : 0, 0),
-        decoration: BoxDecoration(
-          color: widget.showShell ? shellColor : Colors.transparent,
-          borderRadius: outerRadius,
-          boxShadow: isPressed
-              ? const []
-              : const [
-                  BoxShadow(
-                    color: Color(0x26000000),
-                    blurRadius: 0,
-                    offset: Offset(0, 7),
-                  ),
-                ],
+    return Container(
+      decoration: BoxDecoration(
+        color: resolvedCardColor,
+        borderRadius: BorderRadius.circular(borderRadius),
+        border: Border.all(
+          color: GakujiColors.softBorder,
+          width: 1.5,
         ),
-        padding: EdgeInsets.all(shellPadding),
-        child: Material(
-          color: cardColor,
-          borderRadius: cardBorderRadius,
-          clipBehavior: Clip.antiAlias,
+        boxShadow: [GakujiShadows.soft],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(borderRadius),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: GakujiColors.deckBlue.withValues(alpha: 0.07),
+          highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.035),
           child: SizedBox(
-            height: innerHeight,
+            height: cardHeight,
+            width: double.infinity,
             child: Stack(
+              clipBehavior: Clip.hardEdge,
               children: [
-                _watermarkLayer(),
-                Padding(
-                  padding: contentPadding,
-                  child: hasSubtitle ? _titleWithSubtitle() : _titleOnly(),
+                Positioned(
+                  right: patternRightOffset,
+                  top: patternTopOffset,
+                  child: _pattern(),
                 ),
-                if (widget.isPinned) _pinDot(),
+                Positioned(
+                  left: leftInset,
+                  top: 0,
+                  bottom: 0,
+                  child: _watermarkBox(),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    titleLeftPadding,
+                    0,
+                    rightInset + 26,
+                    0,
+                  ),
+                  child: _mainContent(),
+                ),
+                if (isPinned) _pinIcon(),
               ],
             ),
           ),
@@ -263,120 +276,167 @@ class _GakujiDeckCardState extends State<GakujiDeckCard> {
     );
   }
 
-  Widget _titleOnly() {
-    return Transform.translate(
-      offset: Offset(0, contentYOffset),
-      child: Align(alignment: Alignment.centerLeft, child: _titleText()),
-    );
-  }
-
-  Widget _titleWithSubtitle() {
-    return Transform.translate(
-      offset: Offset(0, contentYOffset),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _titleText(),
-            const SizedBox(height: 5),
-            Text(
-              widget.subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: subtitleSize,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.1,
-                color: const Color(0x55FFFFFF),
-              ),
-            ),
-          ],
+  Widget _mainContent() {
+    return Row(
+      children: [
+        Expanded(
+          child: _titleBlock(),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _titleText() {
-    return Text(
-      widget.title,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      textScaler: TextScaler.noScaling,
-      style: TextStyle(
-        fontSize: titleSize,
-        height: 1,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.2,
-        color: Colors.white,
-      ),
+  Widget _titleBlock() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          displayedTitle,
+          maxLines: 1,
+          overflow: TextOverflow.clip,
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.small.copyWith(
+            color: GakujiColors.darkGray,
+          ),
+        ),
+        if (hasSubtitle) ...[
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.xSmall.copyWith(
+              color: GakujiColors.darkGray,
+            ),
+          ),
+        ],
+      ],
     );
   }
 
-  Widget _pinDot() {
-    return Positioned(
-      top: pinDotOffset,
-      left: pinDotOffset,
-      child: IgnorePointer(
-        child: Container(
-          width: pinDotSize,
-          height: pinDotSize,
-          decoration: BoxDecoration(
-            color: pinRed,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 0,
-                offset: Offset(0, 2),
-              ),
-            ],
+   Widget _pattern() {
+    final assetPath = patternAssetPath;
+
+    if (assetPath == null || assetPath.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return IgnorePointer(
+      child: Opacity(
+        opacity: 0.32,
+        child: ShaderMask(
+          shaderCallback: (bounds) {
+            return const LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.transparent,
+                Colors.black,
+              ],
+              stops: [
+                0.22,
+                0.55,
+              ],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.dstIn,
+          child: SizedBox(
+            width: patternSize,
+            height: patternSize,
+            child: Image.asset(
+              assetPath,
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              errorBuilder: (context, error, stackTrace) {
+                return const SizedBox.shrink();
+              },
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _watermarkLayer() {
-    final assetPath = widget.watermarkAssetPath;
-
-    return Positioned(
-      right: watermarkRight,
-      top: watermarkTop,
-      child: IgnorePointer(
-        child: Opacity(
-          opacity: assetPath != null && assetPath.isNotEmpty ? 0.22 : 1,
-          child: assetPath != null && assetPath.isNotEmpty
-              ? Image.asset(
-                  assetPath,
-                  width: imageWatermarkSize,
-                  height: imageWatermarkSize,
-                  fit: BoxFit.contain,
-                  color: Colors.white,
-                  colorBlendMode: BlendMode.srcIn,
-                  errorBuilder: (context, error, stackTrace) {
-                    return _textWatermarkContent();
-                  },
-                )
-              : _textWatermarkContent(),
+  Widget _watermarkBox() {
+    return Center(
+      child: Container(
+        width: circleSize,
+        height: circleSize,
+        decoration: BoxDecoration(
+          color: deckCircle,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: _watermarkContent(),
         ),
       ),
     );
   }
 
+  Widget _watermarkContent() {
+    final assetPath = watermarkAssetPath;
+
+    if (assetPath != null && assetPath.isNotEmpty) {
+      return Image.asset(
+        assetPath,
+        width: watermarkImageSize,
+        height: watermarkImageSize,
+        fit: BoxFit.contain,
+        color: deckTypeColor,
+        colorBlendMode: BlendMode.srcIn,
+        errorBuilder: (context, error, stackTrace) {
+          return _textWatermarkContent();
+        },
+      );
+    }
+
+    return _textWatermarkContent();
+  }
+
   Widget _textWatermarkContent() {
     return Text(
-      widget.watermark,
+      watermark,
       textScaler: TextScaler.noScaling,
       style: TextStyle(
-        fontSize: textWatermarkSize,
+        fontSize: watermarkTextSize,
         height: 1,
-        fontWeight: FontWeight.w900,
-        color: const Color(0x20FFFFFF),
+        fontWeight: FontWeight.w700,
+        color: deckTypeColor,
+      ),
+    );
+  }
+
+  Widget _pinIcon() {
+    final assetPath = pinAssetPath;
+
+    return Positioned(
+      top: pinIconTop,
+      right: pinIconRight,
+      child: IgnorePointer(
+        child: assetPath != null && assetPath.isNotEmpty
+            ? Image.asset(
+                assetPath,
+                width: pinIconSize,
+                height: pinIconSize,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  return _fallbackPinIcon();
+                },
+              )
+            : _fallbackPinIcon(),
+      ),
+    );
+  }
+
+  Widget _fallbackPinIcon() {
+    return Transform.rotate(
+      angle: 0.72,
+      child: Icon(
+        Icons.push_pin,
+        size: pinIconSize,
+        color: GakujiColors.darkGray,
       ),
     );
   }
