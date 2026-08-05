@@ -247,8 +247,8 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
           });
         },
         borderRadius: BorderRadius.circular(GakujiRadius.pill),
-        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
-        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Column(
@@ -260,7 +260,7 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
                 style: GakujiText.xSmall.copyWith(
                   fontSize: 13.5,
                   color: muted
-                      ? GakujiColors.mediumGray.withOpacity(0.35)
+                      ? GakujiColors.mediumGray.withValues(alpha: 0.35)
                       : GakujiColors.mediumGray,
                 ),
               ),
@@ -273,9 +273,9 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: selected
-                      ? GakujiColors.deckBlue.withOpacity(0.78)
+                      ? GakujiColors.deckBlue.withValues(alpha: 0.78)
                       : isToday
-                          ? GakujiColors.softBorder.withOpacity(0.55)
+                          ? GakujiColors.softBorder.withValues(alpha: 0.55)
                           : Colors.transparent,
                   borderRadius: BorderRadius.circular(GakujiRadius.pill),
                   boxShadow: selected ? [GakujiShadows.soft] : const [],
@@ -288,7 +288,7 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
                     color: selected
                         ? Colors.white
                         : muted
-                            ? GakujiColors.mediumGray.withOpacity(0.35)
+                            ? GakujiColors.mediumGray.withValues(alpha: 0.35)
                             : GakujiColors.mediumGray,
                   ),
                 ),

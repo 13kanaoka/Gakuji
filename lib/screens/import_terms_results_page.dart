@@ -70,7 +70,7 @@ class ImportTermsResultsPage extends StatelessWidget {
           width: 92,
           height: 92,
           decoration: BoxDecoration(
-            color: GakujiColors.reading.withOpacity(0.13),
+            color: GakujiColors.reading.withValues(alpha: 0.13),
             shape: BoxShape.circle,
           ),
           child: Icon(
@@ -233,7 +233,7 @@ class ImportTermsResultsPage extends StatelessWidget {
                       height: 32,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.12),
+                        color: statusColor.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(

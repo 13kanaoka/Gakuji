@@ -622,8 +622,13 @@ class _KanjiDictionaryDetailPageState
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _handleSystemBack,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+
+        _handleSystemBack();
+      },
       child: Scaffold(
         backgroundColor: GakujiColors.warmBackground,
         body: SafeArea(
@@ -1338,11 +1343,11 @@ class _KanjiDictionaryDetailPageState
         color: sectionHighlightColor,
         border: Border(
           top: BorderSide(
-            color: darkText.withOpacity(0.16),
+            color: darkText.withValues(alpha: 0.16),
             width: 1,
           ),
           bottom: BorderSide(
-            color: darkText.withOpacity(0.16),
+            color: darkText.withValues(alpha: 0.16),
             width: 1,
           ),
         ),
@@ -1502,7 +1507,7 @@ class _StrokeGuidePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = GakujiColors.warmDivider.withOpacity(0.55)
+      ..color = GakujiColors.warmDivider.withValues(alpha: 0.55)
       ..strokeWidth = 0.8
       ..style = PaintingStyle.stroke;
 

@@ -36,7 +36,7 @@ class DictionaryImportMatcher {
     var completed = 0;
 
     for (final row in matchableRows) {
-      final match = await matchRow(row);
+      final match = await _matchRow(row);
 
       row
         ..candidates = match.candidates
@@ -50,7 +50,7 @@ class DictionaryImportMatcher {
     }
   }
 
-  static Future<_DeckImportMatch> matchRow(DeckImportRow row) async {
+  static Future<_DeckImportMatch> _matchRow(DeckImportRow row) async {
     final readingVariants = _readingVariants(row.importedReading)
         .take(6)
         .toList(growable: false);

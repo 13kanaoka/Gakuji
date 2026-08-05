@@ -1407,7 +1407,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -1516,7 +1516,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         if (activeItems.length > 1) _readingBlankCardBehind(),
         Transform(
           transform: Matrix4.identity()
-            ..translate(dragOffset.dx, dragOffset.dy)
+            ..translateByDouble(dragOffset.dx, dragOffset.dy, 0.0, 1.0)
             ..rotateZ(rotation),
           alignment: Alignment.center,
           child: GestureDetector(
@@ -1563,7 +1563,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         else
           Transform(
             transform: Matrix4.identity()
-              ..translate(dragOffset.dx, dragOffset.dy)
+              ..translateByDouble(dragOffset.dx, dragOffset.dy, 0.0, 1.0)
               ..rotateZ(rotation),
             alignment: Alignment.center,
             child: GestureDetector(
@@ -2346,8 +2346,8 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: Colors.white.withOpacity(0.10),
-          highlightColor: Colors.white.withOpacity(0.05),
+          splashColor: Colors.white.withValues(alpha: 0.10),
+          highlightColor: Colors.white.withValues(alpha: 0.05),
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2374,8 +2374,8 @@ class _HybridStudyPageState extends State<HybridStudyPage>
       child: InkWell(
         onTap: _goBack,
         borderRadius: BorderRadius.circular(20),
-        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
-        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: 20,

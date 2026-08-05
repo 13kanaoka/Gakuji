@@ -528,13 +528,11 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
     try {
       await widget.onTokenTap(context, token);
     } finally {
-      if (!mounted) {
-        return;
+      if (mounted) {
+        setState(() {
+          loadingTokenIndex = null;
+        });
       }
-
-      setState(() {
-        loadingTokenIndex = null;
-      });
     }
   }
 

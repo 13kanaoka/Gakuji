@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:google_mlkit_digital_ink_recognition/google_mlkit_digital_ink_recognition.dart';
 
 import '../models/writing_point.dart';

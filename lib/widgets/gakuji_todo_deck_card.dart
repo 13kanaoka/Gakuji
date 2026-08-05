@@ -27,7 +27,7 @@ class GakujiTodoDeckCard extends StatelessWidget {
   static const double reviewBarHeight = 48;
 
   static Color get cardSurface => GakujiColors.warmCard;
-  static Color get deckCircle => cardSurface.withOpacity(0.10);
+  static Color get deckCircle => cardSurface.withValues(alpha: 0.10);
 
   Color get deckPrimaryColor {
     switch (deck.type) {
@@ -60,8 +60,8 @@ class GakujiTodoDeckCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: deckPrimaryColor.withOpacity(0.08),
-          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
           child: Stack(
             children: [
               Positioned(
@@ -151,7 +151,7 @@ class GakujiTodoDeckCard extends StatelessWidget {
     return Container(
       height: reviewBarHeight,
       decoration: BoxDecoration(
-        color: deckPrimaryColor.withOpacity(0.92),
+        color: deckPrimaryColor.withValues(alpha: 0.92),
         borderRadius: BorderRadius.zero,
       ),
       child: Row(

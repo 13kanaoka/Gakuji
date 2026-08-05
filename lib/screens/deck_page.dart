@@ -21,9 +21,6 @@ import 'study_page.dart';
 import 'writing_study_page.dart';
 import 'hybrid_study_page.dart';
 import 'kanji_fusion_game_page.dart';
-import 'imposter_detective_page.dart';
-import 'detective_perspective_test_page.dart';
-import 'detective_character_animation_test_page.dart';
 import 'detective_full_flow_test_page.dart';
 
 class DeckPage extends StatefulWidget {
@@ -240,6 +237,8 @@ class _DeckPageState extends State<DeckPage> {
   Future<void> openFocusStudy(_FocusStudyType type) async {
     await createReviewCardsForDeck(widget.deck);
 
+    if (!mounted) return;
+
     final focusCards = _focusCardsFor(type);
     final focusTermIds = focusCards.map((card) => card.termId).toSet();
     final focusTerms = widget.deck.terms.where((term) {
@@ -378,7 +377,7 @@ class _DeckPageState extends State<DeckPage> {
   Future<void> confirmDeleteDeck() async {
     final shouldDelete = await showDialog<bool>(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.55),
+      barrierColor: Colors.black.withValues(alpha: 0.55),
       builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: GakujiColors.warmCard,
@@ -474,7 +473,7 @@ class _DeckPageState extends State<DeckPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -876,8 +875,8 @@ class _DeckPageState extends State<DeckPage> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: togglePinnedDeck,
-        splashColor: GakujiColors.darkGray.withOpacity(0.08),
-        highlightColor: GakujiColors.darkGray.withOpacity(0.04),
+        splashColor: GakujiColors.darkGray.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.darkGray.withValues(alpha: 0.04),
         child: SizedBox(
           width: 44,
           height: 44,
@@ -1100,10 +1099,10 @@ class _DeckPageState extends State<DeckPage> {
           child: InkWell(
             onTap: enabled ? () => openFocusStudy(type) : null,
             splashColor: enabled
-                ? Colors.white.withOpacity(0.10)
+                ? Colors.white.withValues(alpha: 0.10)
                 : Colors.transparent,
             highlightColor: enabled
-                ? Colors.white.withOpacity(0.05)
+                ? Colors.white.withValues(alpha: 0.05)
                 : Colors.transparent,
             child: Padding(
               padding: const EdgeInsets.fromLTRB(17, 0, 12, 0),
@@ -1178,8 +1177,8 @@ class _DeckPageState extends State<DeckPage> {
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   onTap: openReviewCalendar,
-                  splashColor: deckPrimaryColor.withOpacity(0.08),
-                  highlightColor: deckPrimaryColor.withOpacity(0.04),
+                  splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+                  highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
                   child: SizedBox(
                     width: 36,
                     height: 36,
@@ -1207,7 +1206,7 @@ class _DeckPageState extends State<DeckPage> {
       height: 42,
       decoration: BoxDecoration(
         color: selected
-            ? deckPrimaryColor.withOpacity(0.78)
+            ? deckPrimaryColor.withValues(alpha: 0.78)
             : GakujiColors.warmBackground,
         borderRadius: BorderRadius.circular(GakujiRadius.pill),
         border: Border.all(
@@ -1222,8 +1221,8 @@ class _DeckPageState extends State<DeckPage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: deckPrimaryColor.withOpacity(0.08),
-          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 19),
             child: Center(
@@ -1305,8 +1304,8 @@ class _DeckPageState extends State<DeckPage> {
 
                       openStudy();
                     },
-              splashColor: deckPrimaryColor.withOpacity(0.08),
-              highlightColor: deckPrimaryColor.withOpacity(0.04),
+              splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+              highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(17, 0, 17, 0),
                 child: isReviewMode
@@ -1369,7 +1368,7 @@ class _DeckPageState extends State<DeckPage> {
         color: GakujiColors.warmCard,
         borderRadius: BorderRadius.circular(GakujiRadius.small),
         border: Border.all(
-          color: deckPrimaryColor.withOpacity(0.55),
+          color: deckPrimaryColor.withValues(alpha: 0.55),
           width: 1.7,
         ),
       ),
@@ -1379,8 +1378,8 @@ class _DeckPageState extends State<DeckPage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: openDetectiveGame,
-          splashColor: deckPrimaryColor.withOpacity(0.08),
-          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(17, 0, 17, 0),
             child: Row(
@@ -1417,7 +1416,7 @@ class _DeckPageState extends State<DeckPage> {
         color: GakujiColors.warmCard,
         borderRadius: BorderRadius.circular(GakujiRadius.small),
         border: Border.all(
-          color: deckPrimaryColor.withOpacity(0.55),
+          color: deckPrimaryColor.withValues(alpha: 0.55),
           width: 1.7,
         ),
       ),
@@ -1427,8 +1426,8 @@ class _DeckPageState extends State<DeckPage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: openKanjiFusionGame,
-          splashColor: deckPrimaryColor.withOpacity(0.08),
-          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(17, 0, 17, 0),
             child: Row(
@@ -1468,7 +1467,7 @@ class _DeckPageState extends State<DeckPage> {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: deckPrimaryColor.withOpacity(0.16),
+              color: deckPrimaryColor.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
           ),
@@ -1528,7 +1527,7 @@ class _DeckPageState extends State<DeckPage> {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: deckPrimaryColor.withOpacity(0.16),
+              color: deckPrimaryColor.withValues(alpha: 0.16),
               shape: BoxShape.circle,
             ),
           ),
@@ -1594,7 +1593,7 @@ class _DeckPageState extends State<DeckPage> {
         borderRadius: BorderRadius.circular(GakujiRadius.small),
         border: Border.all(
           color: isDestructive
-              ? GakujiColors.pinRed.withOpacity(0.45)
+              ? GakujiColors.pinRed.withValues(alpha: 0.45)
               : GakujiColors.softBorder,
           width: 1.5,
         ),
@@ -1606,11 +1605,11 @@ class _DeckPageState extends State<DeckPage> {
         child: InkWell(
           onTap: onTap,
           splashColor: isDestructive
-              ? GakujiColors.pinRed.withOpacity(0.08)
-              : deckPrimaryColor.withOpacity(0.08),
+              ? GakujiColors.pinRed.withValues(alpha: 0.08)
+              : deckPrimaryColor.withValues(alpha: 0.08),
           highlightColor: isDestructive
-              ? GakujiColors.pinRed.withOpacity(0.04)
-              : deckPrimaryColor.withOpacity(0.04),
+              ? GakujiColors.pinRed.withValues(alpha: 0.04)
+              : deckPrimaryColor.withValues(alpha: 0.04),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18),
             child: Row(

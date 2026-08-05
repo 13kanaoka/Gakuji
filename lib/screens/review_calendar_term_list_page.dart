@@ -64,7 +64,7 @@ class ReviewCalendarTermListPage extends StatelessWidget {
     };
   }
 
-  List<_CalendarTermGroup> get groups {
+  List<_CalendarTermGroup> get _groups {
     switch (listType) {
       case ReviewCalendarListType.projected:
         return [
@@ -97,7 +97,7 @@ class ReviewCalendarTermListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visibleGroups = groups
+    final visibleGroups = _groups
         .where((group) => group.cards.isNotEmpty)
         .toList();
 
@@ -247,11 +247,11 @@ class ReviewCalendarTermListPage extends StatelessWidget {
         color: GakujiColors.sectionHeader,
         border: Border(
           top: BorderSide(
-            color: GakujiColors.darkGray.withOpacity(0.16),
+            color: GakujiColors.darkGray.withValues(alpha: 0.16),
             width: 1,
           ),
           bottom: BorderSide(
-            color: GakujiColors.darkGray.withOpacity(0.16),
+            color: GakujiColors.darkGray.withValues(alpha: 0.16),
             width: 1,
           ),
         ),

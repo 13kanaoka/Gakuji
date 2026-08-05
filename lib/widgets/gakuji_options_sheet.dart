@@ -244,8 +244,8 @@ class GakujiOptionsSheet extends StatelessWidget {
         item.onTap();
         onOptionTapped?.call();
       },
-      splashColor: GakujiColors.deckBlue.withOpacity(0.07),
-      highlightColor: GakujiColors.deckBlue.withOpacity(0.035),
+      splashColor: GakujiColors.deckBlue.withValues(alpha: 0.07),
+      highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.035),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: 16,

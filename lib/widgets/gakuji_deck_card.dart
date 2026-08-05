@@ -239,8 +239,8 @@ class GakujiDeckCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: GakujiColors.deckBlue.withOpacity(0.07),
-          highlightColor: GakujiColors.deckBlue.withOpacity(0.035),
+          splashColor: GakujiColors.deckBlue.withValues(alpha: 0.07),
+          highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.035),
           child: SizedBox(
             height: cardHeight,
             width: double.infinity,

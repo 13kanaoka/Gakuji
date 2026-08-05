@@ -61,7 +61,6 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
 
   Timer? savePopupTimer;
 
-  bool showMoreMeanings = false;
   bool isEditingNote = false;
   bool noteLoaded = false;
   bool showSavePopup = false;
@@ -133,7 +132,6 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     final oldSourceId = oldWidget.word.sourceId ?? oldWidget.word.id;
 
     if (oldSourceId != sourceId) {
-      showMoreMeanings = false;
       isEditingNote = false;
       noteLoaded = false;
       noteText = '';
@@ -658,8 +656,13 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   Widget build(BuildContext context) {
     final word = widget.word;
 
-    return WillPopScope(
-      onWillPop: _handleSystemBack,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+
+        _handleSystemBack();
+      },
       child: Scaffold(
         backgroundColor: GakujiColors.warmBackground,
         body: SafeArea(
@@ -938,129 +941,6 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                       style: TextStyle(color: softTextGray),
                     ),
                 ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _moreMeaningsBlock(List<String> extraDefinitions) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              setState(() {
-                showMoreMeanings = !showMoreMeanings;
-              });
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    showMoreMeanings
-                        ? 'Hide meanings'
-                        : 'More meanings (${extraDefinitions.length})',
-                    textScaler: TextScaler.noScaling,
-                    style: TextStyle(
-                      fontSize: 15.5,
-                      height: 1,
-                      color: softTextGray,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 3),
-                  Icon(
-                    showMoreMeanings
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    size: 21,
-                    color: softTextGray,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox(width: double.infinity),
-            secondChild: _extraMeaningsPanel(extraDefinitions),
-            crossFadeState: showMoreMeanings
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 160),
-            sizeCurve: Curves.easeOut,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _extraMeaningsPanel(List<String> extraDefinitions) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 3),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 11),
-      decoration: BoxDecoration(
-        color: softBlueFill,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: sectionColor,
-          width: 1.4,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: extraDefinitions.asMap().entries.map((entry) {
-          final isLast = entry.key == extraDefinitions.length - 1;
-
-          return _extraMeaningRow(
-            definition: entry.value,
-            isLast: isLast,
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _extraMeaningRow({
-    required String definition,
-    required bool isLast,
-  }) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: isLast ? 0 : 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-           Padding(
-            padding: EdgeInsets.only(top: 7),
-            child: SizedBox(
-              width: 4.5,
-              height: 4.5,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: softTextGray,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              definition,
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 14.5,
-                height: 1.22,
-                color: darkText,
-                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -1659,11 +1539,11 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         color: GakujiColors.sectionHeader,
         border: Border(
           top: BorderSide(
-            color: darkText.withOpacity(0.16),
+            color: darkText.withValues(alpha: 0.16),
             width: 1,
           ),
           bottom: BorderSide(
-            color: darkText.withOpacity(0.16),
+            color: darkText.withValues(alpha: 0.16),
             width: 1,
           ),
         ),
@@ -1736,44 +1616,6 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return word.senses
         .where((sense) => sense.glosses.isNotEmpty)
         .toList(growable: false);
-  }
-
-  List<String> _extraRawDefinitions(Term word) {
-    final displayDefinitions = word.displayDefinitions;
-
-    return word.rawDefinitions.where((rawDefinition) {
-      return !_definitionIsCovered(
-        rawDefinition: rawDefinition,
-        displayDefinitions: displayDefinitions,
-      );
-    }).toList();
-  }
-
-  bool _definitionIsCovered({
-    required String rawDefinition,
-    required List<String> displayDefinitions,
-  }) {
-    final raw = _normalizedDefinition(rawDefinition);
-
-    if (raw.isEmpty) return true;
-
-    return displayDefinitions.any((displayDefinition) {
-      final display = _normalizedDefinition(displayDefinition);
-
-      if (display == raw) return true;
-
-      final pieces = display
-          .split(';')
-          .map(_normalizedDefinition)
-          .where((piece) => piece.isNotEmpty)
-          .toList();
-
-      return pieces.contains(raw);
-    });
-  }
-
-  String _normalizedDefinition(String definition) {
-    return definition.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
   }
 
   String _definitionLabel(int index) {
@@ -1928,7 +1770,7 @@ class _HybridCardModeSheet extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(

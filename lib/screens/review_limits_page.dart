@@ -195,8 +195,8 @@ class _ReviewLimitsPageState extends State<ReviewLimitsPage> {
   }) {
     return Material(
       color: enabled
-          ? GakujiColors.deckBlue.withOpacity(0.12)
-          : GakujiColors.softBorder.withOpacity(0.45),
+          ? GakujiColors.deckBlue.withValues(alpha: 0.12)
+          : GakujiColors.softBorder.withValues(alpha: 0.45),
       shape: const CircleBorder(),
       child: InkWell(
         onTap: enabled ? onTap : null,
@@ -209,7 +209,7 @@ class _ReviewLimitsPageState extends State<ReviewLimitsPage> {
             size: 24,
             color: enabled
                 ? GakujiColors.deckBlue
-                : GakujiColors.mediumGray.withOpacity(0.45),
+                : GakujiColors.mediumGray.withValues(alpha: 0.45),
           ),
         ),
       ),

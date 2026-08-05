@@ -4,7 +4,6 @@ import '../data/deck_data.dart';
 import '../data/pinned_deck_data.dart';
 import '../data/review_card_data.dart';
 import '../models/deck.dart';
-import '../models/review_card.dart';
 import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_deck_card.dart';
 import '../widgets/gakuji_faded_scroll.dart';
@@ -274,7 +273,7 @@ class _HomePageState extends State<HomePage> {
           decoration: BoxDecoration(
             color: active
                 ? GakujiColors.darkGray
-                : GakujiColors.mediumGray.withOpacity(0.35),
+                : GakujiColors.mediumGray.withValues(alpha: 0.35),
             shape: BoxShape.circle,
           ),
         );
@@ -376,13 +375,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     return chunks;
-  }
-
-  int _reviewCountForState(
-    List<ReviewCard> cards,
-    ReviewCardState state,
-  ) {
-    return cards.where((card) => card.state == state).length;
   }
 
   String _deckTypeLabel(DeckType type) {

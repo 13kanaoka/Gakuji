@@ -30,7 +30,6 @@ class LibraryPage extends StatefulWidget {
 
 class _LibraryPageState extends State<LibraryPage> {
   static const Color dividerGray = Color(0xFFE1E1E1);
-  static const Color outlineGray = Color(0xFFD8D8D8);
   static const Color textGray = Color(0xFF6F6F6F);
   static const Color fieldGray = Color(0xFFEDEDED);
   static const Color deleteRed = Color(0xFFFF6F6F);
@@ -85,7 +84,7 @@ class _LibraryPageState extends State<LibraryPage> {
       useRootNavigator: true,
       barrierDismissible: true,
       barrierLabel: 'Create New Deck',
-      barrierColor: Colors.black.withOpacity(0.72),
+      barrierColor: Colors.black.withValues(alpha: 0.72),
       transitionDuration: const Duration(milliseconds: 320),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return StatefulBuilder(
@@ -189,7 +188,7 @@ class _LibraryPageState extends State<LibraryPage> {
       useRootNavigator: true,
       barrierDismissible: true,
       barrierLabel: 'New Folder',
-      barrierColor: Colors.black.withOpacity(0.72),
+      barrierColor: Colors.black.withValues(alpha: 0.72),
       transitionDuration: const Duration(milliseconds: 280),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return StatefulBuilder(
@@ -490,41 +489,6 @@ class _LibraryPageState extends State<LibraryPage> {
           ),
           const SizedBox(height: 36),
         ],
-      ),
-    );
-  }
-
-  Widget _viewSwitchButton() {
-    return _Pushable(
-      onTap: toggleLibraryView,
-      pressedOffset: 4,
-      child: Container(
-        width: 76,
-        height: 34,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: GakujiColors.warmCard,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: outlineGray,
-            width: 2.5,
-          ),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x4D000000),
-              blurRadius: 0,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Text(
-          showDecks ? 'Decks' : 'Folders',
-          textAlign: TextAlign.center,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.xSmall.copyWith(
-            color: GakujiColors.darkGray,
-          ),
-        ),
       ),
     );
   }
@@ -1101,8 +1065,8 @@ class _LibraryPageState extends State<LibraryPage> {
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
-            splashColor: Colors.white.withOpacity(0.10),
-            highlightColor: Colors.white.withOpacity(0.05),
+            splashColor: Colors.white.withValues(alpha: 0.10),
+            highlightColor: Colors.white.withValues(alpha: 0.05),
             child: Center(
               child: Text(
                 label,
@@ -1221,13 +1185,12 @@ class _Pushable extends StatefulWidget {
     required this.child,
     required this.onTap,
     this.pressedOffset = 4,
-    this.duration = const Duration(milliseconds: 90),
   });
 
   final Widget child;
   final VoidCallback? onTap;
   final double pressedOffset;
-  final Duration duration;
+  static const Duration duration = Duration(milliseconds: 90);
 
   @override
   State<_Pushable> createState() => _PushableState();
@@ -1295,7 +1258,7 @@ class _PushableState extends State<_Pushable> {
       onTapCancel: releaseAfterMinimumPress,
       onTap: handleTap,
       child: AnimatedContainer(
-        duration: widget.duration,
+        duration: _Pushable.duration,
         curve: Curves.easeOutCubic,
         transform: Matrix4.translationValues(
           0,

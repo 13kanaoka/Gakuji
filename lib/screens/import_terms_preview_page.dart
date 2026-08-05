@@ -634,7 +634,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             width: 68,
             height: 68,
             decoration: BoxDecoration(
-              color: GakujiColors.reading.withOpacity(0.12),
+              color: GakujiColors.reading.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -913,7 +913,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.12),
+              color: statusColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -1135,10 +1135,10 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: GakujiColors.pinRed.withOpacity(0.08),
+        color: GakujiColors.pinRed.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: GakujiColors.pinRed.withOpacity(0.35),
+          color: GakujiColors.pinRed.withValues(alpha: 0.35),
         ),
       ),
       child: Row(

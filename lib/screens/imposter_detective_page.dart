@@ -451,8 +451,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        splashColor: deckPrimaryColor.withOpacity(0.08),
-        highlightColor: deckPrimaryColor.withOpacity(0.04),
+        splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+        highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
         child: SizedBox(
           width: 40,
           height: 40,
@@ -544,7 +544,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       child: Container(
         height: 36,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.55),
+          color: color.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(GakujiRadius.pill),
           border: Border.all(
             color: color,
@@ -626,7 +626,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         color: GakujiColors.warmCard,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: deckPrimaryColor.withOpacity(0.42),
+          color: deckPrimaryColor.withValues(alpha: 0.42),
           width: 1.5,
         ),
         boxShadow: [GakujiShadows.soft],
@@ -872,8 +872,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: continueAfterCorrection,
-          splashColor: Colors.white.withOpacity(0.12),
-          highlightColor: Colors.white.withOpacity(0.06),
+          splashColor: Colors.white.withValues(alpha: 0.12),
+          highlightColor: Colors.white.withValues(alpha: 0.06),
           child: Center(
             child: Text(
               mistakeCount >= maxMistakes ? 'View Results' : 'Continue',
@@ -1000,8 +1000,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: Colors.white.withOpacity(0.12),
-          highlightColor: Colors.white.withOpacity(0.06),
+          splashColor: Colors.white.withValues(alpha: 0.12),
+          highlightColor: Colors.white.withValues(alpha: 0.06),
           child: Center(
             child: Text(
               label,
@@ -1151,8 +1151,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: startGame,
-          splashColor: Colors.white.withOpacity(0.12),
-          highlightColor: Colors.white.withOpacity(0.06),
+          splashColor: Colors.white.withValues(alpha: 0.12),
+          highlightColor: Colors.white.withValues(alpha: 0.06),
           child: Center(
             child: Text(
               'Start Inspection',
@@ -1183,8 +1183,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: restartGame,
-          splashColor: Colors.white.withOpacity(0.12),
-          highlightColor: Colors.white.withOpacity(0.06),
+          splashColor: Colors.white.withValues(alpha: 0.12),
+          highlightColor: Colors.white.withValues(alpha: 0.06),
           child: Center(
             child: Text(
               'Try Again',

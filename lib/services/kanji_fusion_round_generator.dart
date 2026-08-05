@@ -324,14 +324,14 @@ class KanjiFusionRoundGenerator {
 
 
   static List<KanjiFusionRound> buildRounds(
-    List<Term> _terms, {
+    List<Term> terms, {
     KanjiFusionDifficulty difficulty = KanjiFusionDifficulty.easy,
     KanjiFusionRadicalMode radicalMode = KanjiFusionRadicalMode.receive,
     Random? random,
   }) {
     final rng = random ?? Random();
     final sourceTerms = <String, Term>{};
-    for (final term in _terms) {
+    for (final term in terms) {
       final spelling = term.kanji.trim();
       if (_normalIds.containsKey(spelling) &&
           !sourceTerms.containsKey(spelling)) {
@@ -493,34 +493,6 @@ class KanjiFusionRoundGenerator {
       if (entry.value.contains(component)) return entry.key;
     }
     return component;
-  }
-
-  static String _difficultyLabel(KanjiFusionDifficulty difficulty) {
-    switch (difficulty) {
-      case KanjiFusionDifficulty.easy:
-        return 'Easy';
-      case KanjiFusionDifficulty.normal:
-        return 'Normal';
-      case KanjiFusionDifficulty.hard:
-        return 'Hard';
-    }
-  }
-
-  static String _difficultyPrompt(
-    KanjiFusionDifficulty difficulty,
-    String kanji,
-    KanjiFusionRadicalMode radicalMode,
-  ) {
-    switch (difficulty) {
-      case KanjiFusionDifficulty.easy:
-        return 'Choose the parts that make $kanji.';
-      case KanjiFusionDifficulty.normal:
-        return radicalMode == KanjiFusionRadicalMode.create
-            ? 'Choose each radical form and build $kanji.'
-            : 'Place the visible parts of $kanji.';
-      case KanjiFusionDifficulty.hard:
-        return 'Build $kanji without layout hints.';
-    }
   }
 
   static List<KanjiFusionSlot>? _customStructuralSlots(
@@ -730,11 +702,11 @@ class _IdsSlotParser {
   }
   void _splitHorizontal(int n,double l,double t,double w,double h) {
     const gap=.035; final cw=(w-gap*(n-1))/n;
-    for(var i=0;i<n;i++) parse(l+i*(cw+gap),t,cw,h);
+    for(var i=0;i<n;i++) { parse(l+i*(cw+gap),t,cw,h); }
   }
   void _splitVertical(int n,double l,double t,double w,double h) {
     const gap=.035; final ch=(h-gap*(n-1))/n;
-    for(var i=0;i<n;i++) parse(l,t+i*(ch+gap),w,ch);
+    for(var i=0;i<n;i++) { parse(l,t+i*(ch+gap),w,ch); }
   }
   String _next() {
     final rune = source.runes.elementAt(offset);

@@ -178,7 +178,7 @@ class _SettingsPageState extends State<SettingsPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1300),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -190,8 +190,17 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: _handleBack,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        final shouldPop = await _handleBack();
+
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
       child: Scaffold(
         backgroundColor: context.gakujiColors.warmBackground,
       body: Column(
@@ -502,11 +511,11 @@ class _SettingsPageState extends State<SettingsPage> {
     required VoidCallback onTap,
   }) {
     final buttonColor = enabled
-        ? GakujiColors.deckBlue.withOpacity(0.12)
-        : context.gakujiColors.softBorder.withOpacity(0.45);
+        ? GakujiColors.deckBlue.withValues(alpha: 0.12)
+        : context.gakujiColors.softBorder.withValues(alpha: 0.45);
     final iconColor = enabled
         ? GakujiColors.deckBlue
-        : context.gakujiColors.mediumGray.withOpacity(0.45);
+        : context.gakujiColors.mediumGray.withValues(alpha: 0.45);
 
     return Material(
       color: buttonColor,
@@ -515,8 +524,8 @@ class _SettingsPageState extends State<SettingsPage> {
       child: InkWell(
         onTap: enabled ? onTap : null,
         customBorder: const CircleBorder(),
-        splashColor: GakujiColors.deckBlue.withOpacity(0.10),
-        highlightColor: GakujiColors.deckBlue.withOpacity(0.05),
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.10),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.05),
         child: SizedBox(
           width: 36,
           height: 36,

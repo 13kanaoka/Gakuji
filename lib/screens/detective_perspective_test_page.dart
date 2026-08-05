@@ -734,7 +734,7 @@ class _DeskTexturePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final linePaint = Paint()
-      ..color = Colors.black.withOpacity(opacity)
+      ..color = Colors.black.withValues(alpha: opacity)
       ..strokeWidth = 2;
 
     for (double y = 34; y < size.height; y += 46) {

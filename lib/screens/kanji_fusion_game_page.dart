@@ -58,18 +58,6 @@ class _PlacedFusionBlock {
   }
 }
 
-enum _SpatialRelation {
-  overlap,
-  left,
-  right,
-  above,
-  below,
-  upperLeft,
-  upperRight,
-  lowerLeft,
-  lowerRight,
-}
-
 class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   late List<KanjiFusionRound> rounds;
 
@@ -607,49 +595,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     });
   }
 
-  void _setDifficulty(KanjiFusionDifficulty difficulty) {
-    // Easy and Hard remain implemented, but Normal is the only active mode.
-    if (difficulty != KanjiFusionDifficulty.normal ||
-        difficulty == selectedDifficulty) {
-      return;
-    }
-
-    setState(() {
-      selectedDifficulty = KanjiFusionDifficulty.normal;
-      rounds = KanjiFusionRoundGenerator.buildRounds(
-        widget.terms,
-        difficulty: selectedDifficulty,
-        radicalMode: selectedRadicalMode,
-      );
-      currentRoundIndex = 0;
-      correctCount = 0;
-      hasSubmitted = false;
-      lastAnswerCorrect = false;
-      sessionComplete = false;
-      _resetRoundPlacement();
-    });
-  }
-
-
-  void _setRadicalMode(KanjiFusionRadicalMode radicalMode) {
-    if (radicalMode == selectedRadicalMode) return;
-
-    setState(() {
-      selectedRadicalMode = radicalMode;
-      rounds = KanjiFusionRoundGenerator.buildRounds(
-        widget.terms,
-        difficulty: selectedDifficulty,
-        radicalMode: selectedRadicalMode,
-      );
-      currentRoundIndex = 0;
-      correctCount = 0;
-      hasSubmitted = false;
-      lastAnswerCorrect = false;
-      sessionComplete = false;
-      _resetRoundPlacement();
-    });
-  }
-
   bool _componentCountsMatch(
     List<String> selected,
     List<String> required,
@@ -870,144 +815,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     );
   }
 
-  Widget _difficultyOptionRow({
-    required KanjiFusionDifficulty difficulty,
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required BuildContext sheetContext,
-  }) {
-    final selected = selectedDifficulty == difficulty;
-
-    return Material(
-      color: selected
-          ? GakujiColors.deckBlue.withOpacity(0.10)
-          : GakujiColors.warmCard,
-      borderRadius: BorderRadius.circular(GakujiRadius.medium),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(GakujiRadius.medium),
-        onTap: () {
-          Navigator.pop(sheetContext);
-          _setDifficulty(difficulty);
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                color: selected
-                    ? GakujiColors.deckBlue
-                    : GakujiColors.darkGray,
-                size: 24,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      textScaler: TextScaler.noScaling,
-                      style: GakujiText.small.copyWith(
-                        color: GakujiColors.darkGray,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                        color: GakujiColors.mediumGray,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (selected)
-                Icon(
-                  Icons.check_circle_rounded,
-                  color: GakujiColors.deckBlue,
-                  size: 22,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _radicalModeOptionRow({
-    required KanjiFusionRadicalMode radicalMode,
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required BuildContext sheetContext,
-  }) {
-    final selected = selectedRadicalMode == radicalMode;
-
-    return Material(
-      color: selected
-          ? GakujiColors.writing.withOpacity(0.10)
-          : GakujiColors.warmCard,
-      borderRadius: BorderRadius.circular(GakujiRadius.medium),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(GakujiRadius.medium),
-        onTap: () {
-          Navigator.pop(sheetContext);
-          _setRadicalMode(radicalMode);
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                color: selected
-                    ? GakujiColors.writing
-                    : GakujiColors.darkGray,
-                size: 24,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      textScaler: TextScaler.noScaling,
-                      style: GakujiText.small.copyWith(
-                        color: GakujiColors.darkGray,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                        color: GakujiColors.mediumGray,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (selected)
-                Icon(
-                  Icons.check_circle_rounded,
-                  color: GakujiColors.writing,
-                  size: 22,
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _optionRow({
     required IconData icon,
     required String label,
@@ -1140,42 +947,28 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   }
 
   Widget _playScreen({required Key key}) {
-    const compactLayout = true;
-
     return Column(
       key: key,
       children: [
         Expanded(
           child: SingleChildScrollView(
-            physics: compactLayout
-                ? const NeverScrollableScrollPhysics()
-                : const BouncingScrollPhysics(),
-            padding: EdgeInsets.fromLTRB(
-              compactLayout ? 24 : 28,
-              compactLayout ? 8 : 14,
-              compactLayout ? 24 : 28,
-              compactLayout ? 8 : 24,
-            ),
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
             child: Column(
               children: [
                 _scoreRow(showSkip: true),
-                SizedBox(height: compactLayout ? 10 : 22),
+                const SizedBox(height: 10),
                 _prompt(),
-                SizedBox(height: compactLayout ? 14 : 30),
+                const SizedBox(height: 14),
                 _answerSlots(),
-                SizedBox(height: compactLayout ? 18 : 34),
+                const SizedBox(height: 18),
                 _componentGrid(),
               ],
             ),
           ),
         ),
         Padding(
-          padding: EdgeInsets.fromLTRB(
-            28,
-            compactLayout ? 8 : 12,
-            28,
-            compactLayout ? 18 : 24,
-          ),
+          padding: const EdgeInsets.fromLTRB(28, 8, 28, 18),
           child: _primaryButton(
             label: 'FUSE',
             enabled: canFuse,
@@ -1307,8 +1100,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   }
 
   Widget _prompt() {
-    const compactLayout = true;
-
     return Column(
       children: [
         Text(
@@ -1319,21 +1110,21 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
           textScaler: TextScaler.noScaling,
           style: TextStyle(
             fontFamily: GakujiFonts.japanese,
-            fontSize: compactLayout ? 25 : 30,
+            fontSize: 25,
             height: 1.15,
             fontWeight: FontWeight.w600,
             color: GakujiColors.darkGray,
           ),
         ),
-        SizedBox(height: compactLayout ? 5 : 8),
+        const SizedBox(height: 5),
         Text(
           currentRound.definition,
-          maxLines: compactLayout ? 2 : 3,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
           style: TextStyle(
-            fontSize: compactLayout ? 18 : 22,
+            fontSize: 18,
             height: 1.2,
             fontWeight: FontWeight.w600,
             color: GakujiColors.darkGray,
@@ -1361,8 +1152,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   Color get _blockOutlineColor => const Color(0xFFB8B8B8);
 
   Color get _blockSelectionColor => const Color(0xFF7A7A7A);
-
-  bool get _compactLayoutMode => true;
 
   double get _choiceTileHeight => 68;
 
@@ -1769,7 +1558,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
             decoration: BoxDecoration(
               color: candidates.isEmpty
                   ? GakujiColors.warmCard
-                  : GakujiColors.writing.withOpacity(0.08),
+                  : GakujiColors.writing.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
                 color: candidates.isEmpty
@@ -2180,10 +1969,10 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                       width: 18,
                       height: 18,
                       decoration: BoxDecoration(
-                        color: GakujiColors.warmBackground.withOpacity(0.96),
+                        color: GakujiColors.warmBackground.withValues(alpha: 0.96),
                         shape: BoxShape.circle,
                         border: Border.all(
-                          color: _blockOutlineColor.withOpacity(0.75),
+                          color: _blockOutlineColor.withValues(alpha: 0.75),
                           width: 1,
                         ),
                       ),
@@ -2244,8 +2033,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: lastAnswerCorrect
-              ? GakujiColors.writing.withOpacity(0.65)
-              : GakujiColors.review.withOpacity(0.65),
+              ? GakujiColors.writing.withValues(alpha: 0.65)
+              : GakujiColors.review.withValues(alpha: 0.65),
           width: 2,
         ),
         boxShadow: [GakujiShadows.soft],
@@ -2285,7 +2074,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
               color: (lastAnswerCorrect
                       ? GakujiColors.writing
                       : GakujiColors.review)
-                  .withOpacity(0.12),
+                  .withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(GakujiRadius.pill),
             ),
             child: Text(
@@ -2484,7 +2273,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                       width: 94,
                       height: 94,
                       decoration: BoxDecoration(
-                        color: GakujiColors.deckBlue.withOpacity(0.13),
+                        color: GakujiColors.deckBlue.withValues(alpha: 0.13),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -2687,7 +2476,7 @@ class _GateSlotPainter extends CustomPainter {
       if (showShadow) {
         canvas.drawShadow(
           path,
-          Colors.black.withOpacity(0.16),
+          Colors.black.withValues(alpha: 0.16),
           6,
           false,
         );
@@ -2783,7 +2572,7 @@ class _EnclosureSlotPainter extends CustomPainter {
       if (showShadow) {
         canvas.drawShadow(
           path,
-          Colors.black.withOpacity(0.16),
+          Colors.black.withValues(alpha: 0.16),
           6,
           false,
         );
@@ -2923,7 +2712,7 @@ class _CliffSlotPainter extends CustomPainter {
     if (showShadow) {
       canvas.drawShadow(
         path,
-        Colors.black.withOpacity(0.16),
+        Colors.black.withValues(alpha: 0.16),
         6,
         false,
       );
@@ -3045,7 +2834,7 @@ class _RightHookSlotPainter extends CustomPainter {
     if (showShadow) {
       canvas.drawShadow(
         path,
-        Colors.black.withOpacity(0.16),
+        Colors.black.withValues(alpha: 0.16),
         6,
         false,
       );

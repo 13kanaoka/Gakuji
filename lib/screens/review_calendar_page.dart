@@ -518,11 +518,11 @@ class _ReviewCalendarPageState extends State<ReviewCalendarPage> {
                   color: GakujiColors.sectionHeader,
                   border: Border(
                     top: BorderSide(
-                      color: GakujiColors.darkGray.withOpacity(0.16),
+                      color: GakujiColors.darkGray.withValues(alpha: 0.16),
                       width: 1,
                     ),
                     bottom: BorderSide(
-                      color: GakujiColors.darkGray.withOpacity(0.16),
+                      color: GakujiColors.darkGray.withValues(alpha: 0.16),
                       width: 1,
                     ),
                   ),

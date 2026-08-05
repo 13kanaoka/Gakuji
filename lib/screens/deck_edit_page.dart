@@ -24,7 +24,6 @@ class DeckEditPage extends StatefulWidget {
 
 class _DeckEditPageState extends State<DeckEditPage> {
   static const Color accentBlue = Color(0xFF4D7EF7);
-  static const Color dividerGray = Color(0xFFE1E1E1);
   static const Color rowDividerGray = Color(0xFFC8C8C8);
   static const Color softTextGray = Color(0xFF8A8A8A);
 
@@ -152,7 +151,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1400),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: const Text(
             'Reading card editing is only for reading decks right now',
             textScaler: TextScaler.noScaling,
@@ -668,99 +667,4 @@ class _DeckEditPageState extends State<DeckEditPage> {
   }
 
 
-  Widget _menuOverlay() {
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: closeMenu,
-            child: Container(
-              color: Colors.transparent,
-            ),
-          ),
-          Positioned(
-            top: 58,
-            right: 22,
-            child: _deckEditMenuCard(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _deckEditMenuCard() {
-    return Container(
-      width: 234,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 0,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _menuItem(
-            icon: showStarredOnly ? Icons.star_border : Icons.star,
-            label: showStarredOnly ? 'All terms' : 'Starred terms',
-            iconColor: showStarredOnly ? Colors.grey : accentBlue,
-            onTap: () {
-              setTermFilter(starredOnly: !showStarredOnly);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _menuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Color iconColor = Colors.black,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 28,
-              child: Center(
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 24,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

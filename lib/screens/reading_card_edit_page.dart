@@ -74,8 +74,6 @@ class _SenseExampleOption {
 class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
   static const Color accentBlue = Color(0xFF4D7EF7);
   static const Color removeRed = Color(0xFFFF4B4B);
-  static const Color cardGray = Color(0xFFEDEDED);
-  static const Color shadowGray = Color(0xFFBDBDBD);
   static const Color softTextGray = Color(0xFF8A8A8A);
   static const Color softBlueFill = Color(0xFFF5F7FF);
   static const Color softBlueBorder = Color(0xFFEAF0FF);
@@ -293,24 +291,6 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
     DictionaryExample right,
   ) {
     return left.japanese == right.japanese && left.english == right.english;
-  }
-
-  int? _senseIndexForExample(DictionaryExample example) {
-    for (final sense in sourceTerm.senses) {
-      if (sense.examples.any((candidate) => _sameExample(candidate, example))) {
-        return sense.index;
-      }
-    }
-
-    return null;
-  }
-
-  String _senseLabel(int? senseIndex) {
-    if (senseIndex != null && senseIndex >= 0 && senseIndex < 26) {
-      return String.fromCharCode(65 + senseIndex);
-    }
-
-    return '•';
   }
 
   String get termTitle {
@@ -532,7 +512,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1300),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -884,8 +864,17 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: handleBack,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        final shouldPop = await handleBack();
+
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
       child: Scaffold(
         backgroundColor: Colors.white,
         body: SafeArea(
@@ -1208,10 +1197,6 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
 
   void moveGloss(int oldIndex, int newIndex) {
     setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-
       final gloss = workingSelection.removeAt(oldIndex);
       workingSelection.insert(newIndex, gloss);
     });
@@ -1246,7 +1231,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
               child: ReorderableListView.builder(
                 padding: EdgeInsets.zero,
                 itemCount: workingSelection.length,
-                onReorder: moveGloss,
+                onReorderItem: moveGloss,
                 buildDefaultDragHandles: true,
                 itemBuilder: (context, index) {
                   final option = workingSelection[index];

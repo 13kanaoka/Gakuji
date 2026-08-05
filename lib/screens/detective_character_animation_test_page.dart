@@ -585,7 +585,7 @@ class _DetectiveCharacterAnimationTestPageState
               width: 46,
               height: 12,
               decoration: BoxDecoration(
-                color: GakujiColors.darkGray.withOpacity(0.14),
+                color: GakujiColors.darkGray.withValues(alpha: 0.14),
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
@@ -624,7 +624,7 @@ class _DetectiveCharacterAnimationTestPageState
             color: const Color(0xFFD3BA8F),
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: GakujiColors.darkGray.withOpacity(0.25),
+              color: GakujiColors.darkGray.withValues(alpha: 0.25),
               width: 3,
             ),
           ),
@@ -1090,7 +1090,7 @@ class _DeskTexturePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final linePaint = Paint()
-      ..color = Colors.black.withOpacity(opacity)
+      ..color = Colors.black.withValues(alpha: opacity)
       ..strokeWidth = 2;
 
     for (double y = 34; y < size.height; y += 46) {

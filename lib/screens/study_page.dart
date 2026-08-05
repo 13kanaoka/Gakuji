@@ -1170,7 +1170,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -1273,7 +1273,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                             opacity: outgoingOpacity,
                             child: Transform(
                               transform: Matrix4.identity()
-                                ..translate(outgoingOffsetX, 0.0),
+                                ..translateByDouble(outgoingOffsetX, 0.0, 0.0, 1.0),
                               alignment: Alignment.center,
                               child: _card(
                                 outgoingCardTerm!,
@@ -1284,11 +1284,13 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                           ),
                         Transform(
                           transform: Matrix4.identity()
-                            ..translate(
+                            ..translateByDouble(
                               isReturningPreviousCard
                                   ? returningOffsetX
                                   : dragOffset.dx,
                               isReturningPreviousCard ? 0.0 : dragOffset.dy,
+                              0.0,
+                              1.0,
                             )
                             ..rotateZ(
                               isReturningPreviousCard ? 0.0 : rotation,
@@ -1665,8 +1667,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: Colors.white.withOpacity(0.10),
-          highlightColor: Colors.white.withOpacity(0.05),
+          splashColor: Colors.white.withValues(alpha: 0.10),
+          highlightColor: Colors.white.withValues(alpha: 0.05),
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1693,8 +1695,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       child: InkWell(
         onTap: goBack,
         borderRadius: BorderRadius.circular(20),
-        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
-        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: 20,
@@ -1718,186 +1720,6 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _menuOverlay() {
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              setState(() {
-                showMenu = false;
-              });
-            },
-            child: Container(
-              color: Colors.transparent,
-            ),
-          ),
-          Positioned(
-            top: 66,
-            right: 24,
-            child: _studyMenuCard(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _studyMenuCard() {
-    return Container(
-      width: 258,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: GakujiColors.warmBackground,
-        borderRadius: BorderRadius.circular(GakujiRadius.large),
-        border: Border.all(
-          color: GakujiColors.warmDivider,
-          width: 1.5,
-        ),
-        boxShadow: [GakujiShadows.card],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _menuItem(
-            icon: Icons.edit,
-            label: 'Edit Deck',
-            onTap: openDeckEdit,
-          ),
-           Divider(height: 1, color: GakujiColors.lightDivider),
-          _menuItem(
-            icon: showStarredOnly
-                ? Icons.star_rounded
-                : Icons.star_border_rounded,
-            label: showStarredOnly ? 'Starred terms only' : 'All terms',
-            iconColor: showStarredOnly
-                ? GakujiColors.darkGray
-                : GakujiColors.mediumGray,
-            onTap: toggleStarredTermFilter,
-          ),
-           Divider(height: 1, color: GakujiColors.lightDivider),
-          _textMenuItem(
-            textIcon: 'あ',
-            label: showFurigana ? 'Hide Furigana' : 'Show Furigana',
-            iconColor:
-                showFurigana ? GakujiColors.darkGray : GakujiColors.mediumGray,
-            onTap: toggleFurigana,
-          ),
-           Divider(height: 1, color: GakujiColors.lightDivider),
-          _menuItem(
-            icon: Icons.swap_horiz,
-            label: termFirst ? 'Term First' : 'Definition First',
-            iconColor:
-                termFirst ? GakujiColors.mediumGray : GakujiColors.darkGray,
-            onTap: toggleCardOrientation,
-          ),
-           Divider(height: 1, color: GakujiColors.lightDivider),
-          _menuItem(
-            icon: Icons.shuffle,
-            label: isShuffled ? 'Shuffled' : 'Unshuffled',
-            iconColor:
-                isShuffled ? GakujiColors.darkGray : GakujiColors.mediumGray,
-            onTap: toggleShuffle,
-          ),
-           Divider(height: 1, color: GakujiColors.lightDivider),
-          _menuItem(
-            icon: Icons.refresh,
-            label: 'Reset Deck',
-            iconColor: GakujiColors.mediumGray,
-            onTap: restart,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _menuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Color? iconColor,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      splashColor: GakujiColors.deckBlue.withOpacity(0.07),
-      highlightColor: GakujiColors.deckBlue.withOpacity(0.035),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 28,
-              child: Center(
-                child: Icon(
-                  icon,
-                  color: iconColor ?? GakujiColors.darkGray,
-                  size: 24,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                textScaler: TextScaler.noScaling,
-                style: GakujiText.menuItem,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _textMenuItem({
-    required String textIcon,
-    required String label,
-    required VoidCallback onTap,
-    Color? iconColor,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      splashColor: GakujiColors.deckBlue.withOpacity(0.07),
-      highlightColor: GakujiColors.deckBlue.withOpacity(0.035),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 28,
-              child: Center(
-                child: Text(
-                  textIcon,
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 22,
-                    height: 1,
-                    fontWeight: FontWeight.w800,
-                    color: iconColor ?? GakujiColors.darkGray,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                textScaler: TextScaler.noScaling,
-                style: GakujiText.menuItem,
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -2084,8 +1906,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
-        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
         customBorder: const CircleBorder(),
         child: SizedBox(
           width: 46,
