@@ -1,7 +1,13 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
+import 'firebase_options.dart';
+import 'screens/login_page.dart';
 import 'screens/main_shell.dart';
 import 'services/app_theme_controller.dart';
 import 'services/dictionary_service.dart';
@@ -11,6 +17,16 @@ import 'widgets/gakuji_styles.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  if (kDebugMode) {
+    await FirebaseAuth.instance.useAuthEmulator('192.168.3.2', 9099);
+  }
+
+  await GoogleSignIn.instance.initialize();
 
   // Load saved user data before the app opens.
   // This keeps decks, folders, pinned decks, and saved terms from resetting.
@@ -96,7 +112,22 @@ class MyApp extends StatelessWidget {
           theme: _themeFor(Brightness.light),
           darkTheme: _themeFor(Brightness.dark),
           themeMode: appThemeController.themeMode,
-          home: const MainShell(),
+          home: StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.authStateChanges(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              if (snapshot.hasData) {
+                return const MainShell();
+              }
+
+              return const LoginPage();
+            },
+          ),
           builder: (context, child) {
             Widget app = _ThemeRebuildBoundary(
               child: child ?? const SizedBox.shrink(),
