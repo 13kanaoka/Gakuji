@@ -59,7 +59,7 @@ class _LoginPageState extends State<LoginPage> {
         );
     } catch (e) {
       setState(() {
-        errorMessage = 'Yo login is shit twin';
+        errorMessage = 'Sign-in failed. Please try again.';
       });
     } finally {
       if (mounted) {
