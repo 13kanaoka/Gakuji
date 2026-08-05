@@ -56,7 +56,7 @@ class TermImportService {
   };
 
   static Future<TermImportFile?> pickFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['csv', 'tsv', 'txt', 'xlsx'],
       allowMultiple: false,
