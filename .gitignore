@@ -265,3 +265,9 @@ app.*.map.json
 
 # Dictionary database is distributed via GitHub releases, not committed
 assets/dictionary/dictionary.db
+
+# passwords used for beta testing
+lib/data/passwords.dart
+
+# test user accounts
+emulator-data/
