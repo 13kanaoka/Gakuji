@@ -1,47 +1,296 @@
 import 'package:flutter/material.dart';
 
+import '../services/app_theme_controller.dart';
+
+class GakujiFonts {
+  static const String japanese = 'IBMPlexSansJP';
+}
+
+/// App-wide colors.
+///
+/// Brand and deck-type colors remain fixed. Neutral surface, text, border,
+/// divider, and shadow colors switch automatically with the saved theme.
 class GakujiColors {
+  static bool get isDarkMode {
+    return appThemeController.themeMode == ThemeMode.dark;
+  }
+
   static const Color deckBlue = Color(0xFF4D7EF7);
 
-  static const Color folderYellow = Color(0xFFFFCF4D);
-  static const Color folderOrange = Color(0xFFF08B32);
+  static const Color reading = Color(0xFF5B84B8);
+  static const Color writing = Color(0xFF7C8F3A);
+  static const Color hybrid = Color(0xFFA57A48);
+  static const Color review = Color(0xFFD9825B);
 
-  static const Color searchBackground = Color(0xFFF8F8F8);
-  static const Color softGray = Color(0xFFEDEDED);
-  static const Color mediumGray = Color(0xFFB5B5B5);
-  static const Color textGray = Color(0xFF888888);
+  static const Color pinRed = Color(0xFFFF4B4B);
+  static const Color watermarkBlue = Color(0x1A4D7EF7);
 
-  static const Color accentGreen = Color(0xFF2E7D32);
+  static Color get deckCircle => isDarkMode
+      ? const Color(0xFF303136)
+      : const Color(0xFFF8F5EC);
+
+  static Color get warmBackground => isDarkMode
+      ? const Color(0xFF191A1D)
+      : const Color(0xFFFBFAF5);
+
+  static Color get warmCard => isDarkMode
+      ? const Color(0xFF242529)
+      : const Color(0xFFFFFCF4);
+
+  static Color get sectionHeader => isDarkMode
+      ? const Color(0xFF202125)
+      : const Color(0xFFFAF7F2);
+
+  static Color get whiteCard => isDarkMode
+      ? const Color(0xFF2D2E33)
+      : Colors.white;
+
+  static Color get darkGray => isDarkMode
+      ? const Color(0xFFF1EDE5)
+      : const Color(0xFF555555);
+
+  static Color get mediumGray => isDarkMode
+      ? const Color(0xFFB5B1AA)
+      : const Color(0xFF888888);
+
+  static Color get softGray => isDarkMode
+      ? const Color(0xFF7C7D82)
+      : const Color(0xFFAAA39A);
+
+  static Color get softBorder => isDarkMode
+      ? const Color(0xFF3A3B40)
+      : const Color(0xFFD8D5CF);
+
+  static Color get warmDivider => isDarkMode
+      ? const Color(0xFF45464C)
+      : const Color(0xFFE8E2D6);
+
+  static Color get lightDivider => isDarkMode
+      ? const Color(0xFF515258)
+      : const Color(0xFFE1E1E1);
 }
 
-class GakujiCorners {
-  static const double small = 12;
-  static const double medium = 18;
-  static const double large = 24;
-  static const double pill = 32;
+@immutable
+class GakujiPalette extends ThemeExtension<GakujiPalette> {
+  final Color deckCircle;
+  final Color warmBackground;
+  final Color warmCard;
+  final Color whiteCard;
+  final Color darkGray;
+  final Color mediumGray;
+  final Color softGray;
+  final Color softBorder;
+  final Color warmDivider;
+  final Color lightDivider;
+  final Color softShadow;
+  final Color cardShadow;
+
+  const GakujiPalette({
+    required this.deckCircle,
+    required this.warmBackground,
+    required this.warmCard,
+    required this.whiteCard,
+    required this.darkGray,
+    required this.mediumGray,
+    required this.softGray,
+    required this.softBorder,
+    required this.warmDivider,
+    required this.lightDivider,
+    required this.softShadow,
+    required this.cardShadow,
+  });
+
+  static const GakujiPalette light = GakujiPalette(
+    deckCircle: Color(0xFFF8F5EC),
+    warmBackground: Color(0xFFFBFAF5),
+    warmCard: Color(0xFFFFFCF4),
+    whiteCard: Colors.white,
+    darkGray: Color(0xFF555555),
+    mediumGray: Color(0xFF888888),
+    softGray: Color(0xFFAAA39A),
+    softBorder: Color(0xFFD8D5CF),
+    warmDivider: Color(0xFFE8E2D6),
+    lightDivider: Color(0xFFE1E1E1),
+    softShadow: Color(0x22000000),
+    cardShadow: Color(0x36000000),
+  );
+
+  static const GakujiPalette dark = GakujiPalette(
+    deckCircle: Color(0xFF303136),
+    warmBackground: Color(0xFF191A1D),
+    warmCard: Color(0xFF242529),
+    whiteCard: Color(0xFF2D2E33),
+    darkGray: Color(0xFFF1EDE5),
+    mediumGray: Color(0xFFB5B1AA),
+    softGray: Color(0xFF7C7D82),
+    softBorder: Color(0xFF3A3B40),
+    warmDivider: Color(0xFF45464C),
+    lightDivider: Color(0xFF515258),
+    softShadow: Color(0x66000000),
+    cardShadow: Color(0x99000000),
+  );
+
+  @override
+  GakujiPalette copyWith({
+    Color? deckCircle,
+    Color? warmBackground,
+    Color? warmCard,
+    Color? whiteCard,
+    Color? darkGray,
+    Color? mediumGray,
+    Color? softGray,
+    Color? softBorder,
+    Color? warmDivider,
+    Color? lightDivider,
+    Color? softShadow,
+    Color? cardShadow,
+  }) {
+    return GakujiPalette(
+      deckCircle: deckCircle ?? this.deckCircle,
+      warmBackground: warmBackground ?? this.warmBackground,
+      warmCard: warmCard ?? this.warmCard,
+      whiteCard: whiteCard ?? this.whiteCard,
+      darkGray: darkGray ?? this.darkGray,
+      mediumGray: mediumGray ?? this.mediumGray,
+      softGray: softGray ?? this.softGray,
+      softBorder: softBorder ?? this.softBorder,
+      warmDivider: warmDivider ?? this.warmDivider,
+      lightDivider: lightDivider ?? this.lightDivider,
+      softShadow: softShadow ?? this.softShadow,
+      cardShadow: cardShadow ?? this.cardShadow,
+    );
+  }
+
+  @override
+  GakujiPalette lerp(covariant GakujiPalette? other, double t) {
+    if (other == null) return this;
+
+    return GakujiPalette(
+      deckCircle: Color.lerp(deckCircle, other.deckCircle, t)!,
+      warmBackground: Color.lerp(warmBackground, other.warmBackground, t)!,
+      warmCard: Color.lerp(warmCard, other.warmCard, t)!,
+      whiteCard: Color.lerp(whiteCard, other.whiteCard, t)!,
+      darkGray: Color.lerp(darkGray, other.darkGray, t)!,
+      mediumGray: Color.lerp(mediumGray, other.mediumGray, t)!,
+      softGray: Color.lerp(softGray, other.softGray, t)!,
+      softBorder: Color.lerp(softBorder, other.softBorder, t)!,
+      warmDivider: Color.lerp(warmDivider, other.warmDivider, t)!,
+      lightDivider: Color.lerp(lightDivider, other.lightDivider, t)!,
+      softShadow: Color.lerp(softShadow, other.softShadow, t)!,
+      cardShadow: Color.lerp(cardShadow, other.cardShadow, t)!,
+    );
+  }
 }
 
-class GakujiShadows {
-  static const List<BoxShadow> soft = [
-    BoxShadow(color: Color(0x14000000), blurRadius: 18, offset: Offset(0, 8)),
-  ];
+extension GakujiThemeContext on BuildContext {
+  GakujiPalette get gakujiColors {
+    return Theme.of(this).extension<GakujiPalette>() ??
+        (GakujiColors.isDarkMode
+            ? GakujiPalette.dark
+            : GakujiPalette.light);
+  }
 
-  static const List<BoxShadow> cardDrop = [
-    BoxShadow(color: Color(0x22000000), blurRadius: 0, offset: Offset(0, 10)),
-  ];
-
-  static const List<BoxShadow> folderDrop = [
-    BoxShadow(color: Color(0x22000000), blurRadius: 0, offset: Offset(0, 8)),
-  ];
+  bool get isGakujiDarkMode => GakujiColors.isDarkMode;
 }
 
 class GakujiSpacing {
-  static const double pageHorizontal = 18;
-  static const double pageBottomPadding = 100;
+  static const double pageHorizontal = 24;
+  static const double pageBottom = 90;
 
-  static const double small = 8;
-  static const double medium = 12;
+  static const double sectionGap = 28;
+  static const double smallSectionGap = 14;
+
+  static const double buttonGap = 12;
+  static const double pillGap = 12;
+}
+
+class GakujiRadius {
+  static const double small = 10;
+  static const double medium = 14;
   static const double large = 18;
-  static const double extraLarge = 24;
-  static const double huge = 34;
+  static const double card = 18;
+  static const double pill = 999;
+}
+
+/// Shared typography follows the active Light/Dark palette.
+class GakujiText {
+  static TextStyle get xLarge => TextStyle(
+        fontSize: 38,
+        height: 0.92,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -1.0,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get large => TextStyle(
+        fontSize: 28,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.45,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get medium => TextStyle(
+        fontSize: 22,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.35,
+        color: GakujiColors.mediumGray,
+      );
+
+  static TextStyle get small => TextStyle(
+        fontSize: 18,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.15,
+        color: GakujiColors.mediumGray,
+      );
+
+  static const TextStyle xSmall = TextStyle(
+    fontSize: 15.5,
+    height: 1,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.15,
+    color: GakujiColors.deckBlue,
+  );
+
+  static const TextStyle pill = TextStyle(
+    fontSize: 15.5,
+    height: 1,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.15,
+  );
+
+  static TextStyle get menuItem => TextStyle(
+        fontSize: 15,
+        height: 1,
+        fontWeight: FontWeight.w600,
+        color: GakujiColors.darkGray,
+      );
+
+  static const TextStyle snackBar = TextStyle(
+    fontSize: 15,
+    fontWeight: FontWeight.w600,
+    color: Colors.white,
+  );
+}
+
+class GakujiShadows {
+  static BoxShadow get soft => BoxShadow(
+        color: GakujiColors.isDarkMode
+            ? const Color(0x66000000)
+            : const Color(0x22000000),
+        blurRadius: GakujiColors.isDarkMode ? 16 : 10,
+        spreadRadius: GakujiColors.isDarkMode ? -2 : 0,
+        offset: Offset(0, GakujiColors.isDarkMode ? 7 : 4),
+      );
+
+  static BoxShadow get card => BoxShadow(
+        color: GakujiColors.isDarkMode
+            ? const Color(0x99000000)
+            : const Color(0x36000000),
+        blurRadius: GakujiColors.isDarkMode ? 28 : 18,
+        spreadRadius: GakujiColors.isDarkMode ? -3 : 0,
+        offset: Offset(0, GakujiColors.isDarkMode ? 14 : 8),
+      );
 }

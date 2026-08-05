@@ -1,29 +1,44 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/recent_searches.dart';
 import '../models/term.dart';
 import '../models/writing_point.dart';
 import '../services/dictionary_service.dart';
 import '../services/writing_recognition_service.dart';
-import '../theme/app_text_styles.dart';
+import '../widgets/gakuji_faded_scroll.dart';
+import '../widgets/gakuji_search_bar.dart';
+import '../widgets/gakuji_styles.dart';
+import '../widgets/gakuji_term_row.dart';
+import '../widgets/gakuji_top_bar.dart';
 import 'dictionary_detail_page.dart';
+import 'kanji_dictionary_detail_page.dart';
 
-enum DictionaryInputMode { keyboard, writing }
+enum DictionaryInputMode {
+  keyboard,
+  writing,
+}
 
 class DictionaryPage extends StatefulWidget {
   final ValueChanged<bool>? onHandwritingInputActive;
 
-  const DictionaryPage({super.key, this.onHandwritingInputActive});
+  const DictionaryPage({
+    super.key,
+    this.onHandwritingInputActive,
+  });
 
   @override
   State<DictionaryPage> createState() => _DictionaryPageState();
 }
 
 class _DictionaryPageState extends State<DictionaryPage> {
-  static const Color accentBlue = Color(0xFF4D7EF7);
-  static const Color dividerGray = Color(0xFFC8C8C8);
+  static const String recentSearchesPreferenceKey =
+      'dictionary_recent_searches_v1';
+
+  static const Color accentGray = Color(0xFF727377);
   static const Color panelGray = Color(0xFFF0F2F5);
   static const Color panelBorderGray = Color(0xFFD6D8DC);
 
@@ -65,6 +80,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
     searchFocusNode.addListener(_handleSearchFocusChange);
 
+    loadRecentSearches();
     loadDictionary();
   }
 
@@ -88,6 +104,54 @@ class _DictionaryPageState extends State<DictionaryPage> {
     setState(() {
       isDictionaryLoading = false;
     });
+  }
+
+  Future<void> loadRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedData = prefs.getString(recentSearchesPreferenceKey);
+
+    if (savedData == null || savedData.trim().isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(savedData);
+
+      if (decoded is! List) return;
+
+      final loadedSearches = <Term>[];
+
+      for (final item in decoded) {
+        if (item is! Map) continue;
+
+        loadedSearches.add(
+          Term.fromJson(
+            Map<String, dynamic>.from(item),
+          ),
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        recentSearches
+          ..clear()
+          ..addAll(loadedSearches);
+      });
+    } catch (_) {
+      await prefs.remove(recentSearchesPreferenceKey);
+    }
+  }
+
+  Future<void> saveRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final encodedSearches = jsonEncode(
+      recentSearches.map((term) => term.toJson()).toList(),
+    );
+
+    await prefs.setString(
+      recentSearchesPreferenceKey,
+      encodedSearches,
+    );
   }
 
   double _writingPanelHeight(BuildContext context) {
@@ -125,7 +189,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
     );
   }
 
-  void _setInputActive(bool active, {bool rebuild = true}) {
+  void _setInputActive(
+    bool active, {
+    bool rebuild = true,
+  }) {
     if (isInputActive == active) return;
 
     isInputActive = active;
@@ -147,7 +214,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
     _setInputActive(false);
   }
 
-  void updateSearchText(String value, {bool clearHandwritingResult = true}) {
+  void updateSearchText(
+    String value, {
+    bool clearHandwritingResult = true,
+  }) {
     setState(() {
       searchText = value;
 
@@ -182,9 +252,15 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
     final requestNumber = searchRequestNumber;
 
-    searchDebounce = Timer(const Duration(milliseconds: 280), () {
-      searchDictionary(query: query, requestNumber: requestNumber);
-    });
+    searchDebounce = Timer(
+      const Duration(milliseconds: 280),
+      () {
+        searchDictionary(
+          query: query,
+          requestNumber: requestNumber,
+        );
+      },
+    );
   }
 
   Future<void> searchDictionary({
@@ -218,13 +294,17 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
   void addToRecentSearches(Term word) {
     setState(() {
-      recentSearches.removeWhere((recentWord) => recentWord.id == word.id);
+      recentSearches.removeWhere(
+        (recentWord) => recentWord.id == word.id,
+      );
 
       recentSearches.insert(0, word);
     });
+
+    unawaited(saveRecentSearches());
   }
 
-  Future<void> openDictionaryDetail(Term word) async {
+  Future<void> openDictionaryEntry(Term entry) async {
     FocusScope.of(context).unfocus();
 
     setState(() {
@@ -233,23 +313,52 @@ class _DictionaryPageState extends State<DictionaryPage> {
     });
 
     _setInputActive(false);
-    addToRecentSearches(word);
 
-    final result = await Navigator.push<DictionaryDetailBackResult>(
-      context,
-      MaterialPageRoute(builder: (context) => DictionaryDetailPage(word: word)),
-    );
+    var resolvedEntry = entry;
+
+    try {
+      resolvedEntry = await DictionaryService.getTermByIdAsync(entry.id);
+    } catch (error, stackTrace) {
+      debugPrint('Failed to refresh dictionary entry ${entry.id}: $error');
+      debugPrint('$stackTrace');
+    }
 
     if (!mounted) return;
 
-    if (result?.returnToResults ?? true) {
-      setState(() {
-        inputMode = DictionaryInputMode.keyboard;
-        searchHasFocus = false;
-      });
+    addToRecentSearches(resolvedEntry);
 
-      _setInputActive(false);
+    if (_isKanjiEntry(resolvedEntry)) {
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => KanjiDictionaryDetailPage(
+            kanjiEntry: resolvedEntry,
+          ),
+        ),
+      );
+    } else {
+      await Navigator.push<DictionaryDetailBackResult>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => DictionaryDetailPage(
+            word: resolvedEntry,
+          ),
+        ),
+      );
     }
+
+    if (!mounted) return;
+
+    setState(() {
+      inputMode = DictionaryInputMode.keyboard;
+      searchHasFocus = false;
+    });
+
+    _setInputActive(false);
+  }
+
+  bool _isKanjiEntry(Term entry) {
+    return entry.partOfSpeech == 'kanji' || entry.id.startsWith('kanji_');
   }
 
   void switchInputMode(DictionaryInputMode mode) {
@@ -277,7 +386,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
     clearSearchState();
   }
 
-  void addHandwritingPoint(Offset point, {bool isStart = false}) {
+  void addHandwritingPoint(
+    Offset point, {
+    bool isStart = false,
+  }) {
     final writingPoint = WritingPoint.fromOffset(
       x: point.dx,
       y: point.dy,
@@ -398,7 +510,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
       searchController.value = TextEditingValue(
         text: recognizedCharacter,
-        selection: TextSelection.collapsed(offset: recognizedCharacter.length),
+        selection: TextSelection.collapsed(
+          offset: recognizedCharacter.length,
+        ),
       );
     });
 
@@ -416,7 +530,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
       searchController.value = TextEditingValue(
         text: candidate,
-        selection: TextSelection.collapsed(offset: candidate.length),
+        selection: TextSelection.collapsed(
+          offset: candidate.length,
+        ),
       );
     });
 
@@ -429,25 +545,17 @@ class _DictionaryPageState extends State<DictionaryPage> {
     final query = searchText.trim();
     final wordsToShow = query.isEmpty ? recentSearches : searchResults;
     final writingPanelHeight = _writingPanelHeight(context);
-    final headerHeight = MediaQuery.of(context).padding.top + 58;
     final bottomResultsPadding = inputMode == DictionaryInputMode.writing
         ? writingPanelHeight + 92
         : shouldShowInputAccessoryBar
-        ? 90.0
-        : 190.0;
+            ? 90.0
+            : 190.0;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
-      backgroundColor: Colors.white,
+      backgroundColor: GakujiColors.warmBackground,
       body: Stack(
         children: [
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: headerHeight,
-            child: const ColoredBox(color: accentBlue),
-          ),
           GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
@@ -475,7 +583,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                         ),
                       ),
                       Positioned(
-                        top: 8,
+                        top: 18,
                         left: 18,
                         right: 18,
                         child: _keyboardSearchBar(),
@@ -494,22 +602,18 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 
   Widget _dictionaryHeader() {
-    final topInset = MediaQuery.of(context).padding.top;
-
-    return Container(
-      width: double.infinity,
-      height: topInset + 58,
-      color: accentBlue,
-      padding: EdgeInsets.fromLTRB(28, topInset + 18, 28, 18),
-      child: const Stack(
-        alignment: Alignment.center,
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Dictionary',
-            textAlign: TextAlign.center,
-            textScaler: TextScaler.noScaling,
-            style: AppText.pageTitle,
+          GakujiTopBar(
+            title: 'Dictionary',
+            titleStyle: GakujiText.large.copyWith(
+              color: GakujiColors.darkGray,
+            ),
           ),
+          const SizedBox(height: 36),
         ],
       ),
     );
@@ -527,7 +631,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
           child: Text(
             isDictionaryLoading ? 'Loading dictionary...' : 'Search for a word',
             textScaler: TextScaler.noScaling,
-            style: AppText.emptyState,
+            style: const TextStyle(
+              color: Colors.grey,
+              fontSize: 16,
+            ),
           ),
         ),
       );
@@ -540,7 +647,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
           child: Text(
             'Searching...',
             textScaler: TextScaler.noScaling,
-            style: AppText.emptyState,
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 16,
+            ),
           ),
         ),
       );
@@ -553,7 +663,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
           child: Text(
             'No results found',
             textScaler: TextScaler.noScaling,
-            style: AppText.emptyState,
+            style: TextStyle(
+              color: Colors.grey,
+              fontSize: 16,
+            ),
           ),
         ),
       );
@@ -564,10 +677,15 @@ class _DictionaryPageState extends State<DictionaryPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 82),
-          const Text(
+           Text(
             'Recent Searches',
             textScaler: TextScaler.noScaling,
-            style: AppText.listHeading,
+            style: TextStyle(
+              fontSize: 20,
+              height: 1,
+              fontWeight: FontWeight.bold,
+              color: GakujiColors.darkGray,
+            ),
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -593,111 +711,76 @@ class _DictionaryPageState extends State<DictionaryPage> {
     required double topPadding,
     required double bottomResultsPadding,
   }) {
-    return NotificationListener<ScrollStartNotification>(
-      onNotification: (notification) {
-        if (isInputActive) {
-          exitDictionaryInputMode();
-        }
+    return GakujiFadedScroll.withBottomNavigation(
+      child: NotificationListener<ScrollStartNotification>(
+        onNotification: (notification) {
+          if (isInputActive) {
+            exitDictionaryInputMode();
+          }
 
-        return false;
-      },
-      child: ListView.separated(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: EdgeInsets.only(top: topPadding, bottom: bottomResultsPadding),
-        itemCount: wordsToShow.length,
-        separatorBuilder: (context, index) {
-          return const Divider(height: 1, thickness: 1, color: dividerGray);
+          return false;
         },
-        itemBuilder: (context, index) {
-          final word = wordsToShow[index];
-
-          return _DictionaryTermTile(
-            word: word,
-            onTap: () => openDictionaryDetail(word),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _keyboardSearchBar() {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () {
-        searchFocusNode.requestFocus();
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 15),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(999),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x26000000),
-                blurRadius: 18,
-                spreadRadius: 0,
-                offset: Offset(0, 8),
-              ),
-            ],
+        child: ListView.separated(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.only(
+            top: topPadding,
+            bottom: bottomResultsPadding,
           ),
-          child: Row(
-            children: [
-              const Icon(Icons.search, size: 22, color: Colors.black),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: searchController,
-                  focusNode: searchFocusNode,
-                  onTap: () {
-                    if (inputMode != DictionaryInputMode.keyboard) {
-                      switchInputMode(DictionaryInputMode.keyboard);
-                    } else {
-                      _setInputActive(true);
-                    }
-                  },
-                  onChanged: updateSearchText,
-                  cursorColor: accentBlue,
-                  textInputAction: TextInputAction.search,
-                  decoration: const InputDecoration(
-                    hintText: 'Search',
-                    hintStyle: AppText.inputHint,
-                    border: InputBorder.none,
-                    isCollapsed: true,
-                  ),
-                  style: AppText.input,
-                ),
-              ),
-              if (searchText.isNotEmpty)
-                SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    icon: const Icon(
-                      Icons.close,
-                      size: 18,
-                      color: Colors.black45,
-                    ),
-                    onPressed: clearKeyboardSearch,
-                  ),
-                ),
-            ],
-          ),
+          itemCount: wordsToShow.length,
+          separatorBuilder: (context, index) {
+            return const Divider(
+              height: 1,
+              thickness: 1,
+              color: GakujiTermRow.dividerColor,
+            );
+          },
+          itemBuilder: (context, index) {
+            final word = wordsToShow[index];
+
+            final titleText = word.kanjiBracketText.isNotEmpty
+                ? word.kanjiBracketText
+                : word.reading;
+            final readingText =
+                word.kanjiBracketText.isNotEmpty ? word.reading : '';
+
+            return GakujiTermRow(
+              term: word,
+              titleText: titleText,
+              readingText: readingText,
+              onTap: () => openDictionaryEntry(word),
+            );
+          },
         ),
       ),
     );
   }
+  Widget _keyboardSearchBar() {
+    return GakujiSearchBar(
+      controller: searchController,
+      focusNode: searchFocusNode,
+      hintText: 'Search',
+      showClearButton: searchText.isNotEmpty,
+      onTap: () {
+        if (inputMode != DictionaryInputMode.keyboard) {
+          switchInputMode(DictionaryInputMode.keyboard);
+        } else {
+          _setInputActive(true);
+        }
+      },
+      onChanged: updateSearchText,
+      onClear: clearKeyboardSearch,
+    );
+  }
 
-  Widget _keyboardAccessoryBar({required double writingPanelHeight}) {
+  Widget _keyboardAccessoryBar({
+    required double writingPanelHeight,
+  }) {
     final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
     final double bottomOffset = inputMode == DictionaryInputMode.writing
         ? writingPanelHeight + 8.0
         : keyboardHeight > 0
-        ? keyboardHeight + 8.0
-        : 18.0;
+            ? keyboardHeight + 8.0
+            : 18.0;
 
     return Positioned(
       left: 18,
@@ -761,7 +844,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
     final isSelected = inputMode == mode;
 
     return Material(
-      color: isSelected ? accentBlue : const Color(0xFFF4F4F4),
+      color: isSelected ? accentGray : const Color(0xFFF4F4F4),
       borderRadius: BorderRadius.circular(17),
       child: InkWell(
         borderRadius: BorderRadius.circular(17),
@@ -775,14 +858,17 @@ class _DictionaryPageState extends State<DictionaryPage> {
               Icon(
                 icon,
                 size: 21,
-                color: isSelected ? Colors.white : accentBlue,
+                color: isSelected ? Colors.white : accentGray,
               ),
               const SizedBox(width: 6),
               Text(
                 label,
                 textScaler: TextScaler.noScaling,
-                style: AppText.buttonLabel.copyWith(
-                  color: isSelected ? Colors.white : accentBlue,
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1,
+                  fontWeight: FontWeight.w700,
+                  color: isSelected ? Colors.white : accentGray,
                 ),
               ),
             ],
@@ -792,7 +878,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
     );
   }
 
-  Widget _writingInputPanel({required double panelHeight}) {
+  Widget _writingInputPanel({
+    required double panelHeight,
+  }) {
     final visible = inputMode == DictionaryInputMode.writing;
 
     return AnimatedPositioned(
@@ -813,7 +901,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
         child: Container(
           decoration: const BoxDecoration(
             color: panelGray,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(24),
+            ),
             boxShadow: [
               BoxShadow(
                 color: Color(0x26000000),
@@ -823,14 +913,26 @@ class _DictionaryPageState extends State<DictionaryPage> {
             ],
           ),
           child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24),
+            ),
             child: Column(
               children: [
                 _handwritingCandidateRow(),
-                const Divider(height: 1, thickness: 1, color: panelBorderGray),
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: panelBorderGray,
+                ),
                 _handwritingActionRow(),
-                const Divider(height: 1, thickness: 1, color: panelBorderGray),
-                Expanded(child: _handwritingCanvas()),
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: panelBorderGray,
+                ),
+                Expanded(
+                  child: _handwritingCanvas(),
+                ),
               ],
             ),
           ),
@@ -847,11 +949,13 @@ class _DictionaryPageState extends State<DictionaryPage> {
           child: Text(
             hasHandwritingInput
                 ? isRecognizingHandwriting
-                      ? 'Checking...'
-                      : 'Keep writing'
+                    ? 'Checking...'
+                    : 'Keep writing'
                 : 'Write a character',
             textScaler: TextScaler.noScaling,
-            style: AppText.body.copyWith(
+            style: const TextStyle(
+              fontSize: 16,
+              height: 1,
               color: Colors.black45,
               fontWeight: FontWeight.w500,
             ),
@@ -884,7 +988,12 @@ class _DictionaryPageState extends State<DictionaryPage> {
               child: Text(
                 candidate,
                 textScaler: TextScaler.noScaling,
-                style: AppText.kanjiCandidate,
+                style: const TextStyle(
+                  fontSize: 33,
+                  height: 1,
+                  color: Colors.black,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           );
@@ -908,16 +1017,18 @@ class _DictionaryPageState extends State<DictionaryPage> {
             const SizedBox(width: 12),
             _handwritingTextButton(
               label: 'Undo',
-              enabled:
-                  handwritingStrokes.isNotEmpty && !isRecognizingHandwriting,
+              enabled: handwritingStrokes.isNotEmpty &&
+                  !isRecognizingHandwriting,
               onTap: undoLastHandwritingStroke,
             ),
             const Spacer(),
             if (isRecognizingHandwriting)
-              Text(
+              const Text(
                 'Checking...',
                 textScaler: TextScaler.noScaling,
-                style: AppText.cardCaption.copyWith(
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1,
                   color: Colors.black38,
                   fontWeight: FontWeight.w600,
                 ),
@@ -926,7 +1037,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
               Text(
                 'Searching: $handwritingResult',
                 textScaler: TextScaler.noScaling,
-                style: AppText.cardCaption.copyWith(
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1,
                   color: Colors.black38,
                   fontWeight: FontWeight.w600,
                 ),
@@ -950,8 +1063,11 @@ class _DictionaryPageState extends State<DictionaryPage> {
         child: Text(
           label,
           textScaler: TextScaler.noScaling,
-          style: AppText.buttonLabel.copyWith(
-            color: enabled ? accentBlue : Colors.black26,
+          style: TextStyle(
+            fontSize: 16,
+            height: 1,
+            color: enabled ? accentGray : Colors.black26,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),
@@ -974,18 +1090,25 @@ class _DictionaryPageState extends State<DictionaryPage> {
             handwritingRecognitionDebounce?.cancel();
 
             final box = context.findRenderObject() as RenderBox;
-            final point = box.globalToLocal(details.globalPosition);
+            final point = box.globalToLocal(
+              details.globalPosition,
+            );
 
             setState(() {
               handwritingCandidates.clear();
               handwritingResult = '';
 
-              addHandwritingPoint(point, isStart: true);
+              addHandwritingPoint(
+                point,
+                isStart: true,
+              );
             });
           },
           onPanUpdate: (details) {
             final box = context.findRenderObject() as RenderBox;
-            final point = box.globalToLocal(details.globalPosition);
+            final point = box.globalToLocal(
+              details.globalPosition,
+            );
 
             setState(() {
               addHandwritingPoint(point);
@@ -1004,10 +1127,11 @@ class _DictionaryPageState extends State<DictionaryPage> {
             ),
             child: Center(
               child: handwritingStrokes.isEmpty
-                  ? Text(
+                  ? const Text(
                       'Write here',
                       textScaler: TextScaler.noScaling,
-                      style: AppText.body.copyWith(
+                      style: TextStyle(
+                        fontSize: 18,
                         color: Colors.black38,
                         fontWeight: FontWeight.w500,
                       ),
@@ -1021,61 +1145,6 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 }
 
-class _DictionaryTermTile extends StatelessWidget {
-  final Term word;
-  final VoidCallback onTap;
-
-  const _DictionaryTermTile({required this.word, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final titleText = word.kanjiBracketText.isNotEmpty
-        ? word.kanjiBracketText
-        : word.reading;
-    final subtitleText = word.kanjiBracketText.isNotEmpty ? word.reading : '';
-
-    return Material(
-      color: Colors.white,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 4, 0, 5),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.end,
-                spacing: 10,
-                runSpacing: 0,
-                children: [
-                  Text(
-                    titleText,
-                    textScaler: TextScaler.noScaling,
-                    style: AppText.cardTitle,
-                  ),
-                  if (subtitleText.isNotEmpty)
-                    Text(
-                      '【$subtitleText】',
-                      textScaler: TextScaler.noScaling,
-                      style: AppText.cardReading,
-                    ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Text(
-                word.cardMeaning,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textScaler: TextScaler.noScaling,
-                style: AppText.cardCaption,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _HandwritingSearchPainter extends CustomPainter {
   final List<List<WritingPoint>> strokes;
@@ -1103,7 +1172,10 @@ class _HandwritingSearchPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), border);
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.width, size.height),
+      border,
+    );
 
     if (showGrid) {
       canvas.drawLine(
