@@ -166,6 +166,37 @@ class GakujiUserRepository {
     return pinnedDeckIdsData.map((deckId) => deckId.toString()).toList();
   }
 
+    static Future<List<Term>> loadRecentSearches() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .get();
+
+    final data = doc.data()?['recentSearches'];
+
+    if (data is! List) return [];
+
+    final loadedSearches = <Term>[];
+
+    for (final item in data) {
+      if (item is! Map) continue;
+
+      try {
+        loadedSearches.add(Term.fromJson(Map<String, dynamic>.from(item)));
+      } catch (_) {
+        // Skip corrupted entries instead of crashing the app.
+      }
+    }
+
+    return loadedSearches;
+  }
+
+  static Future<void> saveRecentSearches(List<Term> recentSearches) async {
+    await FirebaseFirestore.instance.collection('users').doc(_uid).set({
+      'recentSearches': recentSearches.map((term) => term.toJson()).toList(),
+    }, SetOptions(merge: true));
+  }
+
   static Future<void> saveAll({
     required List<Deck> decks,
     required List<Folder> folders,
@@ -429,8 +460,19 @@ static Future<void> saveReviewLog(ReviewLogEntry reviewLog) async {
     required String key,
     required String value,
   }) async {
-    await FirebaseFirestore.instance.collection('users').doc(_uid).set({
-      'preferences.$key': value,
+    final userDocRef = FirebaseFirestore.instance.collection('users').doc(_uid);
+
+    final doc = await userDocRef.get();
+    final existingPreferences = doc.data()?['preferences'];
+
+    final updatedPreferences = <String, dynamic>{
+      if (existingPreferences is Map)
+        ...Map<String, dynamic>.from(existingPreferences),
+      key: value,
+    };
+
+    await userDocRef.set({
+      'preferences': updatedPreferences,
     }, SetOptions(merge: true));
   }
 

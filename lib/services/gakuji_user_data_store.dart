@@ -14,9 +14,12 @@ class GakujiUserDataStore {
   static Timer? _saveDebounce;
   static bool _loaded = false;
   static bool _isSaving = false;
+  static bool _canSave = true;
 
   static Future<void> load() async {
     if (_loaded) return;
+
+    _canSave = true;
 
     final initialized = await GakujiUserRepository.loadPreference(
       initializedPreferenceKey,
@@ -51,16 +54,8 @@ class GakujiUserDataStore {
     _loaded = true;
   }
 
-  static void scheduleSave() {
-    _saveDebounce?.cancel();
-
-    _saveDebounce = Timer(saveDebounceDuration, () {
-      saveNow();
-    });
-  }
-
   static Future<void> saveNow() async {
-    if (_isSaving) return;
+    if (_isSaving || !_canSave) return;
 
     _isSaving = true;
 
@@ -80,6 +75,14 @@ class GakujiUserDataStore {
     }
   }
 
+  static void scheduleSave() {
+    _saveDebounce?.cancel();
+
+    _saveDebounce = Timer(saveDebounceDuration, () {
+      saveNow();
+    });
+  }
+
   static Future<void> flushPendingSave() async {
     _saveDebounce?.cancel();
     _saveDebounce = null;
@@ -87,13 +90,20 @@ class GakujiUserDataStore {
     await saveNow();
   }
 
-  static void reset() {
-    _saveDebounce?.cancel();
-    _saveDebounce = null;
+  static Future<void> reset() async {
+    await flushPendingSave();
+
+    _canSave = false;
     _loaded = false;
 
-    decks.clear();
-    folders.clear();
+    decks
+      ..clear()
+      ..addAll(buildSampleDecks());
+
+    folders
+      ..clear()
+      ..addAll(buildSampleFolders());
+
     pinnedDeckIds.clear();
   }
 }
