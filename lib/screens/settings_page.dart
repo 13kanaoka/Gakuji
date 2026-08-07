@@ -74,11 +74,16 @@ class _SettingsPageState extends State<SettingsPage> {
       reviewSettings = updatedSettings;
     });
   }
+  
   Future<void> _signOut() async {
     GakujiUserDataStore.reset();
 
     await GoogleSignIn.instance.signOut();
     await FirebaseAuth.instance.signOut();
+
+    if (!mounted) return;
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Future<void> _saveChanges() async {
