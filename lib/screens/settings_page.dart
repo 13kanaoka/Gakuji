@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../services/app_theme_controller.dart';
 import '../services/review_settings.dart';
+import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
@@ -70,6 +73,17 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() {
       reviewSettings = updatedSettings;
     });
+  }
+  
+  Future<void> _signOut() async {
+    GakujiUserDataStore.reset();
+
+    await GoogleSignIn.instance.signOut();
+    await FirebaseAuth.instance.signOut();
+
+    if (!mounted) return;
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   Future<void> _saveChanges() async {
@@ -252,9 +266,11 @@ class _SettingsPageState extends State<SettingsPage> {
                       );
                     },
                   ),
-                  const SizedBox(height: 56),
-                  _aboutButton(),
-                ],
+                    const SizedBox(height: 56),
+                    _aboutButton(),
+                    const SizedBox(height: 20),
+                    _signOutButton(),
+                  ],
               ),
             ),
           ),
@@ -568,6 +584,34 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _signOutButton() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _signOut,
+      child: Row(
+        children: [
+          const Icon(
+            Icons.logout_rounded,
+            color: Colors.redAccent,
+            size: 28,
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Sign Out',
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              )
+            )
+          )
+        ]
+      )
     );
   }
 }

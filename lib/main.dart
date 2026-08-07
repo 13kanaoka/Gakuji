@@ -23,10 +23,6 @@ Future<void> main() async {
 
   await GoogleSignIn.instance.initialize();
 
-  // Load saved user data before the app opens.
-  // This keeps decks, folders, pinned decks, and saved terms from resetting.
-  await GakujiUserDataStore.load();
-
   // Restore the user's saved Light / Dark preference.
   await appThemeController.load();
 
@@ -116,13 +112,15 @@ class MyApp extends StatelessWidget {
                 );
               }
 
-              if (snapshot.hasData) {
-                return const MainShell();
-              }
+            final user = snapshot.data;
+            if (user != null) {
+              return _SignedInApp(user: user);
+            }
+            return const LoginPage();
 
-              return const LoginPage();
             },
           ),
+
           builder: (context, child) {
             Widget app = _ThemeRebuildBoundary(
               child: child ?? const SizedBox.shrink(),
@@ -148,6 +146,45 @@ class MyApp extends StatelessWidget {
         );
       },
     );
+  }
+}
+
+class _SignedInApp extends StatefulWidget {
+  final User user;
+  
+  const _SignedInApp({required this.user});
+
+  @override
+  State<_SignedInApp> createState() => _SignedInAppState();
+}
+
+class _SignedInAppState extends State<_SignedInApp> {
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    await GakujiUserDataStore.load();
+
+    if (!mounted) return;
+
+    setState(() {
+      _loading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return const MainShell();
   }
 }
 
