@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:sqflite/sqflite.dart';
@@ -247,304 +245,143 @@ class GakujiUserRepository {
   }
 
   static Future<List<ReviewCard>> loadReviewCards() async {
-    final database = await GakujiUserDatabase.database;
-    final rows = await database.query(
-      'review_cards',
-      orderBy: 'due_at ASC, created_at ASC',
-    );
-    final loadedCards = <ReviewCard>[];
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .collection('reviewCards')
+        .orderBy('dueDate')
+        .get();
 
-    for (final row in rows) {
-      final cardJsonText = row['fsrs_card_json']?.toString() ?? '';
-      Map<String, dynamic> cardJson = <String, dynamic>{};
-
-      if (cardJsonText.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(cardJsonText);
-
-          if (decoded is Map<String, dynamic>) {
-            cardJson = Map<String, dynamic>.from(decoded);
-          }
-        } catch (_) {
-          // Fall back to the normalized database columns below.
-        }
-      }
-
-      final dueAt = _intFromDatabaseValue(row['due_at']);
-      final lastReviewedAt = _nullableIntFromDatabaseValue(
-        row['last_reviewed_at'],
-      );
-
-      cardJson
-        ..['id'] = row['id']?.toString() ?? ''
-        ..['deckId'] = row['deck_id']?.toString() ?? ''
-        ..['termId'] = row['term_id']?.toString() ?? ''
-        ..['cardType'] = row['card_type']?.toString() ?? 'reading'
-        ..['dueDate'] = DateTime.fromMillisecondsSinceEpoch(
-          dueAt,
-          isUtc: true,
-        ).toIso8601String();
-
-      if (lastReviewedAt == null) {
-        cardJson.remove('lastReviewedAt');
-      } else {
-        cardJson['lastReviewedAt'] = DateTime.fromMillisecondsSinceEpoch(
-          lastReviewedAt,
-          isUtc: true,
-        ).toIso8601String();
-      }
-
-      final card = ReviewCard.fromJson(cardJson);
-
-      if (card.id.isNotEmpty) {
-        loadedCards.add(card);
-      }
-    }
-
-    return loadedCards;
+    return snapshot.docs.map((doc) => ReviewCard.fromJson(doc.data())).toList();
   }
 
   static Future<void> saveReviewCard(ReviewCard card) async {
-    final database = await GakujiUserDatabase.database;
+    final userDoc = FirebaseFirestore.instance.collection('users').doc(_uid);
+    final deckDoc = await userDoc.collection('decks').doc(card.deckId).get();
 
-    await _saveReviewCardWithExecutor(
-      executor: database,
-      card: card,
-      now: _now,
-    );
+    if (!deckDoc.exists) return;
+
+    await userDoc.collection('reviewCards').doc(card.id).set(card.toJson());
   }
 
   static Future<void> saveReviewResult({
     required ReviewCard card,
     required ReviewLogEntry reviewLog,
   }) async {
-    final database = await GakujiUserDatabase.database;
+    final firestore = FirebaseFirestore.instance;
+    final userDoc = firestore.collection('users').doc(_uid);
+    final deckDoc = await userDoc.collection('decks').doc(card.deckId).get();
 
-    await database.transaction((transaction) async {
-      final now = _now;
+    if (!deckDoc.exists) return;
 
-      await _saveReviewCardWithExecutor(
-        executor: transaction,
-        card: card,
-        now: now,
-      );
+    final batch = firestore.batch();
 
-      await _saveReviewLogWithExecutor(
-        executor: transaction,
-        reviewLog: reviewLog,
-        now: now,
-      );
-    });
+    batch.set(userDoc.collection('reviewCards').doc(card.id), card.toJson());
+    batch.set(
+      userDoc.collection('reviewLogs').doc(reviewLog.id),
+      reviewLog.toJson(),
+    );
+
+    await batch.commit();
   }
 
   static Future<void> syncReviewCards(List<ReviewCard> cards) async {
-    final database = await GakujiUserDatabase.database;
+    final reviewCardsRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .collection('reviewCards');
 
-    await database.transaction((transaction) async {
-      final retainedIds = cards.map((card) => card.id).toSet();
-      final existingRows = await transaction.query(
-        'review_cards',
-        columns: ['id'],
-      );
+    final existingDocs = await reviewCardsRef.get();
+    final retainedIds = cards.map((card) => card.id).toSet();
 
-      for (final row in existingRows) {
-        final reviewCardId = row['id']?.toString() ?? '';
+    final batch = FirebaseFirestore.instance.batch();
 
-        if (reviewCardId.isEmpty || retainedIds.contains(reviewCardId)) {
-          continue;
-        }
-
-        await transaction.delete(
-          'review_cards',
-          where: 'id = ?',
-          whereArgs: [reviewCardId],
-        );
+    for (final doc in existingDocs.docs) {
+      if (!retainedIds.contains(doc.id)) {
+        batch.delete(doc.reference);
       }
+    }
 
-      final now = _now;
+    for (final card in cards) {
+      batch.set(reviewCardsRef.doc(card.id), card.toJson());
+    }
 
-      for (final card in cards) {
-        await _saveReviewCardWithExecutor(
-          executor: transaction,
-          card: card,
-          now: now,
-        );
-      }
-    });
+    await batch.commit();
   }
 
   static Future<void> deleteReviewCardsNotInForDeck({
     required String deckId,
     required Set<String> retainedReviewCardIds,
   }) async {
-    final database = await GakujiUserDatabase.database;
-    final rows = await database.query(
-      'review_cards',
-      columns: ['id'],
-      where: 'deck_id = ?',
-      whereArgs: [deckId],
-    );
+    final reviewCardsRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .collection('reviewCards');
 
-    for (final row in rows) {
-      final reviewCardId = row['id']?.toString() ?? '';
+    final snapshot = await reviewCardsRef
+        .where('deckId', isEqualTo: deckId)
+        .get();
 
-      if (reviewCardId.isEmpty ||
-          retainedReviewCardIds.contains(reviewCardId)) {
-        continue;
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (final doc in snapshot.docs) {
+      if (!retainedReviewCardIds.contains(doc.id)) {
+        batch.delete(doc.reference);
       }
-
-      await database.delete(
-        'review_cards',
-        where: 'id = ?',
-        whereArgs: [reviewCardId],
-      );
     }
+
+    await batch.commit();
   }
 
   static Future<void> deleteReviewCardsForDeck(String deckId) async {
-    final database = await GakujiUserDatabase.database;
+    final reviewCardsRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .collection('reviewCards');
 
-    await database.delete(
-      'review_cards',
-      where: 'deck_id = ?',
-      whereArgs: [deckId],
-    );
+    final snapshot = await reviewCardsRef
+        .where('deckId', isEqualTo: deckId)
+        .get();
+
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (final doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    await batch.commit();
   }
 
   static Future<List<ReviewLogEntry>> loadReviewLogs({
     String? reviewCardId,
   }) async {
-    final database = await GakujiUserDatabase.database;
-    final rows = await database.query(
-      'review_logs',
-      where: reviewCardId == null ? null : 'review_card_id = ?',
-      whereArgs: reviewCardId == null ? null : [reviewCardId],
-      orderBy: 'reviewed_at ASC, created_at ASC',
-    );
-    final loadedLogs = <ReviewLogEntry>[];
+    final reviewLogsRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .collection('reviewLogs');
 
-    for (final row in rows) {
-      final logJsonText = row['fsrs_log_json']?.toString() ?? '';
-      Map<String, dynamic> logJson = <String, dynamic>{};
+    final snapshot = reviewCardId == null
+        ? await reviewLogsRef.get()
+        : await reviewLogsRef
+              .where('reviewCardId', isEqualTo: reviewCardId)
+              .get();
 
-      if (logJsonText.isNotEmpty) {
-        try {
-          final decoded = jsonDecode(logJsonText);
+    final loadedLogs = snapshot.docs
+        .map((doc) => ReviewLogEntry.fromJson(doc.data()))
+        .toList();
 
-          if (decoded is Map<String, dynamic>) {
-            logJson = Map<String, dynamic>.from(decoded);
-          }
-        } catch (_) {
-          // Fall back to the normalized database columns below.
-        }
-      }
-
-      final reviewedAt = _intFromDatabaseValue(row['reviewed_at']);
-
-      logJson
-        ..['id'] = row['id']?.toString() ?? ''
-        ..['reviewCardId'] = row['review_card_id']?.toString() ?? ''
-        ..['rating'] = _intFromDatabaseValue(row['rating'])
-        ..['reviewedAt'] = DateTime.fromMillisecondsSinceEpoch(
-          reviewedAt,
-          isUtc: true,
-        ).toIso8601String();
-
-      final reviewLog = ReviewLogEntry.fromJson(logJson);
-
-      if (reviewLog.id.isNotEmpty) {
-        loadedLogs.add(reviewLog);
-      }
-    }
+    loadedLogs.sort((a, b) => a.reviewedAt.compareTo(b.reviewedAt));
 
     return loadedLogs;
   }
 
-  static Future<void> saveReviewLog(ReviewLogEntry reviewLog) async {
-    final database = await GakujiUserDatabase.database;
-
-    await _saveReviewLogWithExecutor(
-      executor: database,
-      reviewLog: reviewLog,
-      now: _now,
-    );
-  }
-
-  static Future<void> _saveReviewLogWithExecutor({
-    required DatabaseExecutor executor,
-    required ReviewLogEntry reviewLog,
-    required int now,
-  }) async {
-    final values = <String, Object?>{
-      'review_card_id': reviewLog.reviewCardId,
-      'rating': reviewLog.rating.index + 1,
-      'reviewed_at': reviewLog.reviewedAt.toUtc().millisecondsSinceEpoch,
-      'fsrs_log_json': jsonEncode(reviewLog.toJson()),
-    };
-
-    await executor.insert('review_logs', {
-      'id': reviewLog.id,
-      ...values,
-      'created_at': now,
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
-
-    await executor.update(
-      'review_logs',
-      values,
-      where: 'id = ?',
-      whereArgs: [reviewLog.id],
-    );
-  }
-
-  static Future<void> _saveReviewCardWithExecutor({
-    required DatabaseExecutor executor,
-    required ReviewCard card,
-    required int now,
-  }) async {
-    final deckRows = await executor.query(
-      'decks',
-      columns: ['id'],
-      where: 'id = ?',
-      whereArgs: [card.deckId],
-      limit: 1,
-    );
-
-    if (deckRows.isEmpty) return;
-
-    final values = <String, Object?>{
-      'deck_id': card.deckId,
-      'term_id': card.termId,
-      'card_type': card.cardType.name,
-      'fsrs_card_json': jsonEncode(card.toJson()),
-      'due_at': card.dueDate.toUtc().millisecondsSinceEpoch,
-      'last_reviewed_at': card.lastReviewedAt?.toUtc().millisecondsSinceEpoch,
-      'updated_at': now,
-    };
-
-    await executor.insert('review_cards', {
-      'id': card.id,
-      ...values,
-      'created_at': now,
-    }, conflictAlgorithm: ConflictAlgorithm.ignore);
-
-    await executor.update(
-      'review_cards',
-      values,
-      where: 'id = ?',
-      whereArgs: [card.id],
-    );
-  }
-
-  static int _intFromDatabaseValue(dynamic value, {int fallback = 0}) {
-    if (value is int) return value;
-
-    return int.tryParse(value?.toString() ?? '') ?? fallback;
-  }
-
-  static int? _nullableIntFromDatabaseValue(dynamic value) {
-    if (value == null) return null;
-
-    return int.tryParse(value.toString());
+static Future<void> saveReviewLog(ReviewLogEntry reviewLog) async {
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(_uid)
+        .collection('reviewLogs')
+        .doc(reviewLog.id)
+        .set(reviewLog.toJson());
   }
 
   static Future<String?> loadDictionaryNote(String sourceId) async {
