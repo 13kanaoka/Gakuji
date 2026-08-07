@@ -86,4 +86,14 @@ class GakujiUserDataStore {
 
     await saveNow();
   }
+
+  static void reset() {
+    _saveDebounce?.cancel();
+    _saveDebounce = null;
+    _loaded = false;
+
+    decks.clear();
+    folders.clear();
+    pinnedDeckIds.clear();
+  }
 }
