@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite/sqflite.dart' as sqflite show Transaction;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/deck.dart';
 import '../models/folder.dart';
@@ -11,6 +14,16 @@ import 'gakuji_user_database.dart';
 class GakujiUserRepository {
   static int get _now {
     return DateTime.now().millisecondsSinceEpoch;
+  }
+
+  static String get _uid {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      throw StateError("No signed-in user");
+    }
+
+    return user.uid;
   }
 
   static String _deckTypeToText(DeckType type) {
@@ -52,108 +65,90 @@ class GakujiUserRepository {
   }
 
   static Future<List<Deck>> loadDecks() async {
-    final database = await GakujiUserDatabase.database;
+    final snapshot = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(_uid)
+      .collection('decks')
+      .get();
 
-    final deckRows = await database.query(
-      'decks',
-      orderBy: 'position ASC, created_at ASC',
-    );
+      final loadedDecks = <Deck>[];
 
-    final loadedDecks = <Deck>[];
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final deckType = _deckTypeFromText(data['type']?.toString() ?? 'reading');
 
-    for (final deckRow in deckRows) {
-      final deckId = deckRow['id']?.toString() ?? '';
+        final loadedTerms = <Term>[];
+        final termsData = data['terms'];
 
-      if (deckId.isEmpty) continue;
-
-      final termRows = await database.query(
-        'deck_terms',
-        where: 'deck_id = ?',
-        whereArgs: [deckId],
-        orderBy: 'position ASC, created_at ASC',
-      );
-
-      final deckType = _deckTypeFromText(
-        deckRow['type']?.toString() ?? 'reading',
-      );
-      final loadedTerms = <Term>[];
-      final loadedHybridCardModes = <String, HybridCardMode>{};
-
-      for (final termRow in termRows) {
-        final termJsonText = termRow['term_json']?.toString() ?? '';
-
-        if (termJsonText.isEmpty) continue;
-
-        try {
-          final decoded = jsonDecode(termJsonText);
-
-          if (decoded is Map<String, dynamic>) {
-            final term = Term.fromJson(decoded);
-            loadedTerms.add(term);
-
-            if (deckType == DeckType.hybrid) {
-              final storedMode = decoded['_hybridCardMode']?.toString();
-
-              if (storedMode != null && storedMode.isNotEmpty) {
-                loadedHybridCardModes[term.id] =
-                    hybridCardModeFromStorage(storedMode);
+        if (termsData is List) {
+          for (final termData in termsData) {
+            if (termData is Map) {
+              try {
+                loadedTerms.add(
+                  Term.fromJson(Map<String, dynamic>.from(termData)),
+                );
+              } catch (_) {
+                // skip corrupted term entries instead of crashing the app
               }
             }
           }
-        } catch (_) {
-          // Skip corrupted term rows instead of crashing the app.
         }
+        final loadedHybridCardModes = <String, HybridCardMode>{};
+        final hybridModesData = data['hybridCardModes'];
+
+        if (hybridModesData is Map) {
+          hybridModesData.forEach((key, value) {
+            loadedHybridCardModes[key.toString()] = hybridCardModeFromStorage(value?.toString());
+          });
+        }
+        loadedDecks.add(
+          Deck(
+            id: doc.id,
+            name: data['name']?.toString() ?? '',
+            type: deckType,
+            terms: loadedTerms,
+            hybridCardModes: loadedHybridCardModes,
+            reviewEnabled: data['reviewEnabled'] == true,
+            activeStudyMode: data['activeStudyMode'] == 'review'
+                ? StudyMode.review
+                : StudyMode.study,
+            reviewEnabledAt: data['reviewEnabledAt'] != null
+                ? DateTime.tryParse(data['reviewEnabledAt'].toString())
+                : null,
+            lastStudyIndex: data['lastStudyIndex'] is int
+                ? data['lastStudyIndex'] as int
+                : int.tryParse(data['lastStudyIndex']?.toString() ?? '') ?? 0,
+            isShuffled: data['isShuffled'] == true,
+          ),
+        );
       }
 
-      loadedDecks.add(
-        Deck(
-          id: deckId,
-          name: deckRow['name']?.toString() ?? '',
-          type: deckType,
-          terms: loadedTerms,
-          hybridCardModes: loadedHybridCardModes,
-        ),
-      );
+      return loadedDecks;
     }
 
-    return loadedDecks;
-  }
-
   static Future<List<Folder>> loadFolders() async {
-    final database = await GakujiUserDatabase.database;
-
-    final folderRows = await database.query(
-      'folders',
-      orderBy: 'position ASC, created_at ASC',
-    );
+    final snapshot = await FirebaseFirestore.instance
+    .collection('users')
+    .doc(_uid)
+    .collection('folders')
+    .get();
 
     final loadedFolders = <Folder>[];
 
-    for (final folderRow in folderRows) {
-      final folderId = folderRow['id']?.toString() ?? '';
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final deckIdsData = data["deckIds"];
 
-      if (folderId.isEmpty) continue;
-
-      final folderDeckRows = await database.query(
-        'folder_decks',
-        where: 'folder_id = ?',
-        whereArgs: [folderId],
-        orderBy: 'position ASC, created_at ASC',
-      );
-
-      final deckIds = folderDeckRows
-          .map((row) => row['deck_id']?.toString() ?? '')
-          .where((deckId) => deckId.isNotEmpty)
-          .toList();
+      final deckIds = deckIdsData is List ? deckIdsData.map((deckId) => deckId.toString()).toList() : <String>[];
 
       loadedFolders.add(
         Folder(
-          id: folderId,
-          name: folderRow['name']?.toString() ?? '',
+          id: doc.id,
+          name: data['name']?.toString() ?? '',
           deckIds: deckIds,
         ),
       );
-    }
+    }  
 
     return loadedFolders;
   }
@@ -248,7 +243,7 @@ class GakujiUserRepository {
   }
 
   static Future<void> _deleteRemovedDecks({
-    required Transaction transaction,
+    required sqflite.Transaction transaction,
     required Set<String> savedDeckIds,
   }) async {
     final existingRows = await transaction.query(
@@ -270,7 +265,7 @@ class GakujiUserRepository {
   }
 
   static Future<void> _saveDeck({
-    required Transaction transaction,
+    required sqflite.Transaction transaction,
     required Deck deck,
     required int position,
     required int now,
@@ -364,7 +359,7 @@ class GakujiUserRepository {
   }
 
   static Future<void> _deleteRemovedFolders({
-    required Transaction transaction,
+    required sqflite.Transaction transaction,
     required Set<String> savedFolderIds,
   }) async {
     final existingRows = await transaction.query(
@@ -386,7 +381,7 @@ class GakujiUserRepository {
   }
 
   static Future<void> _saveFolder({
-    required Transaction transaction,
+    required sqflite.Transaction transaction,
     required Folder folder,
     required int position,
     required Set<String> existingDeckIds,
@@ -467,7 +462,7 @@ class GakujiUserRepository {
   }
 
   static Future<void> _syncPinnedDecks({
-    required Transaction transaction,
+    required sqflite.Transaction transaction,
     required List<String> pinnedDeckIds,
     required Set<String> existingDeckIds,
     required int now,
