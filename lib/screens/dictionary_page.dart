@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/recent_searches.dart';
 import '../models/term.dart';
 import '../models/writing_point.dart';
 import '../services/dictionary_service.dart';
+import '../services/gakuji_user_repository.dart';
 import '../services/writing_recognition_service.dart';
 import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_search_bar.dart';
@@ -35,9 +34,6 @@ class DictionaryPage extends StatefulWidget {
 }
 
 class _DictionaryPageState extends State<DictionaryPage> {
-  static const String recentSearchesPreferenceKey =
-      'dictionary_recent_searches_v1';
-
   static const Color accentGray = Color(0xFF727377);
   static const Color panelGray = Color(0xFFF0F2F5);
   static const Color panelBorderGray = Color(0xFFD6D8DC);
@@ -107,51 +103,19 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 
   Future<void> loadRecentSearches() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedData = prefs.getString(recentSearchesPreferenceKey);
+    final loadedSearches = await GakujiUserRepository.loadRecentSearches();
 
-    if (savedData == null || savedData.trim().isEmpty) return;
+    if (!mounted) return;
 
-    try {
-      final decoded = jsonDecode(savedData);
-
-      if (decoded is! List) return;
-
-      final loadedSearches = <Term>[];
-
-      for (final item in decoded) {
-        if (item is! Map) continue;
-
-        loadedSearches.add(
-          Term.fromJson(
-            Map<String, dynamic>.from(item),
-          ),
-        );
-      }
-
-      if (!mounted) return;
-
-      setState(() {
-        recentSearches
-          ..clear()
-          ..addAll(loadedSearches);
-      });
-    } catch (_) {
-      await prefs.remove(recentSearchesPreferenceKey);
-    }
+    setState(() {
+      recentSearches
+        ..clear()
+        ..addAll(loadedSearches);
+    });
   }
 
   Future<void> saveRecentSearches() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    final encodedSearches = jsonEncode(
-      recentSearches.map((term) => term.toJson()).toList(),
-    );
-
-    await prefs.setString(
-      recentSearchesPreferenceKey,
-      encodedSearches,
-    );
+    await GakujiUserRepository.saveRecentSearches(recentSearches);
   }
 
   double _writingPanelHeight(BuildContext context) {

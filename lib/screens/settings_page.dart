@@ -76,7 +76,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
   
   Future<void> _signOut() async {
-    GakujiUserDataStore.reset();
+    await GakujiUserDataStore.reset();
 
     await GoogleSignIn.instance.signOut();
     await FirebaseAuth.instance.signOut();
