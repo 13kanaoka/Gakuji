@@ -1,0 +1,62 @@
+name: 🐛 Bug Report
+description: Report a reproducible glitch, error, or UI issue.
+title: "fix(scope): "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please fill out this form accurately to help us fix the issue quickly.
+        Remember to use the `fix(scope): description` format for the title above!
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: 🚦 Priority Level
+      description: Choose the priority level of this bug.
+      options:
+        - "Low (Cosmetic issues, layout tweaks, text truncation)"
+        - "Medium (Feature is degraded but usable, broken workaround)"
+        - "High (App crash, broken core loop, login failure, data loss)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: 📝 Description
+      description: A clear and concise description of what the bug is.
+      placeholder: "e.g., On the home page, the deck titles cut off into ellipses too early..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 👣 Steps to Reproduce
+      description: How do we make this bug happen?
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 🎯 Expected Behavior
+      description: What did you expect to happen instead?
+      placeholder: "e.g., The title should stretch across the card or wrap to the next line."
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 💻 Environment & Context
+      description: Operating system, browser, or screen resolution if relevant.
+      placeholder: "e.g., Chrome v120 on macOS Sonoma, mobile viewport"
+    validations:
+      required: false
