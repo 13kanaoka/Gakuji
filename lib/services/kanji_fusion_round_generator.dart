@@ -13,14 +13,25 @@ class _FusionChoiceSpec {
   });
 }
 
+class _FusionStructure {
+  final List<KanjiFusionSlot> slots;
+  final List<KanjiFusionGroup> groups;
+
+  const _FusionStructure({
+    required this.slots,
+    this.groups = const [],
+  });
+}
+
 class KanjiFusionRoundGenerator {
-  static const int easyChoiceCount = 7;
-  static const int normalChoiceCount = 10;
+  static const double choicesPerAnswerSlot = 3.5;
+  static const int minimumChoiceCount = 4;
   static const Map<String, List<String>> _easyRecipes = {
     '明': ['日', '月'],
     '休': ['人', '木'],
     '体': ['人', '本'],
-    '何': ['人', '丁', '口'],
+    '何': ['人', '可'],
+    '況': ['水', '兄'],
     '作': ['人', '乍'],
     '住': ['人', '主'],
     '位': ['人', '立'],
@@ -30,6 +41,7 @@ class KanjiFusionRoundGenerator {
     '化': ['人', '匕'],
     '代': ['人', '弋'],
     '仙': ['人', '山'],
+    '兄': ['口', '儿'],
     '林': ['木', '木'],
     '森': ['木', '木', '木'],
     '村': ['木', '寸'],
@@ -44,20 +56,23 @@ class KanjiFusionRoundGenerator {
     '問': ['門', '口'],
     '間': ['門', '日'],
     '闇': ['門', '音'],
-    '時': ['日', '土', '寸'],
+    '時': ['日', '寺'],
     '星': ['日', '生'],
     '早': ['日', '十'],
     '昌': ['日', '日'],
     '晶': ['日', '日', '日'],
     '映': ['日', '央'],
-    '照': ['日', '刀', '口', '火'],
+    '照': ['昭', '火'],
     '晴': ['日', '青'],
+    '曜': ['日', '羽', '隹'],
     '朋': ['月', '月'],
     '期': ['其', '月'],
     '炎': ['火', '火'],
     '灯': ['火', '丁'],
     '品': ['口', '口', '口'],
-    '唱': ['口', '昌'],
+    '唱': ['口', '日', '日'],
+    '歌': ['哥', '欠'],
+    '鳴': ['口', '鳥'],
     '味': ['口', '未'],
     '呼': ['口', '乎'],
     '名': ['夕', '口'],
@@ -67,22 +82,23 @@ class KanjiFusionRoundGenerator {
     '秋': ['禾', '火'],
     '科': ['禾', '斗'],
     '私': ['禾', '厶'],
+    '流': ['水', '𠫓', '川'],
     '海': ['水', '毎'],
-    '河': ['水', '丁', '口'],
+    '河': ['水', '可'],
     '池': ['水', '也'],
     '洗': ['水', '先'],
     '洋': ['水', '羊'],
     '酒': ['水', '酉'],
-    '活': ['水', '千', '口'],
+    '活': ['水', '舌'],
     '清': ['水', '青'],
     '泳': ['水', '永'],
     '語': ['言', '吾'],
-    '話': ['言', '千', '口'],
+    '話': ['言', '舌'],
     '計': ['言', '十'],
     '記': ['言', '己'],
     '読': ['言', '売'],
     '試': ['言', '式'],
-    '詩': ['言', '土', '寸'],
+    '詩': ['言', '寺'],
     '好': ['女', '子'],
     '姉': ['女', '市'],
     '妹': ['女', '未'],
@@ -100,20 +116,20 @@ class KanjiFusionRoundGenerator {
     '薬': ['艹', '楽'],
     '雪': ['雨', '彐'],
     '雷': ['雨', '田'],
-    '電': ['雨', '申'],
+    '電': ['雨', '电'],
     '岩': ['山', '石'],
     '炭': ['山', '灰'],
-    '出': ['山', '山'],
     '音': ['立', '日'],
-    '意': ['立', '目', '心'],
+    '意': ['音', '心'],
     '章': ['立', '早'],
     '新': ['立', '木', '斤'],
     '見': ['目', '儿'],
     '親': ['立', '木', '見'],
     '買': ['罒', '貝'],
+    '置': ['目', '直'],
     '貧': ['分', '貝'],
     '員': ['口', '貝'],
-    '持': ['手', '土', '寸'],
+    '持': ['手', '寺'],
     '打': ['手', '丁'],
     '投': ['手', '殳'],
     '拾': ['手', '合'],
@@ -139,7 +155,7 @@ class KanjiFusionRoundGenerator {
     '国': ['囗', '玉'],
     '回': ['囗', '口'],
     '困': ['囗', '木'],
-    '図': ['囗', '乂'],
+    '図': ['囗', '斗'],
     '因': ['囗', '大'],
     '囲': ['囗', '井'],
   };
@@ -148,6 +164,7 @@ class KanjiFusionRoundGenerator {
     '休': ['やすむ', 'rest; take a break'],
     '体': ['からだ', 'body'],
     '何': ['なに', 'what'],
+    '況': ['きょう', 'condition; situation'],
     '作': ['つくる', 'make; create'],
     '住': ['すむ', 'live; reside'],
     '位': ['くらい', 'rank; position'],
@@ -157,6 +174,7 @@ class KanjiFusionRoundGenerator {
     '化': ['か', 'change; transformation'],
     '代': ['だい', 'generation; substitute'],
     '仙': ['せん', 'hermit; immortal'],
+    '兄': ['あに', 'older brother'],
     '林': ['はやし', 'woods'],
     '森': ['もり', 'forest'],
     '村': ['むら', 'village'],
@@ -179,12 +197,15 @@ class KanjiFusionRoundGenerator {
     '映': ['うつる', 'reflect; project'],
     '照': ['てる', 'shine; illuminate'],
     '晴': ['はれる', 'clear weather'],
+    '曜': ['よう', 'weekday; day of the week'],
     '朋': ['とも', 'companion; friend'],
     '期': ['き', 'period; expectation'],
     '炎': ['ほのお', 'flame'],
     '灯': ['ひ', 'lamp; light'],
     '品': ['しな', 'goods; quality'],
     '唱': ['となえる', 'chant; recite'],
+    '歌': ['うたう', 'sing; song'],
+    '鳴': ['なく', 'make a sound; cry'],
     '味': ['あじ', 'taste; flavor'],
     '呼': ['よぶ', 'call'],
     '名': ['な', 'name'],
@@ -194,6 +215,7 @@ class KanjiFusionRoundGenerator {
     '秋': ['あき', 'autumn'],
     '科': ['か', 'department; course'],
     '私': ['わたし', 'I; private'],
+    '流': ['ながす', 'let flow; drain; pour'],
     '海': ['うみ', 'sea'],
     '河': ['かわ', 'river'],
     '池': ['いけ', 'pond'],
@@ -230,7 +252,6 @@ class KanjiFusionRoundGenerator {
     '電': ['でん', 'electricity'],
     '岩': ['いわ', 'rock'],
     '炭': ['すみ', 'charcoal'],
-    '出': ['でる', 'go out; exit'],
     '音': ['おと', 'sound'],
     '意': ['い', 'meaning; intention'],
     '章': ['しょう', 'chapter; badge'],
@@ -238,6 +259,7 @@ class KanjiFusionRoundGenerator {
     '見': ['みる', 'see; look'],
     '親': ['おや', 'parent; close'],
     '買': ['かう', 'buy'],
+    '置': ['おく', 'put; place'],
     '貧': ['まずしい', 'poor'],
     '員': ['いん', 'member'],
     '持': ['もつ', 'hold; possess'],
@@ -271,43 +293,71 @@ class KanjiFusionRoundGenerator {
     '囲': ['かこむ', 'surround'],
   };
 
-  // Normal and Hard use curated, reusable components rather than
-  // mechanically splitting every kanji into the smallest possible shapes.
-  // Components such as 本, 央, 成, 糸, 貝, and 戈 stay whole when nested,
-  // while transparent reusable structures such as 交, 見, and 苗 expand.
+  // The top-level IDS follows the immediate reusable units identified by RTK.
+  // Fusion then expands a curated set of transparent nested units so every
+  // round remains understandable even when the learner has not followed a
+  // fixed curriculum. Nested units keep a visible group boundary while their
+  // leaf components become the draggable pieces. Opaque units such as 鳥 and
+  // 直 remain whole rather than being forced into arbitrary stroke fragments.
   static const Map<String, String> _normalIds = {
-    '明': '⿰日月', '休': '⿰亻木', '体': '⿰亻本', '何': '⿰亻⿹丁口', '作': '⿰亻乍',
+    '明': '⿰日月', '休': '⿰亻木', '体': '⿰亻本', '何': '⿰亻可', '況': '⿰氵兄', '作': '⿰亻乍',
     '住': '⿰亻主', '位': '⿰亻立', '信': '⿰亻言', '仕': '⿰亻士', '件': '⿰亻牛',
-    '化': '⿰亻匕', '代': '⿰亻弋', '仙': '⿰亻山', '林': '⿰木木', '森': '⿱木⿰木木',
-    '村': '⿰木寸', '校': '⿰木⿱亠父', '相': '⿰木目', '交': '⿱亠父', '男': '⿱田力',
+    '化': '⿰亻匕', '代': '⿰亻弋', '仙': '⿰亻山', '兄': '⿱口儿',
+    '林': '⿰木木', '森': '⿱木⿰木木',
+    '村': '⿰木寸', '校': '⿰木交', '相': '⿰木目', '交': '⿱亠父', '男': '⿱田力',
     '思': '⿱田心', '界': '⿱田介', '町': '⿰田丁', '聞': '⿵門耳', '問': '⿵門口',
-    '間': '⿵門日', '闇': '⿵門音', '時': '⿰日⿱土寸', '星': '⿱日生', '早': '⿱日十',
+    '間': '⿵門日', '闇': '⿵門音', '時': '⿰日寺', '星': '⿱日生', '早': '⿱日十',
     '昌': '⿱日日', '晶': '⿱日⿰日日', '映': '⿰日央', '照': '⿱昭灬',
-    '晴': '⿰日青', '朋': '⿰月月', '期': '⿰其月', '炎': '⿱火火', '灯': '⿰火丁',
-    '品': '⿱口⿰口口', '唱': '⿰口⿱日日', '味': '⿰口未', '呼': '⿰口乎',
+    '晴': '⿰日青', '曜': '⿰日⿱羽隹', '朋': '⿰月月', '期': '⿰其月', '炎': '⿱火火', '灯': '⿰火丁',
+    '品': '⿱口⿰口口', '唱': '⿰口⿱日日',
+    '歌': '⿰哥欠', '鳴': '⿰口鳥', '味': '⿰口未', '呼': '⿰口乎',
     '名': '⿱夕口', '多': '⿱夕夕', '外': '⿰夕卜', '和': '⿰禾口', '秋': '⿰禾火',
-    '科': '⿰禾斗', '私': '⿰禾厶', '海': '⿰氵毎', '河': '⿰氵⿹丁口', '池': '⿰氵也',
-    '洗': '⿰氵先', '洋': '⿰氵羊', '酒': '⿰氵酉', '活': '⿰氵⿱千口', '清': '⿰氵青',
-    '泳': '⿰氵永', '語': '⿰言吾', '話': '⿰言⿱千口', '計': '⿰言十', '記': '⿰言己',
-    '読': '⿰言売', '試': '⿰言式', '詩': '⿰言⿱土寸', '好': '⿰女子', '姉': '⿰女市',
+    '科': '⿰禾斗', '私': '⿰禾厶', '流': '⿰氵⿱𠫓川',
+    '海': '⿰氵毎', '河': '⿰氵可', '池': '⿰氵也',
+    '洗': '⿰氵先', '洋': '⿰氵羊', '酒': '⿰氵酉', '活': '⿰氵舌', '清': '⿰氵青',
+    '泳': '⿰氵永', '語': '⿰言吾', '話': '⿰言舌', '計': '⿰言十', '記': '⿰言己',
+    '読': '⿰言売', '試': '⿰言式', '詩': '⿰言寺', '好': '⿰女子', '姉': '⿰女市',
     '妹': '⿰女未', '姓': '⿰女生', '安': '⿱宀女', '字': '⿱宀子', '家': '⿱宀豕',
     '室': '⿱宀至', '空': '⿱穴工', '花': '⿱艹化', '茶': '⿱艹⿱𠆢木',
     '草': '⿱艹早', '英': '⿱艹央', '苗': '⿱艹田', '薬': '⿱艹楽', '雪': '⿱雨彐', '雷': '⿱雨田',
-    '電': '⿱雨申', '岩': '⿱山石', '炭': '⿱山⿸厂火', '出': '⿱山山',
-    '音': '⿱立日', '意': '⿳立目心', '章': '⿱立早', '新': '⿰⿱立木斤',
-    '見': '⿱目儿', '親': '⿰⿱立木⿱目儿', '買': '⿱罒貝', '貧': '⿱分貝',
-    '員': '⿱口貝', '持': '⿰扌⿱土寸', '打': '⿰扌丁', '投': '⿰扌殳', '拾': '⿰扌合',
+    '電': '⿱雨电', '岩': '⿱山石', '炭': '⿱山灰',
+    '音': '⿱立日', '意': '⿱音心', '章': '⿱立早', '新': '⿰亲斤',
+    '見': '⿱目儿', '親': '⿰亲見', '買': '⿱罒貝',
+    '置': '⿱罒直', '貧': '⿱分貝',
+    '員': '⿱口貝', '持': '⿰扌寺', '打': '⿰扌丁', '投': '⿰扌殳', '拾': '⿰扌合',
     '性': '⿰忄生', '情': '⿰忄青', '快': '⿰忄夬', '想': '⿱相心',
     '忘': '⿱亡心', '念': '⿱今心', '線': '⿰糹泉', '紙': '⿰糹氏', '組': '⿰糹且',
     '終': '⿰糹冬', '絵': '⿰糹会', '社': '⿰礻土', '神': '⿰礻申', '初': '⿰衤刀',
-    '被': '⿰衤皮', '猫': '⿰犭⿱艹田', '独': '⿰犭虫', '地': '⿰土也', '城': '⿰土成',
-    '国': '⿴囗玉', '回': '⿴囗口', '困': '⿴囗木', '図': '⿴囗乂', '因': '⿴囗大',
+    '被': '⿰衤皮', '猫': '⿰犭苗', '独': '⿰犭虫', '地': '⿰土也', '城': '⿰土成',
+    '国': '⿴囗玉', '回': '⿴囗口', '困': '⿴囗木', '図': '⿴囗斗', '因': '⿴囗大',
     '囲': '⿴囗井',
+  };
+
+  // Only components with a clear, reusable internal structure are expanded.
+  // The completed component is retained as a visual group, but the listed
+  // leaves are what the learner actually drags into the answer box.
+  static const Map<String, String> _nestedComponentIds = {
+    '兄': '⿱口儿',
+    '見': '⿱目儿',
+    '寺': '⿱土寸',
+    '舌': '⿱千口',
+    '音': '⿱立日',
+    '亲': '⿱立木',
+    '可': '⿹丁口',
+    '哥': '⿱可可',
+    '昭': '⿰日召',
+    '召': '⿱刀口',
+    '相': '⿰木目',
+    '化': '⿰亻匕',
+    '早': '⿱日十',
+    '交': '⿱亠父',
+    '苗': '⿱艹田',
   };
 
 
   static const Map<String, List<String>> _radicalFormFamilies = {
     '人': ['人', '亻', '𠆢'],
+    '目': ['目', '罒'],
     '水': ['水', '氵'],
     '手': ['手', '扌'],
     '心': ['心', '忄', '⺗'],
@@ -330,44 +380,67 @@ class KanjiFusionRoundGenerator {
     Random? random,
   }) {
     final rng = random ?? Random();
-    final sourceTerms = <String, Term>{};
-    for (final term in terms) {
-      final spelling = term.kanji.trim();
-      if (_normalIds.containsKey(spelling) &&
-          !sourceTerms.containsKey(spelling)) {
-        sourceTerms[spelling] = term;
-      }
-    }
 
-    final entries = _normalIds.keys
-        .where(_easyRecipes.containsKey)
-        .toList()
-      ..shuffle(rng);
-
-    List<KanjiFusionSlot> structuralSlotsFor(String kanji) {
-      final custom = _customStructuralSlots(kanji, difficulty);
-      return custom ?? _parseSlots(_normalIds[kanji]!);
+    _FusionStructure structureFor(String kanji) {
+      final custom = _customStructure(kanji, difficulty);
+      return custom ?? _parseStructure(_normalIds[kanji]!);
     }
 
     int componentCountFor(String kanji) {
       if (difficulty == KanjiFusionDifficulty.easy) {
         return _easyRecipes[kanji]!.length;
       }
-      return structuralSlotsFor(kanji).length;
+      return structureFor(kanji).slots.length;
     }
+
+    final allSupportedKanji = _normalIds.keys
+        .where(_easyRecipes.containsKey)
+        .where((kanji) => componentCountFor(kanji) >= 2)
+        .toList(growable: false);
+
+    final sourceTerms = <String, Term>{};
+    final deckKanji = <String>{};
+
+    for (final term in terms) {
+      final spelling = term.kanji.trim();
+      if (spelling.isEmpty) continue;
+
+      for (final kanji in _extractKanji(spelling)) {
+        if (!allSupportedKanji.contains(kanji)) continue;
+
+        deckKanji.add(kanji);
+
+        // An exact single-kanji card has the most specific saved prompt.
+        // Kanji extracted from a larger word use the curated kanji-level
+        // reading and meaning so Fusion remains a single-kanji activity.
+        if (spelling == kanji) {
+          sourceTerms[kanji] = term;
+        } else {
+          sourceTerms.putIfAbsent(
+            kanji,
+            () => _showcaseTerm(kanji, difficulty),
+          );
+        }
+      }
+    }
+
+    final entries = deckKanji.toList()..shuffle(rng);
 
     entries.sort((a, b) {
       return componentCountFor(b).compareTo(componentCountFor(a));
     });
 
+    // Distractors come from the complete supported component library rather
+    // than only the current deck. A deck with one eligible kanji can therefore
+    // still receive the full Normal-mode set of ten choices.
     final componentPool = difficulty == KanjiFusionDifficulty.easy
-        ? _easyRecipes.values
-            .expand((components) => components)
+        ? allSupportedKanji
+            .expand((kanji) => _easyRecipes[kanji]!)
             .toSet()
             .toList()
-        : entries
+        : allSupportedKanji
             .expand(
-              (kanji) => structuralSlotsFor(kanji).map(
+              (kanji) => structureFor(kanji).slots.map(
                 (slot) => slot.component,
               ),
             )
@@ -376,7 +449,8 @@ class KanjiFusionRoundGenerator {
 
     return List.unmodifiable(
       entries.map((kanji) {
-        final slots = structuralSlotsFor(kanji);
+        final structure = structureFor(kanji);
+        final slots = structure.slots;
         final required = difficulty == KanjiFusionDifficulty.easy
             ? List<String>.from(_easyRecipes[kanji]!)
             : slots.map((slot) => slot.component).toList(growable: false);
@@ -394,10 +468,7 @@ class KanjiFusionRoundGenerator {
             .where((component) => !required.contains(component))
             .toList()
           ..shuffle(rng);
-        final choiceTarget = max(
-          _choiceCountFor(difficulty),
-          required.length,
-        );
+        final choiceTarget = _choiceCountFor(required.length);
         final usedDistractorKeys = <String>{
           for (final choice in choiceSpecs) _choiceKey(choice),
         };
@@ -428,20 +499,39 @@ class KanjiFusionRoundGenerator {
             ),
           ),
           structuralSlots: List<KanjiFusionSlot>.unmodifiable(slots),
+          structuralGroups: List<KanjiFusionGroup>.unmodifiable(
+            structure.groups,
+          ),
         );
       }),
     );
   }
 
-  static int _choiceCountFor(KanjiFusionDifficulty difficulty) {
-    switch (difficulty) {
-      case KanjiFusionDifficulty.easy:
-        return easyChoiceCount;
-      case KanjiFusionDifficulty.normal:
-        return normalChoiceCount;
-      case KanjiFusionDifficulty.hard:
-        return easyChoiceCount;
+  static Iterable<String> _extractKanji(String text) sync* {
+    for (final rune in text.runes) {
+      if (_isKanjiRune(rune)) {
+        yield String.fromCharCode(rune);
+      }
     }
+  }
+
+  static bool _isKanjiRune(int rune) {
+    return (rune >= 0x3400 && rune <= 0x4DBF) ||
+        (rune >= 0x4E00 && rune <= 0x9FFF) ||
+        (rune >= 0xF900 && rune <= 0xFAFF) ||
+        (rune >= 0x20000 && rune <= 0x2FA1F);
+  }
+
+  static int _choiceCountFor(int requiredSlotCount) {
+    if (requiredSlotCount <= 0) return 0;
+
+    final scaledChoiceCount =
+        (requiredSlotCount * choicesPerAnswerSlot).floor();
+
+    return max(
+      requiredSlotCount,
+      max(minimumChoiceCount, scaledChoiceCount),
+    );
   }
 
   static Term _showcaseTerm(
@@ -495,12 +585,13 @@ class KanjiFusionRoundGenerator {
     return component;
   }
 
-  static List<KanjiFusionSlot>? _customStructuralSlots(
+  static _FusionStructure? _customStructure(
     String kanji,
     KanjiFusionDifficulty difficulty,
   ) {
-    String? gateInnerComponent;
+    if (difficulty == KanjiFusionDifficulty.easy) return null;
 
+    String? gateInnerComponent;
     switch (kanji) {
       case '聞':
         gateInnerComponent = '耳';
@@ -516,9 +607,8 @@ class KanjiFusionRoundGenerator {
         break;
     }
 
-    if (gateInnerComponent != null &&
-        difficulty != KanjiFusionDifficulty.easy) {
-      return [
+    if (gateInnerComponent != null) {
+      final slots = <KanjiFusionSlot>[
         const KanjiFusionSlot(
           component: '門',
           left: 0.10,
@@ -531,18 +621,51 @@ class KanjiFusionRoundGenerator {
           contentWidth: 0.40,
           contentHeight: 0.20,
         ),
-        KanjiFusionSlot(
-          component: gateInnerComponent,
-          left: 0.31,
-          top: 0.29,
-          width: 0.38,
-          height: 0.62,
-        ),
       ];
+      final groups = <KanjiFusionGroup>[];
+
+      if (gateInnerComponent == '音') {
+        groups.add(
+          const KanjiFusionGroup(
+            component: '音',
+            left: 0.29,
+            top: 0.26,
+            width: 0.42,
+            height: 0.65,
+          ),
+        );
+        slots.addAll(const [
+          KanjiFusionSlot(
+            component: '立',
+            left: 0.33,
+            top: 0.30,
+            width: 0.34,
+            height: 0.27,
+          ),
+          KanjiFusionSlot(
+            component: '日',
+            left: 0.33,
+            top: 0.61,
+            width: 0.34,
+            height: 0.26,
+          ),
+        ]);
+      } else {
+        slots.add(
+          KanjiFusionSlot(
+            component: gateInnerComponent,
+            left: 0.31,
+            top: 0.29,
+            width: 0.38,
+            height: 0.62,
+          ),
+        );
+      }
+
+      return _FusionStructure(slots: slots, groups: groups);
     }
 
     String? enclosureInnerComponent;
-
     switch (kanji) {
       case '国':
         enclosureInnerComponent = '玉';
@@ -554,7 +677,7 @@ class KanjiFusionRoundGenerator {
         enclosureInnerComponent = '木';
         break;
       case '図':
-        enclosureInnerComponent = '乂';
+        enclosureInnerComponent = '斗';
         break;
       case '因':
         enclosureInnerComponent = '大';
@@ -564,66 +687,54 @@ class KanjiFusionRoundGenerator {
         break;
     }
 
-    if (enclosureInnerComponent != null &&
-        difficulty != KanjiFusionDifficulty.easy) {
-      return [
-        const KanjiFusionSlot(
-          component: '囗',
-          left: 0.12,
-          top: 0.06,
-          width: 0.76,
-          height: 0.82,
-          shape: KanjiFusionSlotShape.enclosure,
-          contentLeft: 0.30,
-          contentTop: 0.02,
-          contentWidth: 0.40,
-          contentHeight: 0.18,
-        ),
-        KanjiFusionSlot(
-          component: enclosureInnerComponent,
-          left: 0.29,
-          top: 0.24,
-          width: 0.42,
-          height: 0.46,
-        ),
-      ];
+    if (enclosureInnerComponent != null) {
+      return _FusionStructure(
+        slots: [
+          const KanjiFusionSlot(
+            component: '囗',
+            left: 0.12,
+            top: 0.06,
+            width: 0.76,
+            height: 0.82,
+            shape: KanjiFusionSlotShape.enclosure,
+            contentLeft: 0.30,
+            contentTop: 0.02,
+            contentWidth: 0.40,
+            contentHeight: 0.18,
+          ),
+          KanjiFusionSlot(
+            component: enclosureInnerComponent,
+            left: 0.29,
+            top: 0.24,
+            width: 0.42,
+            height: 0.46,
+          ),
+        ],
+      );
     }
 
-
-    if (kanji == '炭' && difficulty != KanjiFusionDifficulty.easy) {
-      return const [
-        KanjiFusionSlot(
-          component: '山',
-          left: 0.12,
-          top: 0.04,
-          width: 0.76,
-          height: 0.25,
-        ),
-        KanjiFusionSlot(
-          component: '厂',
-          left: 0.12,
-          top: 0.34,
-          width: 0.76,
-          height: 0.60,
-          shape: KanjiFusionSlotShape.cliff,
-          contentLeft: 0.02,
-          contentTop: 0.34,
-          contentWidth: 0.30,
-          contentHeight: 0.46,
-        ),
-        KanjiFusionSlot(
-          component: '火',
-          left: 0.42,
-          top: 0.56,
-          width: 0.46,
-          height: 0.38,
-        ),
-      ];
+    if (kanji == '炭') {
+      return const _FusionStructure(
+        slots: [
+          KanjiFusionSlot(
+            component: '山',
+            left: 0.13,
+            top: 0.05,
+            width: 0.74,
+            height: 0.27,
+          ),
+          KanjiFusionSlot(
+            component: '灰',
+            left: 0.18,
+            top: 0.37,
+            width: 0.64,
+            height: 0.56,
+          ),
+        ],
+      );
     }
-
 
     String? rightHookLeftComponent;
-
     switch (kanji) {
       case '何':
         rightHookLeftComponent = '亻';
@@ -633,85 +744,604 @@ class KanjiFusionRoundGenerator {
         break;
     }
 
-    if (rightHookLeftComponent != null &&
-        difficulty != KanjiFusionDifficulty.easy) {
-      return [
-        KanjiFusionSlot(
-          component: rightHookLeftComponent,
-          left: 0.05,
-          top: 0.08,
-          width: 0.34,
-          height: 0.84,
-        ),
-        const KanjiFusionSlot(
-          component: '丁',
-          left: 0.43,
-          top: 0.08,
-          width: 0.52,
-          height: 0.84,
-          shape: KanjiFusionSlotShape.rightHook,
-          contentLeft: 0.30,
-          contentTop: 0.02,
-          contentWidth: 0.40,
-          contentHeight: 0.20,
-        ),
-        const KanjiFusionSlot(
-          component: '口',
-          left: 0.43,
-          top: 0.35,
-          width: 0.29,
-          height: 0.57,
-        ),
-      ];
+    if (rightHookLeftComponent != null) {
+      return _FusionStructure(
+        groups: const [
+          KanjiFusionGroup(
+            component: '可',
+            left: 0.40,
+            top: 0.05,
+            width: 0.57,
+            height: 0.90,
+          ),
+        ],
+        slots: [
+          KanjiFusionSlot(
+            component: rightHookLeftComponent,
+            left: 0.05,
+            top: 0.08,
+            width: 0.30,
+            height: 0.84,
+          ),
+          const KanjiFusionSlot(
+            component: '丁',
+            left: 0.43,
+            top: 0.08,
+            width: 0.52,
+            height: 0.84,
+            shape: KanjiFusionSlotShape.rightHook,
+            contentLeft: 0.30,
+            contentTop: 0.02,
+            contentWidth: 0.40,
+            contentHeight: 0.20,
+          ),
+          const KanjiFusionSlot(
+            component: '口',
+            left: 0.43,
+            top: 0.35,
+            width: 0.29,
+            height: 0.57,
+          ),
+        ],
+      );
     }
 
+    if (kanji == '兄') {
+      return const _FusionStructure(
+        slots: [
+          KanjiFusionSlot(
+            component: '口',
+            left: 0.24,
+            top: 0.08,
+            width: 0.52,
+            height: 0.34,
+          ),
+          KanjiFusionSlot(
+            component: '儿',
+            left: 0.18,
+            top: 0.48,
+            width: 0.64,
+            height: 0.44,
+          ),
+        ],
+      );
+    }
 
+    if (kanji == '流') {
+      return const _FusionStructure(
+        slots: [
+          KanjiFusionSlot(
+            component: '氵',
+            left: 0.05,
+            top: 0.08,
+            width: 0.27,
+            height: 0.84,
+          ),
+          KanjiFusionSlot(
+            component: '𠫓',
+            left: 0.39,
+            top: 0.08,
+            width: 0.55,
+            height: 0.34,
+          ),
+          KanjiFusionSlot(
+            component: '川',
+            left: 0.39,
+            top: 0.49,
+            width: 0.55,
+            height: 0.43,
+          ),
+        ],
+      );
+    }
+
+    if (kanji == '歌') {
+      return const _FusionStructure(
+        groups: [
+          KanjiFusionGroup(
+            component: '哥',
+            left: 0.04,
+            top: 0.05,
+            width: 0.60,
+            height: 0.90,
+          ),
+          KanjiFusionGroup(
+            component: '可',
+            left: 0.07,
+            top: 0.08,
+            width: 0.54,
+            height: 0.39,
+            depth: 1,
+          ),
+          KanjiFusionGroup(
+            component: '可',
+            left: 0.07,
+            top: 0.50,
+            width: 0.54,
+            height: 0.39,
+            depth: 1,
+          ),
+        ],
+        slots: [
+          KanjiFusionSlot(
+            component: '丁',
+            left: 0.09,
+            top: 0.10,
+            width: 0.50,
+            height: 0.34,
+            shape: KanjiFusionSlotShape.rightHook,
+            contentLeft: 0.30,
+            contentTop: 0.02,
+            contentWidth: 0.40,
+            contentHeight: 0.20,
+          ),
+          KanjiFusionSlot(
+            component: '口',
+            left: 0.09,
+            top: 0.22,
+            width: 0.28,
+            height: 0.20,
+          ),
+          KanjiFusionSlot(
+            component: '丁',
+            left: 0.09,
+            top: 0.52,
+            width: 0.50,
+            height: 0.34,
+            shape: KanjiFusionSlotShape.rightHook,
+            contentLeft: 0.30,
+            contentTop: 0.02,
+            contentWidth: 0.40,
+            contentHeight: 0.20,
+          ),
+          KanjiFusionSlot(
+            component: '口',
+            left: 0.09,
+            top: 0.64,
+            width: 0.28,
+            height: 0.20,
+          ),
+          KanjiFusionSlot(
+            component: '欠',
+            left: 0.68,
+            top: 0.11,
+            width: 0.27,
+            height: 0.78,
+          ),
+        ],
+      );
+    }
+
+    if (kanji == '鳴') {
+      return const _FusionStructure(
+        slots: [
+          KanjiFusionSlot(
+            component: '口',
+            left: 0.05,
+            top: 0.29,
+            width: 0.27,
+            height: 0.40,
+          ),
+          KanjiFusionSlot(
+            component: '鳥',
+            left: 0.38,
+            top: 0.06,
+            width: 0.57,
+            height: 0.87,
+          ),
+        ],
+      );
+    }
+
+    if (kanji == '置') {
+      return const _FusionStructure(
+        slots: [
+          KanjiFusionSlot(
+            component: '罒',
+            left: 0.13,
+            top: 0.05,
+            width: 0.74,
+            height: 0.25,
+          ),
+          KanjiFusionSlot(
+            component: '直',
+            left: 0.18,
+            top: 0.35,
+            width: 0.64,
+            height: 0.58,
+          ),
+        ],
+      );
+    }
+
+    if (kanji == '電') {
+      return const _FusionStructure(
+        slots: [
+          KanjiFusionSlot(
+            component: '雨',
+            left: 0.13,
+            top: 0.05,
+            width: 0.74,
+            height: 0.31,
+          ),
+          KanjiFusionSlot(
+            component: '电',
+            left: 0.21,
+            top: 0.40,
+            width: 0.58,
+            height: 0.53,
+          ),
+        ],
+      );
+    }
+
+    if (kanji == '新') {
+      return const _FusionStructure(
+        groups: [
+          KanjiFusionGroup(
+            component: '亲',
+            left: 0.04,
+            top: 0.04,
+            width: 0.60,
+            height: 0.92,
+          ),
+        ],
+        slots: [
+          KanjiFusionSlot(
+            component: '立',
+            left: 0.09,
+            top: 0.08,
+            width: 0.50,
+            height: 0.35,
+          ),
+          KanjiFusionSlot(
+            component: '木',
+            left: 0.09,
+            top: 0.49,
+            width: 0.50,
+            height: 0.40,
+          ),
+          KanjiFusionSlot(
+            component: '斤',
+            left: 0.68,
+            top: 0.10,
+            width: 0.27,
+            height: 0.80,
+          ),
+        ],
+      );
+    }
+
+    if (kanji == '親') {
+      return const _FusionStructure(
+        groups: [
+          KanjiFusionGroup(
+            component: '亲',
+            left: 0.03,
+            top: 0.04,
+            width: 0.52,
+            height: 0.92,
+          ),
+          KanjiFusionGroup(
+            component: '見',
+            left: 0.57,
+            top: 0.04,
+            width: 0.40,
+            height: 0.92,
+          ),
+        ],
+        slots: [
+          KanjiFusionSlot(
+            component: '立',
+            left: 0.07,
+            top: 0.08,
+            width: 0.44,
+            height: 0.35,
+          ),
+          KanjiFusionSlot(
+            component: '木',
+            left: 0.07,
+            top: 0.49,
+            width: 0.44,
+            height: 0.40,
+          ),
+          KanjiFusionSlot(
+            component: '目',
+            left: 0.61,
+            top: 0.08,
+            width: 0.32,
+            height: 0.38,
+          ),
+          KanjiFusionSlot(
+            component: '儿',
+            left: 0.61,
+            top: 0.52,
+            width: 0.32,
+            height: 0.37,
+          ),
+        ],
+      );
+    }
 
     return null;
   }
 
-  static List<KanjiFusionSlot> _parseSlots(String ids) {
-    final parser = _IdsSlotParser(ids);
-    parser.parse(0.05, 0.05, 0.90, 0.90);
-    return parser.slots;
+  static _FusionStructure _parseStructure(String ids) {
+    final parser = _IdsStructureParser(
+      nestedIds: _nestedComponentIds,
+    );
+    parser.parseIds(ids, 0.05, 0.05, 0.90, 0.90);
+    return _FusionStructure(
+      slots: parser.slots,
+      groups: parser.groups,
+    );
   }
 }
 
-class _IdsSlotParser {
-  final String source;
-  int offset = 0;
+class _IdsStructureParser {
+  final Map<String, String> nestedIds;
   final List<KanjiFusionSlot> slots = [];
-  _IdsSlotParser(this.source);
+  final List<KanjiFusionGroup> groups = [];
 
-  void parse(double l, double t, double w, double h) {
-    final token = _next();
+  _IdsStructureParser({required this.nestedIds});
+
+  void parseIds(
+    String ids,
+    double left,
+    double top,
+    double width,
+    double height, {
+    int depth = 0,
+  }) {
+    final cursor = _IdsCursor(ids);
+    _parse(cursor, left, top, width, height, depth: depth);
+  }
+
+  void _parse(
+    _IdsCursor cursor,
+    double left,
+    double top,
+    double width,
+    double height, {
+    required int depth,
+    KanjiFusionSlotShape leafShape = KanjiFusionSlotShape.standard,
+    double contentLeft = 0,
+    double contentTop = 0,
+    double contentWidth = 1,
+    double contentHeight = 1,
+  }) {
+    final token = cursor.next();
+
     switch (token) {
-      case '⿰': _splitHorizontal(2,l,t,w,h); break;
-      case '⿲': _splitHorizontal(3,l,t,w,h); break;
-      case '⿱': _splitVertical(2,l,t,w,h); break;
-      case '⿳': _splitVertical(3,l,t,w,h); break;
-      case '⿴': case '⿵': case '⿶': case '⿷':
-        parse(l,t,w,h); parse(l+w*.23,t+h*.22,w*.58,h*.60); break;
-      case '⿸': case '⿹': case '⿺':
-        parse(l,t,w,h); parse(l+w*.30,t+h*.28,w*.62,h*.64); break;
+      case '⿰':
+        _splitHorizontal(cursor, 2, left, top, width, height, depth);
+        return;
+      case '⿲':
+        _splitHorizontal(cursor, 3, left, top, width, height, depth);
+        return;
+      case '⿱':
+        _splitVertical(cursor, 2, left, top, width, height, depth);
+        return;
+      case '⿳':
+        _splitVertical(cursor, 3, left, top, width, height, depth);
+        return;
+      case '⿴':
+        _parse(
+          cursor,
+          left,
+          top,
+          width,
+          height,
+          depth: depth,
+          leafShape: KanjiFusionSlotShape.enclosure,
+          contentLeft: 0.30,
+          contentTop: 0.02,
+          contentWidth: 0.40,
+          contentHeight: 0.18,
+        );
+        _parse(
+          cursor,
+          left + (width * 0.23),
+          top + (height * 0.22),
+          width * 0.58,
+          height * 0.60,
+          depth: depth,
+        );
+        return;
+      case '⿵':
+        _parse(
+          cursor,
+          left,
+          top,
+          width,
+          height,
+          depth: depth,
+          leafShape: KanjiFusionSlotShape.gate,
+          contentLeft: 0.30,
+          contentTop: 0.02,
+          contentWidth: 0.40,
+          contentHeight: 0.20,
+        );
+        _parse(
+          cursor,
+          left + (width * 0.23),
+          top + (height * 0.22),
+          width * 0.58,
+          height * 0.60,
+          depth: depth,
+        );
+        return;
+      case '⿸':
+        _parse(
+          cursor,
+          left,
+          top,
+          width,
+          height,
+          depth: depth,
+          leafShape: KanjiFusionSlotShape.cliff,
+          contentLeft: 0.04,
+          contentTop: 0.02,
+          contentWidth: 0.42,
+          contentHeight: 0.22,
+        );
+        _parse(
+          cursor,
+          left + (width * 0.30),
+          top + (height * 0.28),
+          width * 0.62,
+          height * 0.64,
+          depth: depth,
+        );
+        return;
+      case '⿹':
+        _parse(
+          cursor,
+          left,
+          top,
+          width,
+          height,
+          depth: depth,
+          leafShape: KanjiFusionSlotShape.rightHook,
+          contentLeft: 0.30,
+          contentTop: 0.02,
+          contentWidth: 0.40,
+          contentHeight: 0.20,
+        );
+        _parse(
+          cursor,
+          left,
+          top + (height * 0.32),
+          width * 0.58,
+          height * 0.66,
+          depth: depth,
+        );
+        return;
+      case '⿶':
+      case '⿷':
+      case '⿺':
+        _parse(cursor, left, top, width, height, depth: depth);
+        _parse(
+          cursor,
+          left + (width * 0.30),
+          top + (height * 0.28),
+          width * 0.62,
+          height * 0.64,
+          depth: depth,
+        );
+        return;
       case '⿻':
-        parse(l,t,w,h); parse(l+w*.12,t+h*.40,w*.76,h*.20); break;
-      default:
-        slots.add(KanjiFusionSlot(component: token,left:l,top:t,width:w,height:h));
+        _parse(cursor, left, top, width, height, depth: depth);
+        _parse(
+          cursor,
+          left + (width * 0.12),
+          top + (height * 0.40),
+          width * 0.76,
+          height * 0.20,
+          depth: depth,
+        );
+        return;
+    }
+
+    final nestedIdsForToken = nestedIds[token];
+    if (nestedIdsForToken != null) {
+      groups.add(
+        KanjiFusionGroup(
+          component: token,
+          left: left,
+          top: top,
+          width: width,
+          height: height,
+          depth: depth,
+        ),
+      );
+
+      final horizontalPadding = width * 0.055;
+      final verticalPadding = height * 0.055;
+      parseIds(
+        nestedIdsForToken,
+        left + horizontalPadding,
+        top + verticalPadding,
+        width - (horizontalPadding * 2),
+        height - (verticalPadding * 2),
+        depth: depth + 1,
+      );
+      return;
+    }
+
+    slots.add(
+      KanjiFusionSlot(
+        component: token,
+        left: left,
+        top: top,
+        width: width,
+        height: height,
+        shape: leafShape,
+        contentLeft: contentLeft,
+        contentTop: contentTop,
+        contentWidth: contentWidth,
+        contentHeight: contentHeight,
+      ),
+    );
+  }
+
+  void _splitHorizontal(
+    _IdsCursor cursor,
+    int count,
+    double left,
+    double top,
+    double width,
+    double height,
+    int depth,
+  ) {
+    const gap = 0.035;
+    final childWidth = (width - (gap * (count - 1))) / count;
+    for (var index = 0; index < count; index++) {
+      _parse(
+        cursor,
+        left + (index * (childWidth + gap)),
+        top,
+        childWidth,
+        height,
+        depth: depth,
+      );
     }
   }
-  void _splitHorizontal(int n,double l,double t,double w,double h) {
-    const gap=.035; final cw=(w-gap*(n-1))/n;
-    for(var i=0;i<n;i++) { parse(l+i*(cw+gap),t,cw,h); }
-  }
-  void _splitVertical(int n,double l,double t,double w,double h) {
-    const gap=.035; final ch=(h-gap*(n-1))/n;
-    for(var i=0;i<n;i++) { parse(l,t+i*(ch+gap),w,ch); }
-  }
-  String _next() {
-    final rune = source.runes.elementAt(offset);
-    offset++;
-    return String.fromCharCode(rune);
+
+  void _splitVertical(
+    _IdsCursor cursor,
+    int count,
+    double left,
+    double top,
+    double width,
+    double height,
+    int depth,
+  ) {
+    const gap = 0.035;
+    final childHeight = (height - (gap * (count - 1))) / count;
+    for (var index = 0; index < count; index++) {
+      _parse(
+        cursor,
+        left,
+        top + (index * (childHeight + gap)),
+        width,
+        childHeight,
+        depth: depth,
+      );
+    }
   }
 }
 
+class _IdsCursor {
+  final List<int> runes;
+  int offset = 0;
+
+  _IdsCursor(String source) : runes = source.runes.toList(growable: false);
+
+  String next() {
+    if (offset >= runes.length) {
+      throw StateError('Unexpected end of IDS structure.');
+    }
+    return String.fromCharCode(runes[offset++]);
+  }
+}
