@@ -48,3 +48,82 @@ jobs:
           section: priority
           template: feature_request.yml
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set Priority field on project item
+        if: steps.issue-parser-bug.outputs.jsonString != '' || steps.issue-parser-feature.outputs.jsonString != ''
+        uses: actions/github-script@v7
+        env:
+          ISSUE_FORM_BUG: ${{ steps.issue-parser-bug.outputs.jsonString }}
+          ISSUE_FORM_FEATURE: ${{ steps.issue-parser-feature.outputs.jsonString }}
+        with:
+          # A classic PAT with "project" scope, stored as a repo secret.
+          # The default GITHUB_TOKEN cannot access Projects, so this is required.
+          github-token: ${{ secrets.PROJECT_PAT }}
+          script: |
+            // --- fill these in (see notes below for how to find them) ---
+            const projectId = "PVT_kwHOCsHPPs4Bf1fI";
+            const fieldId = "PVTSSF_lAHOCsHPPs4Bf1fIzhaFhD8";
+            const optionIdByPriority = {
+              High: "0d25c4d4",
+              Medium: "4f92d73d",
+              Low: "847f80dd",
+            };
+            // ---------------------------------------------------------
+
+            // Read via env, not directly interpolated into the script, since
+            // this JSON is derived from user-submitted issue body content.
+            const raw = process.env.ISSUE_FORM_BUG || process.env.ISSUE_FORM_FEATURE;
+            if (!raw) return;
+
+            const issueForm = JSON.parse(raw);
+            const optionId = optionIdByPriority[issueForm.priority];
+            if (!optionId) return; // priority value isn't one we map to a Project option
+
+            const issueNodeId = context.payload.issue.node_id;
+
+            // Find this issue's item id within the project (an issue can be in multiple projects)
+            const findItem = await github.graphql(
+              `query($issueId: ID!) {
+                node(id: $issueId) {
+                  ... on Issue {
+                    projectItems(first: 10) {
+                      nodes { id project { id } }
+                    }
+                  }
+                }
+              }`,
+              { issueId: issueNodeId }
+            );
+
+            let item = findItem.node.projectItems.nodes.find(
+              (n) => n.project.id === projectId
+            );
+
+            // If the issue hasn't been added to the project yet (e.g. this Action
+            // runs before the built-in auto-add workflow does), add it ourselves
+            // so we don't silently skip setting Priority due to a race condition.
+            if (!item) {
+              const addResult = await github.graphql(
+                `mutation($projectId: ID!, $contentId: ID!) {
+                  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                    item { id }
+                  }
+                }`,
+                { projectId, contentId: issueNodeId }
+              );
+              item = { id: addResult.addProjectV2ItemById.item.id };
+            }
+
+            await github.graphql(
+              `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+                updateProjectV2ItemFieldValue(input: {
+                  projectId: $projectId,
+                  itemId: $itemId,
+                  fieldId: $fieldId,
+                  value: { singleSelectOptionId: $optionId }
+                }) {
+                  projectV2Item { id }
+                }
+              }`,
+              { projectId, itemId: item.id, fieldId, optionId }
+            );
