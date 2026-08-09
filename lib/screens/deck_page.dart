@@ -238,6 +238,8 @@ class _DeckPageState extends State<DeckPage> {
   Future<void> openFocusStudy(_FocusStudyType type) async {
     await createReviewCardsForDeck(widget.deck);
 
+    if (!mounted) return;
+
     final focusCards = _focusCardsFor(type);
     final focusTermIds = focusCards.map((card) => card.termId).toSet();
     final focusTerms = widget.deck.terms.where((term) {
