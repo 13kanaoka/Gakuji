@@ -1,6 +1,6 @@
 name: 🐛 Bug Report
 description: Report a reproducible glitch, error, or UI issue.
-title: "fix(scope): "
+title: "fix(): "
 labels: ["bug"]
 body:
   - type: markdown
