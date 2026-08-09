@@ -9,6 +9,7 @@ import '../models/review_card.dart';
 import '../models/term.dart';
 import '../services/deck_storage.dart';
 import '../services/gakuji_user_data_store.dart';
+import '../services/word_fusion_round_generator.dart';
 import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
@@ -21,15 +22,13 @@ import 'study_page.dart';
 import 'writing_study_page.dart';
 import 'hybrid_study_page.dart';
 import 'kanji_fusion_game_page.dart';
-import 'detective_full_flow_test_page.dart';
+import 'word_fusion_game_page.dart';
+import 'imposter_detective_page.dart';
 
 class DeckPage extends StatefulWidget {
   final Deck deck;
 
-  const DeckPage({
-    super.key,
-    required this.deck,
-  });
+  const DeckPage({super.key, required this.deck});
 
   @override
   State<DeckPage> createState() => _DeckPageState();
@@ -109,9 +108,7 @@ class _DeckPageState extends State<DeckPage> {
     return getReviewCardsForDeck(widget.deck.id);
   }
 
-  Future<List<ReviewCard>> _reviewCardsForCurrentSession({
-    DateTime? now,
-  }) {
+  Future<List<ReviewCard>> _reviewCardsForCurrentSession({DateTime? now}) {
     return getLimitedReviewCardsForDeck(
       widget.deck.id,
       now: now,
@@ -190,16 +187,20 @@ class _DeckPageState extends State<DeckPage> {
 
     final savedIndex = await DeckStorage.loadProgress(widget.deck.id);
     final savedShuffle = await DeckStorage.loadShuffle(widget.deck.id);
-    final savedReviewEnabled =
-        await DeckStorage.loadReviewEnabled(widget.deck.id);
-    final savedActiveStudyMode =
-        await DeckStorage.loadActiveStudyMode(widget.deck.id);
-    final savedReviewEnabledAt =
-        await DeckStorage.loadReviewEnabledAt(widget.deck.id);
+    final savedReviewEnabled = await DeckStorage.loadReviewEnabled(
+      widget.deck.id,
+    );
+    final savedActiveStudyMode = await DeckStorage.loadActiveStudyMode(
+      widget.deck.id,
+    );
+    final savedReviewEnabledAt = await DeckStorage.loadReviewEnabledAt(
+      widget.deck.id,
+    );
 
     final prefs = await SharedPreferences.getInstance();
-    final savedReviewSessionStartedAt =
-        prefs.getString(reviewSessionStartedPreferenceKey);
+    final savedReviewSessionStartedAt = prefs.getString(
+      reviewSessionStartedPreferenceKey,
+    );
 
     if (!mounted) return;
 
@@ -236,8 +237,6 @@ class _DeckPageState extends State<DeckPage> {
 
   Future<void> openFocusStudy(_FocusStudyType type) async {
     await createReviewCardsForDeck(widget.deck);
-
-    if (!mounted) return;
 
     final focusCards = _focusCardsFor(type);
     final focusTermIds = focusCards.map((card) => card.termId).toSet();
@@ -387,16 +386,12 @@ class _DeckPageState extends State<DeckPage> {
           title: Text(
             'Delete Deck?',
             textScaler: TextScaler.noScaling,
-            style: GakujiText.large.copyWith(
-              color: GakujiColors.darkGray,
-            ),
+            style: GakujiText.large.copyWith(color: GakujiColors.darkGray),
           ),
           content: Text(
             'This will permanently delete this deck.',
             textScaler: TextScaler.noScaling,
-            style: GakujiText.small.copyWith(
-              color: GakujiColors.mediumGray,
-            ),
+            style: GakujiText.small.copyWith(color: GakujiColors.mediumGray),
           ),
           actions: [
             TextButton(
@@ -418,9 +413,7 @@ class _DeckPageState extends State<DeckPage> {
               child: Text(
                 'Delete',
                 textScaler: TextScaler.noScaling,
-                style: GakujiText.small.copyWith(
-                  color: GakujiColors.pinRed,
-                ),
+                style: GakujiText.small.copyWith(color: GakujiColors.pinRed),
               ),
             ),
           ],
@@ -558,10 +551,8 @@ class _DeckPageState extends State<DeckPage> {
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => ReviewStudyPage(
-            deck: widget.deck,
-            reviewCards: dueCards,
-          ),
+          builder: (context) =>
+              ReviewStudyPage(deck: widget.deck, reviewCards: dueCards),
         ),
       );
 
@@ -653,18 +644,19 @@ class _DeckPageState extends State<DeckPage> {
     scheduleUserDataSave();
   }
 
-  Future<void> openDetectiveGame() async {
+  Future<void> openCrosscheckGame() async {
     final gameTerms = List<Term>.from(widget.deck.terms);
 
     if (gameTerms.isEmpty) {
-      _showFloatingMessage('No terms to inspect');
+      _showFloatingMessage('No entries available for Crosscheck');
       return;
     }
 
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => DetectiveFullFlowTestPage(),
+        builder: (_) =>
+            ImposterDetectivePage(deck: widget.deck, terms: gameTerms),
       ),
     );
 
@@ -675,12 +667,10 @@ class _DeckPageState extends State<DeckPage> {
   }
 
   Future<void> openKanjiFusionGame() async {
-    final gameTerms = isHybridDeck
-        ? widget.deck.terms.where(widget.deck.writingEnabledFor).toList()
-        : List<Term>.from(widget.deck.terms);
+    final gameTerms = List<Term>.from(widget.deck.terms);
 
     if (gameTerms.isEmpty) {
-      _showFloatingMessage('No writing terms available for Fusion');
+      _showFloatingMessage('No terms available for Fusion');
       return;
     }
 
@@ -700,12 +690,37 @@ class _DeckPageState extends State<DeckPage> {
     scheduleUserDataSave();
   }
 
-  Future<void> openDeckEdit() async {
+  Future<void> openWordFusionGame() async {
+    final gameTerms = List<Term>.from(widget.deck.terms);
+
+    final eligibleCount = WordFusionRoundGenerator.eligibleTermCount(gameTerms);
+
+    if (eligibleCount == 0) {
+      _showFloatingMessage('Word Fusion needs a word written with 2–6 kanji');
+      return;
+    }
+
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => DeckEditPage(deck: widget.deck),
+        builder: (_) => WordFusionGamePage(
+          terms: gameTerms,
+          deckName: widget.deck.name,
+          accentColor: deckPrimaryColor,
+        ),
       ),
+    );
+
+    if (!mounted) return;
+
+    setState(() {});
+    scheduleUserDataSave();
+  }
+
+  Future<void> openDeckEdit() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => DeckEditPage(deck: widget.deck)),
     );
 
     await refreshDeckAfterChanges();
@@ -737,11 +752,7 @@ class _DeckPageState extends State<DeckPage> {
     if (!dataLoaded) {
       return Scaffold(
         backgroundColor: GakujiColors.warmBackground,
-        body: Center(
-          child: CircularProgressIndicator(
-            color: deckPrimaryColor,
-          ),
-        ),
+        body: Center(child: CircularProgressIndicator(color: deckPrimaryColor)),
       );
     }
 
@@ -772,20 +783,14 @@ class _DeckPageState extends State<DeckPage> {
                           const SizedBox(height: 10),
                           _studySection(),
                           if (isReviewMode && reviewEnabled) ...[
-                            const SizedBox(
-                              height: GakujiSpacing.sectionGap,
-                            ),
+                            const SizedBox(height: GakujiSpacing.sectionGap),
                             _focusSection(),
                           ],
                           if (isReviewMode && reviewEnabled) ...[
-                            const SizedBox(
-                              height: GakujiSpacing.sectionGap,
-                            ),
+                            const SizedBox(height: GakujiSpacing.sectionGap),
                             _reviewScheduleSection(),
                           ],
-                          const SizedBox(
-                            height: GakujiSpacing.sectionGap,
-                          ),
+                          const SizedBox(height: GakujiSpacing.sectionGap),
                           _deckInformationSection(),
                         ],
                       ),
@@ -813,16 +818,8 @@ class _DeckPageState extends State<DeckPage> {
             return const LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
-              colors: [
-                Colors.black,
-                Colors.black,
-                Colors.transparent,
-              ],
-              stops: [
-                0.0,
-                0.62,
-                1.0,
-              ],
+              colors: [Colors.black, Colors.black, Colors.transparent],
+              stops: [0.0, 0.62, 1.0],
             ).createShader(bounds);
           },
           child: Opacity(
@@ -913,9 +910,7 @@ class _DeckPageState extends State<DeckPage> {
           Positioned(
             right: 4,
             top: 58,
-            child: IgnorePointer(
-              child: _deckWatermark(),
-            ),
+            child: IgnorePointer(child: _deckWatermark()),
           ),
           Positioned(
             left: 0,
@@ -1035,11 +1030,11 @@ class _DeckPageState extends State<DeckPage> {
         _flashcardsButton(),
         if (!isReviewMode) ...[
           const SizedBox(height: GakujiSpacing.buttonGap),
-          _detectiveButton(),
-          if (isWritingDeck || isHybridDeck) ...[
-            const SizedBox(height: GakujiSpacing.buttonGap),
-            _kanjiFusionButton(),
-          ],
+          _crosscheckButton(),
+          const SizedBox(height: GakujiSpacing.buttonGap),
+          _kanjiFusionButton(),
+          const SizedBox(height: GakujiSpacing.buttonGap),
+          _wordFusionButton(),
         ],
       ],
     );
@@ -1068,9 +1063,7 @@ class _DeckPageState extends State<DeckPage> {
     final count = _focusCount(type);
     final enabled = count > 0;
 
-    final backgroundColor = enabled
-        ? deckPrimaryColor
-        : GakujiColors.warmCard;
+    final backgroundColor = enabled ? deckPrimaryColor : GakujiColors.warmCard;
 
     final contentColor = enabled
         ? GakujiColors.warmCard
@@ -1087,10 +1080,7 @@ class _DeckPageState extends State<DeckPage> {
           borderRadius: BorderRadius.circular(GakujiRadius.small),
           border: enabled
               ? null
-              : Border.all(
-                  color: GakujiColors.softBorder,
-                  width: 1.7,
-                ),
+              : Border.all(color: GakujiColors.softBorder, width: 1.7),
         ),
         child: Material(
           color: Colors.transparent,
@@ -1112,9 +1102,7 @@ class _DeckPageState extends State<DeckPage> {
                     child: Text(
                       _focusLabel(type),
                       textScaler: TextScaler.noScaling,
-                      style: GakujiText.medium.copyWith(
-                        color: contentColor,
-                      ),
+                      style: GakujiText.medium.copyWith(color: contentColor),
                     ),
                   ),
                   Text(
@@ -1165,9 +1153,7 @@ class _DeckPageState extends State<DeckPage> {
         const SizedBox(height: 18),
         Stack(
           children: [
-            ReviewScheduleCard(
-              reviewCards: deckReviewCards,
-            ),
+            ReviewScheduleCard(reviewCards: deckReviewCards),
             Positioned(
               top: 10,
               right: 10,
@@ -1209,10 +1195,7 @@ class _DeckPageState extends State<DeckPage> {
             ? deckPrimaryColor.withValues(alpha: 0.78)
             : GakujiColors.warmBackground,
         borderRadius: BorderRadius.circular(GakujiRadius.pill),
-        border: Border.all(
-          color: deckPrimaryColor,
-          width: 2.3,
-        ),
+        border: Border.all(color: deckPrimaryColor, width: 2.3),
         boxShadow: selected ? [GakujiShadows.soft] : const [],
       ),
       child: Material(
@@ -1242,8 +1225,7 @@ class _DeckPageState extends State<DeckPage> {
 
   Widget _flashcardsButton() {
     final enableReviewButton = isReviewMode && !reviewEnabled;
-    final reviewUnavailable =
-        isReviewMode && reviewEnabled && !reviewAvailable;
+    final reviewUnavailable = isReviewMode && reviewEnabled && !reviewAvailable;
 
     final backgroundColor = enableReviewButton || reviewUnavailable
         ? GakujiColors.warmCard
@@ -1252,8 +1234,8 @@ class _DeckPageState extends State<DeckPage> {
     final contentColor = enableReviewButton
         ? deckPrimaryColor
         : reviewUnavailable
-            ? GakujiColors.softGray
-            : GakujiColors.warmCard;
+        ? GakujiColors.softGray
+        : GakujiColors.warmCard;
 
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 180),
@@ -1263,10 +1245,7 @@ class _DeckPageState extends State<DeckPage> {
         switchInCurve: Curves.easeOutCubic,
         switchOutCurve: Curves.easeInCubic,
         transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: child,
-          );
+          return FadeTransition(opacity: animation, child: child);
         },
         child: Container(
           key: ValueKey(
@@ -1278,16 +1257,10 @@ class _DeckPageState extends State<DeckPage> {
             color: backgroundColor,
             borderRadius: BorderRadius.circular(GakujiRadius.small),
             border: enableReviewButton
-                ? Border.all(
-                    color: deckPrimaryColor,
-                    width: 2,
-                  )
+                ? Border.all(color: deckPrimaryColor, width: 2)
                 : reviewUnavailable
-                    ? Border.all(
-                        color: GakujiColors.softBorder,
-                        width: 1.7,
-                      )
-                    : null,
+                ? Border.all(color: GakujiColors.softBorder, width: 1.7)
+                : null,
           ),
           child: Material(
             color: Colors.transparent,
@@ -1360,7 +1333,7 @@ class _DeckPageState extends State<DeckPage> {
     );
   }
 
-  Widget _detectiveButton() {
+  Widget _crosscheckButton() {
     return Container(
       height: 54,
       width: double.infinity,
@@ -1377,22 +1350,20 @@ class _DeckPageState extends State<DeckPage> {
         borderRadius: BorderRadius.circular(GakujiRadius.small),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: openDetectiveGame,
+          onTap: openCrosscheckGame,
           splashColor: deckPrimaryColor.withValues(alpha: 0.08),
           highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(17, 0, 17, 0),
             child: Row(
               children: [
-                _detectiveIcon(),
+                _crosscheckIcon(),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    'Detective',
+                    'Crosscheck',
                     textScaler: TextScaler.noScaling,
-                    style: GakujiText.medium.copyWith(
-                      color: deckPrimaryColor,
-                    ),
+                    style: GakujiText.medium.copyWith(color: deckPrimaryColor),
                   ),
                 ),
                 Icon(
@@ -1438,9 +1409,7 @@ class _DeckPageState extends State<DeckPage> {
                   child: Text(
                     'Fusion',
                     textScaler: TextScaler.noScaling,
-                    style: GakujiText.medium.copyWith(
-                      color: deckPrimaryColor,
-                    ),
+                    style: GakujiText.medium.copyWith(color: deckPrimaryColor),
                   ),
                 ),
                 Icon(
@@ -1452,6 +1421,91 @@ class _DeckPageState extends State<DeckPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _wordFusionButton() {
+    return Container(
+      height: 54,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        border: Border.all(
+          color: deckPrimaryColor.withValues(alpha: 0.55),
+          width: 1.7,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: openWordFusionGame,
+          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(17, 0, 17, 0),
+            child: Row(
+              children: [
+                _wordFusionIcon(),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Word Fusion',
+                    textScaler: TextScaler.noScaling,
+                    style: GakujiText.medium.copyWith(color: deckPrimaryColor),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 38,
+                  color: deckPrimaryColor,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _wordFusionIcon() {
+    Widget miniTile(String text) {
+      return Container(
+        width: 22,
+        height: 25,
+        decoration: BoxDecoration(
+          color: GakujiColors.warmCard,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: deckPrimaryColor, width: 1.5),
+        ),
+        child: Center(
+          child: Text(
+            text,
+            textScaler: TextScaler.noScaling,
+            style: TextStyle(
+              fontFamily: GakujiFonts.japanese,
+              fontSize: 12,
+              height: 1,
+              fontWeight: FontWeight.w700,
+              color: deckPrimaryColor,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: 38,
+      height: 38,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(left: 0, top: 7, child: miniTile('学')),
+          Positioned(right: 0, bottom: 6, child: miniTile('校')),
+        ],
       ),
     );
   }
@@ -1471,11 +1525,7 @@ class _DeckPageState extends State<DeckPage> {
               shape: BoxShape.circle,
             ),
           ),
-          Icon(
-            Icons.auto_awesome_rounded,
-            size: 25,
-            color: deckPrimaryColor,
-          ),
+          Icon(Icons.auto_awesome_rounded, size: 25, color: deckPrimaryColor),
         ],
       ),
     );
@@ -1516,7 +1566,7 @@ class _DeckPageState extends State<DeckPage> {
     );
   }
 
-  Widget _detectiveIcon() {
+  Widget _crosscheckIcon() {
     return SizedBox(
       width: 38,
       height: 38,
@@ -1531,11 +1581,7 @@ class _DeckPageState extends State<DeckPage> {
               shape: BoxShape.circle,
             ),
           ),
-          Icon(
-            Icons.manage_search_rounded,
-            size: 28,
-            color: deckPrimaryColor,
-          ),
+          Icon(Icons.fact_check_rounded, size: 28, color: deckPrimaryColor),
         ],
       ),
     );
@@ -1579,11 +1625,13 @@ class _DeckPageState extends State<DeckPage> {
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    final iconColor =
-        isDestructive ? GakujiColors.pinRed : GakujiColors.mediumGray;
+    final iconColor = isDestructive
+        ? GakujiColors.pinRed
+        : GakujiColors.mediumGray;
 
-    final textColor =
-        isDestructive ? GakujiColors.pinRed : GakujiColors.darkGray;
+    final textColor = isDestructive
+        ? GakujiColors.pinRed
+        : GakujiColors.darkGray;
 
     return Container(
       height: 50,
@@ -1614,18 +1662,12 @@ class _DeckPageState extends State<DeckPage> {
             padding: const EdgeInsets.symmetric(horizontal: 18),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  size: 26,
-                  color: iconColor,
-                ),
+                Icon(icon, size: 26, color: iconColor),
                 const SizedBox(width: 12),
                 Text(
                   label,
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.medium.copyWith(
-                    color: textColor,
-                  ),
+                  style: GakujiText.medium.copyWith(color: textColor),
                 ),
               ],
             ),
@@ -1680,8 +1722,4 @@ class _DeckPageState extends State<DeckPage> {
   }
 }
 
-enum _FocusStudyType {
-  newCards,
-  learning,
-  review,
-}
+enum _FocusStudyType { newCards, learning, review }
