@@ -16,12 +16,12 @@ jobs:
           github-token: ${{ secrets.PROJECT_PAT }}
           script: |
             // --- fill these in (see notes below for how to find them) ---
-            const projectId = "PVT_xxxxxxxxxxxx";
-            const fieldId = "PVTSSF_xxxxxxxxxxxx";
+            const projectId = "PVT_kwHOCsHPPs4Bf1fI";
+            const fieldId = "PVTSSF_lAHOCsHPPs4Bf1fIzhaFhD8";
             const optionIdByLabel = {
-              "priority: high": "xxxxxxxx",
-              "priority: medium": "xxxxxxxx",
-              "priority: low": "xxxxxxxx",
+              "priority: high": "0d25c4d4",
+              "priority: medium": "4f92d73d",
+              "priority: low": "847f80dd",
             };
             // ---------------------------------------------------------
 
@@ -45,10 +45,24 @@ jobs:
               { issueId: issueNodeId }
             );
 
-            const item = findItem.node.projectItems.nodes.find(
+            let item = findItem.node.projectItems.nodes.find(
               (n) => n.project.id === projectId
             );
-            if (!item) return; // issue isn't on this project's board
+
+            // If the issue hasn't been added to the project yet (e.g. this Action
+            // runs before the built-in auto-add workflow does), add it ourselves
+            // so we don't silently skip setting Priority due to a race condition.
+            if (!item) {
+              const addResult = await github.graphql(
+                `mutation($projectId: ID!, $contentId: ID!) {
+                  addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) {
+                    item { id }
+                  }
+                }`,
+                { projectId, contentId: issueNodeId }
+              );
+              item = { id: addResult.addProjectV2ItemById.item.id };
+            }
 
             await github.graphql(
               `mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
