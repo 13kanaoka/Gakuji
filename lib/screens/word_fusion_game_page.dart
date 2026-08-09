@@ -542,9 +542,9 @@ class _WordFusionGamePageState extends State<WordFusionGamePage> {
 
               final child = interactive
                   ? DragTarget<int>(
-                      onWillAccept: (_) => !hasSubmitted,
-                      onAccept: (choiceIndex) {
-                        _placeChoiceInSlot(choiceIndex, slotIndex);
+                      onWillAcceptWithDetails: (_) => !hasSubmitted,
+                      onAcceptWithDetails: (choiceIndex) {
+                        _placeChoiceInSlot(choiceIndex as int, slotIndex);
                       },
                       builder: (context, candidates, rejected) {
                         return AnimatedScale(
