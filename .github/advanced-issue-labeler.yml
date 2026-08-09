@@ -1,0 +1,12 @@
+policy:
+  - template: ['bug_report.yml', 'feature_request.yml']
+    section:
+      - id: ['priority']
+        block-list: []
+        label:
+          - name: 'priority: low'
+            keys: ['Low']
+          - name: 'priority: medium'
+            keys: ['Medium']
+          - name: 'priority: high'
+            keys: ['High']
