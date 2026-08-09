@@ -6,7 +6,6 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for proposing a new feature! 
         Remember to use the `feat(scope): description` format for the title above!
 
   - type: dropdown
@@ -15,9 +14,9 @@ body:
       label: 🎯 Priority Level
       description: How important is this feature to the project?
       options:
-        - "Low (Nice-to-have, minor quality-of-life tweak)"
-        - "Medium (Solid enhancement, improves core user experience)"
-        - "High (Critical roadblock, essential for product launch)"
+        - "Low"
+        - "Medium"
+        - "High"
     validations:
       required: true
 
