@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/kanji_fusion_round.dart';
 import '../models/term.dart';
@@ -11,11 +12,13 @@ import '../widgets/gakuji_top_bar.dart';
 class KanjiFusionGamePage extends StatefulWidget {
   final List<Term> terms;
   final String deckName;
+  final Color? accentColor;
 
   const KanjiFusionGamePage({
     super.key,
     required this.terms,
     required this.deckName,
+    this.accentColor,
   });
 
   @override
@@ -66,6 +69,11 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       KanjiFusionRadicalMode.create;
   int currentRoundIndex = 0;
   int correctCount = 0;
+  int incorrectCount = 0;
+  int skippedCount = 0;
+  int highScore = 0;
+  bool isReviewSession = false;
+  final List<KanjiFusionRound> incorrectRounds = [];
 
   final List<int?> placedChoiceIndexes = [];
   final List<String?> placedComponentForms = [];
@@ -74,6 +82,10 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   String? activeChoiceForm;
   static const double _fusionFieldSize = 205;
   static const double _placedBlockSize = 54;
+  static const Color _studyIncorrectRed = Color(0xFFE06F6F);
+  static const Color _studyIncorrectRedFill = Color(0xFFF6A3A3);
+  static const String _highScorePreferenceKey =
+      'kanji_fusion_high_score_v1';
 
   final GlobalKey _fusionFieldKey = GlobalKey();
   final List<_PlacedFusionBlock> placedBlocks = [];
@@ -86,6 +98,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   bool sessionComplete = false;
 
   KanjiFusionRound get currentRound => rounds[currentRoundIndex];
+
+  Color get _accentColor =>
+      widget.accentColor ?? GakujiColors.deckBlue;
 
   List<String> get selectedComponents {
     switch (selectedDifficulty) {
@@ -108,6 +123,19 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
     final completed = currentRoundIndex + (hasSubmitted ? 1 : 0);
     return (completed / rounds.length).clamp(0.0, 1.0).toDouble();
+  }
+
+  int get arcadeScore {
+    if (rounds.isEmpty) return 0;
+
+    return ((correctCount / rounds.length) * 10000).round();
+  }
+
+  String _formatScore(int value) {
+    return value.toString().replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (match) => '${match[1]},',
+    );
   }
 
   bool get canFuse {
@@ -135,6 +163,33 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       radicalMode: selectedRadicalMode,
     );
     _resetRoundPlacement();
+    _loadHighScore();
+  }
+
+  Future<void> _loadHighScore() async {
+    final preferences = await SharedPreferences.getInstance();
+    final storedHighScore =
+        preferences.getInt(_highScorePreferenceKey) ?? 0;
+
+    if (!mounted || storedHighScore <= highScore) return;
+
+    setState(() {
+      highScore = storedHighScore;
+    });
+  }
+
+  Future<void> _recordHighScoreIfNeeded() async {
+    if (isReviewSession || rounds.isEmpty) return;
+
+    final completedScore = arcadeScore;
+    if (completedScore <= highScore) return;
+
+    setState(() {
+      highScore = completedScore;
+    });
+
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setInt(_highScorePreferenceKey, completedScore);
   }
 
   Future<void> _toggleChoice(int choiceIndex) async {
@@ -539,6 +594,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
       if (correct) {
         correctCount++;
+      } else {
+        incorrectCount++;
+        incorrectRounds.add(currentRound);
       }
     });
   }
@@ -550,6 +608,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       setState(() {
         sessionComplete = true;
       });
+      _recordHighScoreIfNeeded();
       return;
     }
 
@@ -564,19 +623,23 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   void _skipRound() {
     if (hasSubmitted) return;
 
-    if (currentRoundIndex >= rounds.length - 1) {
-      setState(() {
-        sessionComplete = true;
-      });
-      return;
-    }
-
     setState(() {
+      skippedCount++;
+
+      if (currentRoundIndex >= rounds.length - 1) {
+        sessionComplete = true;
+        return;
+      }
+
       currentRoundIndex++;
       _resetRoundPlacement();
       hasSubmitted = false;
       lastAnswerCorrect = false;
     });
+
+    if (sessionComplete) {
+      _recordHighScoreIfNeeded();
+    }
   }
 
   void _restart() {
@@ -588,6 +651,10 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       );
       currentRoundIndex = 0;
       correctCount = 0;
+      incorrectCount = 0;
+      skippedCount = 0;
+      isReviewSession = false;
+      incorrectRounds.clear();
       hasSubmitted = false;
       lastAnswerCorrect = false;
       sessionComplete = false;
@@ -720,123 +787,76 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   Future<void> _showOptions() async {
     await showModalBottomSheet<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+      backgroundColor: GakujiColors.warmBackground,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(28),
+        ),
+      ),
       builder: (sheetContext) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.48,
-          minChildSize: 0.38,
-          maxChildSize: 0.72,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: BoxDecoration(
-                color: GakujiColors.warmBackground,
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24),
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: GakujiColors.softBorder,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
-              ),
-              child: SafeArea(
-                top: false,
-                child: Column(
-                  children: [
-                    const SizedBox(height: 10),
-                    Container(
-                      width: 42,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: GakujiColors.softBorder,
-                        borderRadius: BorderRadius.circular(99),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 22),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Fusion Options',
-                          textScaler: TextScaler.noScaling,
-                          style: GakujiText.medium.copyWith(
-                            color: GakujiColors.darkGray,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: ListView(
-                        controller: scrollController,
-                        padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
-                        children: [
-                          _optionsSectionLabel('Session'),
-                          _optionRow(
-                            icon: Icons.refresh_rounded,
-                            label: 'Restart Game',
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              _restart();
-                            },
-                          ),
-                          const SizedBox(height: 6),
-                          _optionRow(
-                            icon: Icons.close_rounded,
-                            label: 'Exit Fusion',
-                            onTap: () {
-                              Navigator.pop(sheetContext);
-                              Navigator.pop(context);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 20),
+                _optionRow(
+                  icon: Icons.refresh_rounded,
+                  label: 'Restart Session',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _restart();
+                  },
                 ),
-              ),
-            );
-          },
+                const SizedBox(height: 8),
+                _optionRow(
+                  icon: Icons.close_rounded,
+                  label: 'Exit Fusion',
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
+          ),
         );
       },
     );
   }
 
-  Widget _optionsSectionLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(
-        label,
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: GakujiColors.mediumGray,
-        ),
-      ),
-    );
-  }
 
   Widget _optionRow({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
   }) {
-    return Material(
-      color: GakujiColors.warmCard,
-      borderRadius: BorderRadius.circular(GakujiRadius.medium),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(GakujiRadius.medium),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 13,
-          ),
+    return SizedBox(
+      height: 52,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: _accentColor.withValues(alpha: 0.08),
+          highlightColor: _accentColor.withValues(alpha: 0.04),
           child: Row(
             children: [
               Icon(
                 icon,
-                color: GakujiColors.darkGray,
-                size: 24,
+                size: 25,
+                color: GakujiColors.mediumGray,
               ),
               const SizedBox(width: 14),
               Text(
@@ -953,22 +973,32 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         Expanded(
           child: SingleChildScrollView(
             physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              8,
+              24,
+              8,
+            ),
             child: Column(
               children: [
                 _scoreRow(showSkip: true),
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 _prompt(),
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
                 _answerSlots(),
-                const SizedBox(height: 18),
+                SizedBox(height: 18),
                 _componentGrid(),
               ],
             ),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(28, 8, 28, 18),
+          padding: EdgeInsets.fromLTRB(
+            28,
+            8,
+            28,
+            18,
+          ),
           child: _primaryButton(
             label: 'FUSE',
             enabled: canFuse,
@@ -992,7 +1022,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                 const SizedBox(height: 22),
                 _prompt(),
                 const SizedBox(height: 26),
-                _fusionResultCard(),
+                lastAnswerCorrect
+                    ? _successfulFusionResultCard()
+                    : _failedFusionComparison(),
                 const SizedBox(height: 22),
                 Container(
                   width: double.infinity,
@@ -1005,7 +1037,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                   textScaler: TextScaler.noScaling,
                   style: GakujiText.medium.copyWith(
                     color: lastAnswerCorrect
-                        ? GakujiColors.writing
+                        ? _accentColor
                         : GakujiColors.mediumGray,
                   ),
                 ),
@@ -1056,43 +1088,46 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   Widget _scoreRow({bool showSkip = false}) {
     return Row(
       children: [
-        if (showSkip) TextButton(
-          onPressed: hasSubmitted ? null : _skipRound,
-          style: TextButton.styleFrom(
-            foregroundColor: GakujiColors.mediumGray,
-            disabledForegroundColor: GakujiColors.softGray,
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: const Text(
-            'Skip',
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        const Spacer(),
-        RichText(
-          textScaler: TextScaler.noScaling,
-          text: TextSpan(
-            style: TextStyle(
-              fontSize: 16,
-              height: 1,
-              fontWeight: FontWeight.w700,
-              color: GakujiColors.mediumGray,
-            ),
-            children: [
-              const TextSpan(text: 'Score  '),
-              TextSpan(
-                text: '$correctCount',
-                style: TextStyle(
-                  color: GakujiColors.darkGray,
+        if (showSkip)
+          SizedBox(
+            height: 34,
+            child: Material(
+              color: GakujiColors.warmCard,
+              borderRadius: BorderRadius.circular(GakujiRadius.pill),
+              child: InkWell(
+                onTap: hasSubmitted ? null : _skipRound,
+                borderRadius: BorderRadius.circular(GakujiRadius.pill),
+                child: Container(
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(GakujiRadius.pill),
+                    border: Border.all(
+                      color: _accentColor.withValues(alpha: 0.34),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Text(
+                    'SKIP',
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1,
+                      fontWeight: FontWeight.w800,
+                      color: _accentColor,
+                    ),
+                  ),
                 ),
               ),
-            ],
+            ),
+          ),
+        const Spacer(),
+        Text(
+          'Score  ${_formatScore(arcadeScore)}',
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.small.copyWith(
+            color: GakujiColors.mediumGray,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],
@@ -1116,7 +1151,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
             color: GakujiColors.darkGray,
           ),
         ),
-        const SizedBox(height: 5),
+        SizedBox(height: 5),
         Text(
           currentRound.definition,
           maxLines: 2,
@@ -1153,7 +1188,10 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
   Color get _blockSelectionColor => const Color(0xFF7A7A7A);
 
-  double get _choiceTileHeight => 68;
+  bool get _compactChoiceTiles =>
+      currentRound.componentChoices.length > 15;
+
+  double get _choiceTileHeight => _compactChoiceTiles ? 60 : 75.5;
 
   Widget _easyAnswerSlots() {
     final slotCount = currentRound.requiredComponents.length;
@@ -1202,7 +1240,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                         ? CustomPaint(
                             painter: _DashedRoundedRectPainter(
                               color: candidates.isNotEmpty
-                                  ? GakujiColors.writing
+                                  ? _accentColor
                                   : GakujiColors.mediumGray,
                               radius: 17,
                             ),
@@ -1295,8 +1333,30 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     );
   }
 
+  Widget _structuralGroupOutline(
+    KanjiFusionGroup group, {
+    bool preview = false,
+  }) {
+    return IgnorePointer(
+      child: CustomPaint(
+        painter: _NestedGroupOutlinePainter(
+          color: _accentColor.withValues(alpha: 
+            preview ? 0.28 : (group.depth == 0 ? 0.36 : 0.25),
+          ),
+          fillColor: _accentColor.withValues(alpha: 
+            preview ? 0.018 : (group.depth == 0 ? 0.030 : 0.018),
+          ),
+          radius: preview
+              ? 12.0
+              : math.max(12.0, 20.0 - (group.depth * 3.0)).toDouble(),
+          strokeWidth: preview ? 1.0 : 1.35,
+        ),
+      ),
+    );
+  }
+
   Widget _structuredAnswerSlots() {
-    const boardSize = 205.0;
+    const boardSize = 224.0;
 
     return Center(
       child: SizedBox(
@@ -1304,24 +1364,34 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         height: boardSize,
         child: Stack(
           clipBehavior: Clip.none,
-          children: List.generate(currentRound.structuralSlots.length, (index) {
-            final slot = currentRound.structuralSlots[index];
-            final choiceIndex = placedChoiceIndexes[index];
-            final component = placedComponentForms[index];
-
-            return Positioned(
-              left: slot.left * boardSize,
-              top: slot.top * boardSize,
-              width: slot.width * boardSize,
-              height: slot.height * boardSize,
-              child: _structuredSlotTarget(
-                slot: slot,
-                slotIndex: index,
-                choiceIndex: choiceIndex,
-                component: component,
+          children: [
+            for (final group in currentRound.structuralGroups)
+              Positioned(
+                left: group.left * boardSize,
+                top: group.top * boardSize,
+                width: group.width * boardSize,
+                height: group.height * boardSize,
+                child: _structuralGroupOutline(group),
               ),
-            );
-          }),
+            ...List.generate(currentRound.structuralSlots.length, (index) {
+              final slot = currentRound.structuralSlots[index];
+              final choiceIndex = placedChoiceIndexes[index];
+              final component = placedComponentForms[index];
+
+              return Positioned(
+                left: slot.left * boardSize,
+                top: slot.top * boardSize,
+                width: slot.width * boardSize,
+                height: slot.height * boardSize,
+                child: _structuredSlotTarget(
+                  slot: slot,
+                  slotIndex: index,
+                  choiceIndex: choiceIndex,
+                  component: component,
+                ),
+              );
+            }),
+          ],
         ),
       ),
     );
@@ -1342,7 +1412,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       },
       builder: (context, candidates, rejected) {
         final outlineColor = candidates.isNotEmpty
-            ? GakujiColors.writing
+            ? _accentColor
             : _blockOutlineColor;
         final isInnerEnclosureSlot =
             slot.shape == KanjiFusionSlotShape.standard &&
@@ -1558,12 +1628,12 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
             decoration: BoxDecoration(
               color: candidates.isEmpty
                   ? GakujiColors.warmCard
-                  : GakujiColors.writing.withValues(alpha: 0.08),
+                  : _accentColor.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
                 color: candidates.isEmpty
                     ? GakujiColors.mediumGray
-                    : GakujiColors.writing,
+                    : _accentColor,
                 width: 2,
               ),
               boxShadow: [GakujiShadows.soft],
@@ -1633,7 +1703,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: _blockFillColor,
-                borderRadius: BorderRadius.circular(13),
+                borderRadius: BorderRadius.circular(
+            _compactChoiceTiles ? 11 : 13,
+          ),
                 border: Border.all(
                   color: _blockOutlineColor,
                   width: 1.5,
@@ -1683,16 +1755,40 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   Widget _componentGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        const horizontalGap = 8.0;
-        const verticalGap = 10.0;
         final choiceCount = currentRound.componentChoices.length;
+        final compactTiles = choiceCount > 15;
         final columns = choiceCount >= 9 ? 5 : 4;
-        final gridWidth = math.min(
-          constraints.maxWidth,
-          360.0,
-        );
-        final tileWidth =
-            (gridWidth - (horizontalGap * (columns - 1))) / columns;
+        const horizontalGap = 8.0;
+        final verticalGap = compactTiles ? 8.0 : 12.0;
+
+        late final double gridWidth;
+        late final double tileWidth;
+
+        if (compactTiles) {
+          gridWidth = math.min(constraints.maxWidth, 348.0);
+          tileWidth =
+              (gridWidth - (horizontalGap * (columns - 1))) / columns;
+        } else {
+          // All rounds with 15 or fewer choices use one consistent base
+          // domino size. The base is 2% larger than the previous five-column
+          // tile size, while still shrinking safely on narrower screens.
+          const standardColumnCount = 5;
+          const standardTileWidth = 67.73;
+          final availableTileWidth = math.max(
+            44.0,
+            (constraints.maxWidth -
+                    (horizontalGap * (standardColumnCount - 1))) /
+                standardColumnCount,
+          ).toDouble();
+
+          tileWidth = math.min(standardTileWidth, availableTileWidth);
+          gridWidth = math.min(
+            constraints.maxWidth,
+            (tileWidth * standardColumnCount) +
+                (horizontalGap * (standardColumnCount - 1)),
+          );
+        }
+
         final rows = <List<int>>[];
 
         for (var start = 0; start < choiceCount; start += columns) {
@@ -1766,10 +1862,15 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       final forms = currentRound.formsForChoice(index);
       final currentForm = _currentChoiceForm(index);
       final transformable = forms.length > 1;
+      final selectedFormIndex = index < choiceFormIndexes.length
+          ? choiceFormIndexes[index].clamp(0, forms.length - 1).toInt()
+          : 0;
       final tile = _choiceTileSurface(
         component: currentForm,
         width: width,
         showFormControl: transformable,
+        formCount: forms.length,
+        selectedFormIndex: selectedFormIndex,
         onTap: transformable ? () => _cycleChoiceForm(index) : null,
       );
 
@@ -1907,15 +2008,19 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     required double width,
     bool selected = false,
     bool showFormControl = false,
+    int formCount = 1,
+    int selectedFormIndex = 0,
     VoidCallback? onTap,
   }) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 140),
       width: width,
       height: _choiceTileHeight,
-      padding: const EdgeInsets.all(3),
+      padding: EdgeInsets.all(_compactChoiceTiles ? 2 : 3),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(
+          _compactChoiceTiles ? 15 : 18,
+        ),
         border: Border.all(
           color: selected ? _blockSelectionColor : Colors.transparent,
           width: 2.5,
@@ -1924,7 +2029,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       child: Container(
         decoration: BoxDecoration(
           color: _blockFillColor,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(
+            _compactChoiceTiles ? 12 : 14,
+          ),
           border: Border.all(
             color: _blockOutlineColor,
             width: 1.5,
@@ -1933,54 +2040,73 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         ),
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(
+            _compactChoiceTiles ? 11 : 13,
+          ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onTap,
             child: Stack(
               children: [
                 Center(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 140),
-                    switchInCurve: Curves.easeOut,
-                    switchOutCurve: Curves.easeIn,
-                    transitionBuilder: (child, animation) {
-                      return FadeTransition(
-                        opacity: animation,
-                        child: ScaleTransition(
-                          scale: Tween<double>(begin: 0.88, end: 1).animate(
-                            animation,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: showFormControl
+                          ? (_compactChoiceTiles ? 9 : 11)
+                          : 0,
+                    ),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 140),
+                      switchInCurve: Curves.easeOut,
+                      switchOutCurve: Curves.easeIn,
+                      transitionBuilder: (child, animation) {
+                        return FadeTransition(
+                          opacity: animation,
+                          child: ScaleTransition(
+                            scale: Tween<double>(begin: 0.88, end: 1).animate(
+                              animation,
+                            ),
+                            child: child,
                           ),
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: KeyedSubtree(
-                      key: ValueKey(component),
-                      child: _componentText(component),
+                        );
+                      },
+                      child: KeyedSubtree(
+                        key: ValueKey(component),
+                        child: _componentText(component),
+                      ),
                     ),
                   ),
                 ),
                 if (showFormControl)
                   Positioned(
-                    right: 5,
-                    bottom: 5,
-                    child: Container(
-                      width: 18,
-                      height: 18,
-                      decoration: BoxDecoration(
-                        color: GakujiColors.warmBackground.withValues(alpha: 0.96),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _blockOutlineColor.withValues(alpha: 0.75),
-                          width: 1,
-                        ),
-                      ),
-                      child: Icon(
-                        Icons.sync_alt_rounded,
-                        size: 12,
-                        color: _blockTextColor,
-                      ),
+                    left: 0,
+                    right: 0,
+                    bottom: _compactChoiceTiles ? 5 : 7,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(formCount, (dotIndex) {
+                        final isCurrent = dotIndex == selectedFormIndex;
+
+                        return Container(
+                          width: isCurrent
+                              ? (_compactChoiceTiles ? 6 : 7)
+                              : (_compactChoiceTiles ? 5 : 6),
+                          height: isCurrent
+                              ? (_compactChoiceTiles ? 6 : 7)
+                              : (_compactChoiceTiles ? 5 : 6),
+                          margin: EdgeInsets.only(
+                            right: dotIndex == formCount - 1
+                                ? 0
+                                : (_compactChoiceTiles ? 3 : 4),
+                          ),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isCurrent
+                                ? _blockTextColor
+                                : _blockOutlineColor.withValues(alpha: 0.55),
+                          ),
+                        );
+                      }),
                     ),
                   ),
               ],
@@ -1997,7 +2123,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       textScaler: TextScaler.noScaling,
       style: TextStyle(
         fontFamily: GakujiFonts.japanese,
-        fontSize: component.length > 1 ? 21 : 29,
+        fontSize: component.length > 1
+            ? (_compactChoiceTiles ? 18 : 22)
+            : (_compactChoiceTiles ? 26 : 31),
         height: 1,
         fontWeight: FontWeight.w600,
         color: _blockTextColor,
@@ -2023,78 +2151,161 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     );
   }
 
-  Widget _fusionResultCard() {
-    return Container(
-      width: 250,
-      constraints: const BoxConstraints(minHeight: 220),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-      decoration: BoxDecoration(
-        color: GakujiColors.warmCard,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: lastAnswerCorrect
-              ? GakujiColors.writing.withValues(alpha: 0.65)
-              : GakujiColors.review.withValues(alpha: 0.65),
-          width: 2,
+  Widget _successfulFusionResultCard() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final comparisonCardWidth = (constraints.maxWidth - 14) / 2;
+
+        return Column(
+          children: [
+            SizedBox(
+              width: comparisonCardWidth,
+              child: _fusionComparisonCard(
+                title: 'Your Fusion',
+                accentColor: _accentColor,
+                child: _placedFusionPreview(
+                  previewSize: 112,
+                  maxFontSize: 22,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: _accentColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(GakujiRadius.pill),
+                border: Border.all(
+                  color: _accentColor,
+                  width: 1.5,
+                ),
+              ),
+              child: Text(
+                'Successful fusion',
+                textScaler: TextScaler.noScaling,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _accentColor,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _failedFusionComparison() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _fusionComparisonCard(
+                title: 'Your Fusion',
+                accentColor: _studyIncorrectRed,
+                child: _placedFusionPreview(
+                  previewSize: 112,
+                  maxFontSize: 22,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: _fusionComparisonCard(
+                title: 'Correct Fusion',
+                accentColor: _accentColor.withValues(alpha: 0.82),
+                child: _correctFusionPreview(
+                  previewSize: 112,
+                  maxFontSize: 22,
+                ),
+              ),
+            ),
+          ],
         ),
-        boxShadow: [GakujiShadows.soft],
+        const SizedBox(height: 18),
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 8,
+          ),
+          decoration: BoxDecoration(
+            color: _studyIncorrectRedFill,
+            borderRadius: BorderRadius.circular(GakujiRadius.pill),
+            border: Border.all(
+              color: _studyIncorrectRed,
+              width: 1.5,
+            ),
+          ),
+          child: Text(
+            'Fusion failed',
+            textScaler: TextScaler.noScaling,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: _studyIncorrectRed,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _fusionComparisonCard({
+    required String title,
+    required Color accentColor,
+    required Widget child,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 190),
+      padding: const EdgeInsets.fromLTRB(10, 16, 10, 14),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: accentColor,
+          width: 3,
+        ),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
-            'Your Fusion',
+            title,
+            textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               fontWeight: FontWeight.w700,
               color: GakujiColors.mediumGray,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
           TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 0.78, end: 1),
-            duration: const Duration(milliseconds: 380),
+            tween: Tween<double>(begin: 0.82, end: 1),
+            duration: const Duration(milliseconds: 360),
             curve: Curves.easeOutBack,
-            builder: (context, value, child) {
+            builder: (context, value, animatedChild) {
               return Transform.scale(
                 scale: value,
-                child: child,
+                child: animatedChild,
               );
             },
-            child: _placedFusionPreview(),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 7,
-            ),
-            decoration: BoxDecoration(
-              color: (lastAnswerCorrect
-                      ? GakujiColors.writing
-                      : GakujiColors.review)
-                  .withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(GakujiRadius.pill),
-            ),
-            child: Text(
-              lastAnswerCorrect ? 'Successful fusion' : 'Fusion failed',
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: lastAnswerCorrect
-                    ? GakujiColors.writing
-                    : GakujiColors.review,
-              ),
-            ),
+            child: child,
           ),
         ],
       ),
     );
   }
 
-  Widget _placedFusionPreview() {
+  Widget _placedFusionPreview({
+    double previewSize = 150,
+    double maxFontSize = 28,
+  }) {
     switch (selectedDifficulty) {
       case KanjiFusionDifficulty.easy:
         return Text(
@@ -2110,55 +2321,105 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
           ),
         );
       case KanjiFusionDifficulty.normal:
-        return _structuredFusionPreview();
+        return _structuredFusionPreview(
+          previewSize: previewSize,
+          maxFontSize: maxFontSize,
+        );
       case KanjiFusionDifficulty.hard:
         return _hardFusionPreview();
     }
   }
 
-  Widget _structuredFusionPreview() {
-    const previewSize = 150.0;
+  Widget _correctFusionPreview({
+    double previewSize = 150,
+    double maxFontSize = 28,
+  }) {
+    switch (selectedDifficulty) {
+      case KanjiFusionDifficulty.easy:
+        return Text(
+          currentRound.requiredComponents.join(''),
+          textAlign: TextAlign.center,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontFamily: GakujiFonts.japanese,
+            fontSize: currentRound.requiredComponents.length >= 4 ? 42 : 56,
+            height: 1.05,
+            fontWeight: FontWeight.w600,
+            color: GakujiColors.darkGray,
+          ),
+        );
+      case KanjiFusionDifficulty.normal:
+        return _structuredFusionPreview(
+          showCorrectComponents: true,
+          previewSize: previewSize,
+          maxFontSize: maxFontSize,
+        );
+      case KanjiFusionDifficulty.hard:
+        return _structuredFusionPreview(
+          showCorrectComponents: true,
+          previewSize: previewSize,
+          maxFontSize: maxFontSize,
+        );
+    }
+  }
 
+  Widget _structuredFusionPreview({
+    bool showCorrectComponents = false,
+    double previewSize = 150,
+    double maxFontSize = 28,
+  }) {
     return SizedBox(
       width: previewSize,
       height: previewSize,
       child: Stack(
         clipBehavior: Clip.none,
-        children: List.generate(currentRound.structuralSlots.length, (index) {
-          final slot = currentRound.structuralSlots[index];
-          final component = placedComponentForms[index];
+        children: [
+          for (final group in currentRound.structuralGroups)
+            Positioned(
+              left: group.left * previewSize,
+              top: group.top * previewSize,
+              width: group.width * previewSize,
+              height: group.height * previewSize,
+              child: _structuralGroupOutline(group, preview: true),
+            ),
+          ...List.generate(currentRound.structuralSlots.length, (index) {
+            final slot = currentRound.structuralSlots[index];
+            final component = showCorrectComponents
+                ? slot.component
+                : placedComponentForms[index];
 
-          return Positioned(
-            left: slot.left * previewSize,
-            top: slot.top * previewSize,
-            width: slot.width * previewSize,
-            height: slot.height * previewSize,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Positioned.fill(
-                  child: _structuralSlotSurface(
-                    slot: slot,
-                    outlineColor: _blockOutlineColor,
-                    isFilled: component != null,
-                    showShadow: false,
-                  ),
-                ),
-                if (component != null)
-                  Positioned(
-                    left: slot.contentLeft * slot.width * previewSize,
-                    top: slot.contentTop * slot.height * previewSize,
-                    width: slot.contentWidth * slot.width * previewSize,
-                    height: slot.contentHeight * slot.height * previewSize,
-                    child: _structuralComponentGlyph(
-                      component,
-                      maxFontSize: 28,
+            return Positioned(
+              left: slot.left * previewSize,
+              top: slot.top * previewSize,
+              width: slot.width * previewSize,
+              height: slot.height * previewSize,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: _structuralSlotSurface(
+                      slot: slot,
+                      outlineColor: _blockOutlineColor,
+                      isFilled: component != null,
+                      showShadow: false,
                     ),
                   ),
-              ],
-            ),
-          );
-        }),
+                  if (component != null)
+                    Positioned(
+                      left: slot.contentLeft * slot.width * previewSize,
+                      top: slot.contentTop * slot.height * previewSize,
+                      width: slot.contentWidth * slot.width * previewSize,
+                      height: slot.contentHeight * slot.height * previewSize,
+                      child: _structuralComponentGlyph(
+                        component,
+                        maxFontSize: maxFontSize,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }
@@ -2220,7 +2481,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       height: 58,
       child: Material(
         color: enabled
-            ? GakujiColors.deckBlue
+            ? _accentColor
             : GakujiColors.softBorder,
         borderRadius: BorderRadius.circular(GakujiRadius.pill),
         clipBehavior: Clip.antiAlias,
@@ -2241,10 +2502,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   }
 
   Widget _completeScreen() {
-    final percent = rounds.isEmpty
-        ? 0
-        : ((correctCount / rounds.length) * 100).round();
-
     return Scaffold(
       backgroundColor: GakujiColors.warmBackground,
       body: SafeArea(
@@ -2255,59 +2512,98 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
               leftIconSize: 34,
               leftIconColor: GakujiColors.darkGray,
               onLeftTap: () => Navigator.pop(context),
-              title: 'Complete',
-              titleStyle: TextStyle(
-                fontSize: 20,
-                height: 1,
-                fontWeight: FontWeight.w700,
-                color: GakujiColors.darkGray,
-              ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(28, 30, 28, 28),
+                padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
                 child: Column(
                   children: [
-                    const Spacer(),
-                    Container(
-                      width: 94,
-                      height: 94,
-                      decoration: BoxDecoration(
-                        color: GakujiColors.deckBlue.withValues(alpha: 0.13),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.auto_awesome_rounded,
-                        size: 48,
-                        color: GakujiColors.deckBlue,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 34),
                     Text(
-                      'Fusion Complete',
+                      'Complete!',
+                      textAlign: TextAlign.center,
                       textScaler: TextScaler.noScaling,
-                      style: GakujiText.large.copyWith(
+                      style: TextStyle(
+                        fontSize: 42,
+                        height: 1,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.3,
                         color: GakujiColors.darkGray,
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 46),
                     Text(
-                      widget.deckName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      'SCORE',
                       textScaler: TextScaler.noScaling,
                       style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        height: 1,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.4,
                         color: GakujiColors.mediumGray,
                       ),
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      '$correctCount/${rounds.length} correct  •  $percent%',
+                      _formatScore(arcadeScore),
+                      textAlign: TextAlign.center,
                       textScaler: TextScaler.noScaling,
-                      style: GakujiText.small.copyWith(
+                      style: TextStyle(
+                        fontSize: 54,
+                        height: 0.95,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.8,
+                        color: GakujiColors.darkGray,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'High Score ${_formatScore(highScore)}',
+                      textAlign: TextAlign.center,
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1,
+                        fontWeight: FontWeight.w700,
                         color: GakujiColors.mediumGray,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                      decoration: BoxDecoration(
+                        color: GakujiColors.warmCard.withValues(alpha: 0.42),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: GakujiColors.softBorder,
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          _completionStatRow(
+                            label: 'Rounds played',
+                            value: rounds.length,
+                          ),
+                          const SizedBox(height: 12),
+                          _completionStatRow(
+                            label: 'Correct fusions',
+                            value: correctCount,
+                          ),
+                          const SizedBox(height: 12),
+                          _completionStatRow(
+                            label: 'Incorrect fusions',
+                            value: incorrectCount,
+                          ),
+                          if (skippedCount > 0) ...[
+                            const SizedBox(height: 12),
+                            _completionStatRow(
+                              label: 'Skipped',
+                              value: skippedCount,
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     const Spacer(),
@@ -2322,7 +2618,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                       height: 54,
                       child: Material(
                         color: GakujiColors.warmCard,
-                        borderRadius: BorderRadius.circular(GakujiRadius.pill),
+                        borderRadius:
+                            BorderRadius.circular(GakujiRadius.pill),
                         child: InkWell(
                           borderRadius:
                               BorderRadius.circular(GakujiRadius.pill),
@@ -2332,7 +2629,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                               'DONE',
                               textScaler: TextScaler.noScaling,
                               style: GakujiText.small.copyWith(
-                                color: GakujiColors.deckBlue,
+                                color: _accentColor,
                               ),
                             ),
                           ),
@@ -2346,6 +2643,35 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _completionStatRow({
+    required String label,
+    required int value,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.small.copyWith(
+              color: GakujiColors.mediumGray,
+            ),
+          ),
+        ),
+        Text(
+          '$value',
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: 16,
+            height: 1,
+            fontWeight: FontWeight.w800,
+            color: GakujiColors.darkGray,
+          ),
+        ),
+      ],
     );
   }
 
@@ -2366,7 +2692,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                 child: Padding(
                   padding: const EdgeInsets.all(28),
                   child: Text(
-                    'Fusion could not create any rounds.',
+                    'This deck does not contain any supported kanji with two or more components yet.',
                     textAlign: TextAlign.center,
                     textScaler: TextScaler.noScaling,
                     style: GakujiText.small.copyWith(
@@ -2380,6 +2706,59 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         ),
       ),
     );
+  }
+}
+
+class _NestedGroupOutlinePainter extends CustomPainter {
+  final Color color;
+  final Color fillColor;
+  final double radius;
+  final double strokeWidth;
+
+  const _NestedGroupOutlinePainter({
+    required this.color,
+    required this.fillColor,
+    required this.radius,
+    required this.strokeWidth,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(math.min(radius, size.shortestSide * 0.22)),
+    );
+
+    canvas.drawRRect(
+      rect,
+      Paint()
+        ..color = fillColor
+        ..style = PaintingStyle.fill,
+    );
+
+    final path = Path()..addRRect(rect);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = math.min(distance + 6, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance += 11;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _NestedGroupOutlinePainter oldDelegate) {
+    return oldDelegate.color != color ||
+        oldDelegate.fillColor != fillColor ||
+        oldDelegate.radius != radius ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }
 
