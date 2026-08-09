@@ -12,7 +12,10 @@ body:
     id: priority
     attributes:
       label: 🚦 Priority Level
-      description: Choose the priority level of this bug.
+      description: |
+        Low -> Cosmetic issues, layout tweaks, text truncation
+        Medium -> Feature is degraded but usable, broken workaround
+        High -> App crash, broken core loop, login failure, data loss
       options:
         - "Low"
         - "Medium"
@@ -24,7 +27,7 @@ body:
     id: description
     attributes:
       label: 📝 Description
-      description: A clear and concise description of what the bug is.
+      description: \
       placeholder: "e.g., On the home page, the deck titles cut off into ellipses too early..."
     validations:
       required: true
@@ -33,7 +36,7 @@ body:
     id: expected
     attributes:
       label: 🎯 Expected Behavior
-      description: What did you expect to happen instead?
+      description: \
       placeholder: "e.g., The title should stretch across the card or wrap to the next line."
     validations:
       required: true
@@ -42,7 +45,7 @@ body:
     id: steps
     attributes:
       label: 👣 Steps to Reproduce
-      description: How do we make this bug happen?
+      description: \
       placeholder: |
         1. Go to '...'
         2. Click on '....'
@@ -55,7 +58,7 @@ body:
     id: context
     attributes:
       label: 💻 Environment & Context
-      description: Operating system, browser, or screen resolution if relevant.
+      description: \
       placeholder: "e.g., Chrome v120 on macOS Sonoma, mobile viewport"
     validations:
       required: false
