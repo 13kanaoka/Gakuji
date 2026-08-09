@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import csv
 import gzip
 import re
@@ -369,8 +369,7 @@ def convert_entry(entry, learner_priority_keywords):
         "reading": reading,
         "meaning": meaning,
         "part_of_speech": part_of_speech,
-        "definitions": definitions,
-        "related_terms": related_terms,
+        "senses": senses,
         "is_common": 1 if is_common else 0,
         "common_score": common_score,
         "keyword_weights": keyword_weights,
@@ -388,8 +387,12 @@ def create_schema(connection):
     cursor = connection.cursor()
 
     cursor.execute("DROP TABLE IF EXISTS search_keywords")
+    cursor.execute("DROP TABLE IF EXISTS sense_related_terms")
+    cursor.execute("DROP TABLE IF EXISTS sense_part_of_speech")
     cursor.execute("DROP TABLE IF EXISTS definitions")
+    cursor.execute("DROP TABLE IF EXISTS senses")
     cursor.execute("DROP TABLE IF EXISTS terms")
+    cursor.execute("DROP TABLE IF EXISTS kanji_entries")
 
     cursor.execute(
         """
@@ -407,11 +410,65 @@ def create_schema(connection):
 
     cursor.execute(
         """
+        CREATE TABLE kanji_entries (
+            character TEXT PRIMARY KEY,
+            meaning TEXT NOT NULL,
+            onyomi TEXT,
+            kunyomi TEXT,
+            nanori TEXT,
+            stroke_count INTEGER,
+            grade INTEGER,
+            jlpt_level INTEGER,
+            frequency INTEGER,
+            radical INTEGER,
+            has_word_entry INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE senses (
+            term_id TEXT NOT NULL,
+            sense_index INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            PRIMARY KEY (term_id, sense_index)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
         CREATE TABLE definitions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             term_id TEXT NOT NULL,
+            sense_index INTEGER NOT NULL,
             definition TEXT NOT NULL,
             position INTEGER NOT NULL
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE sense_part_of_speech (
+            term_id TEXT NOT NULL,
+            sense_index INTEGER NOT NULL,
+            tag TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            PRIMARY KEY (term_id, sense_index, position)
+        )
+        """
+    )
+
+    cursor.execute(
+        """
+        CREATE TABLE sense_related_terms (
+            term_id TEXT NOT NULL,
+            sense_index INTEGER NOT NULL,
+            related_term TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            PRIMARY KEY (term_id, sense_index, position)
         )
         """
     )
@@ -428,8 +485,28 @@ def create_schema(connection):
 
     cursor.execute("CREATE INDEX idx_terms_kanji ON terms(kanji)")
     cursor.execute("CREATE INDEX idx_terms_reading ON terms(reading)")
+    cursor.execute(
+        "CREATE INDEX idx_kanji_entries_character "
+        "ON kanji_entries(character)"
+    )
+    cursor.execute(
+        "CREATE INDEX idx_kanji_entries_has_word_entry "
+        "ON kanji_entries(has_word_entry)"
+    )
     cursor.execute("CREATE INDEX idx_terms_common ON terms(is_common, common_score)")
-    cursor.execute("CREATE INDEX idx_definitions_term_id ON definitions(term_id)")
+    cursor.execute("CREATE INDEX idx_senses_term_id ON senses(term_id)")
+    cursor.execute(
+        "CREATE INDEX idx_definitions_term_sense "
+        "ON definitions(term_id, sense_index, position)"
+    )
+    cursor.execute(
+        "CREATE INDEX idx_sense_pos_term_sense "
+        "ON sense_part_of_speech(term_id, sense_index, position)"
+    )
+    cursor.execute(
+        "CREATE INDEX idx_sense_related_term_sense "
+        "ON sense_related_terms(term_id, sense_index, position)"
+    )
     cursor.execute("CREATE INDEX idx_search_keywords_keyword ON search_keywords(keyword)")
     cursor.execute("CREATE INDEX idx_search_keywords_term_id ON search_keywords(term_id)")
     cursor.execute("CREATE INDEX idx_search_keywords_keyword_weight ON search_keywords(keyword, weight)")
@@ -464,22 +541,81 @@ def insert_term(connection, term):
         ),
     )
 
-    for index, definition in enumerate(term["definitions"]):
+    for sense_position, sense in enumerate(term["senses"]):
+        sense_index = sense["index"]
+
         cursor.execute(
             """
-            INSERT INTO definitions (
+            INSERT INTO senses (
                 term_id,
-                definition,
+                sense_index,
                 position
             )
             VALUES (?, ?, ?)
             """,
             (
                 term["id"],
-                definition,
-                index,
+                sense_index,
+                sense_position,
             ),
         )
+
+        for gloss_position, definition in enumerate(sense["definitions"]):
+            cursor.execute(
+                """
+                INSERT INTO definitions (
+                    term_id,
+                    sense_index,
+                    definition,
+                    position
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    term["id"],
+                    sense_index,
+                    definition,
+                    gloss_position,
+                ),
+            )
+
+        for tag_position, tag in enumerate(sense["part_of_speech_tags"]):
+            cursor.execute(
+                """
+                INSERT INTO sense_part_of_speech (
+                    term_id,
+                    sense_index,
+                    tag,
+                    position
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    term["id"],
+                    sense_index,
+                    tag,
+                    tag_position,
+                ),
+            )
+
+        for related_position, related_term in enumerate(sense["related_terms"]):
+            cursor.execute(
+                """
+                INSERT INTO sense_related_terms (
+                    term_id,
+                    sense_index,
+                    related_term,
+                    position
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    term["id"],
+                    sense_index,
+                    related_term,
+                    related_position,
+                ),
+            )
 
     for keyword, weight in term["keyword_weights"].items():
         cursor.execute(
@@ -579,3 +715,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../models/deck.dart';
 import '../models/term.dart';
+import '../widgets/gakuji_faded_scroll.dart';
+import '../widgets/gakuji_search_bar.dart';
+import '../widgets/gakuji_styles.dart';
+import '../widgets/gakuji_term_row.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'dictionary_detail_page.dart';
 
-class DeckTermListPage extends StatelessWidget {
-  static const Color deckBlue = Color(0xFF4D7EF7);
-  static const Color dividerGray = Color(0xFFC8C8C8);
-  static const Color metadataGray = Color(0xFF6F6F6F);
-
+class DeckTermListPage extends StatefulWidget {
   final Deck deck;
 
   const DeckTermListPage({
@@ -18,111 +18,243 @@ class DeckTermListPage extends StatelessWidget {
   });
 
   @override
+  State<DeckTermListPage> createState() => _DeckTermListPageState();
+}
+
+class _DeckTermListPageState extends State<DeckTermListPage> {
+  static const Color metadataGray = Color(0xFF6F6F6F);
+
+  static const Duration _headerCollapseDuration = Duration(milliseconds: 400);
+
+  final TextEditingController searchController = TextEditingController();
+  final ScrollController termsScrollController = ScrollController();
+
+  String searchQuery = '';
+  bool deckInfoCollapsed = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    termsScrollController.addListener(handleTermListScroll);
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    termsScrollController.dispose();
+
+    super.dispose();
+  }
+
+  void handleTermListScroll() {
+    if (!termsScrollController.hasClients) return;
+
+    final shouldCollapse = termsScrollController.offset > 14;
+
+    if (deckInfoCollapsed == shouldCollapse) return;
+
+    setState(() {
+      deckInfoCollapsed = shouldCollapse;
+    });
+  }
+
+  List<Term> get visibleTerms {
+    final normalizedQuery = searchQuery.trim().toLowerCase();
+
+    if (normalizedQuery.isEmpty) {
+      return widget.deck.terms;
+    }
+
+    return widget.deck.terms.where((term) {
+      final titleText =
+          term.kanjiBracketText.isNotEmpty ? term.kanjiBracketText : term.kanji;
+
+      return titleText.toLowerCase().contains(normalizedQuery) ||
+          term.kanji.toLowerCase().contains(normalizedQuery) ||
+          term.reading.toLowerCase().contains(normalizedQuery) ||
+          term.meaning.toLowerCase().contains(normalizedQuery) ||
+          term.cardMeaning.toLowerCase().contains(normalizedQuery);
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final terms = deck.terms;
+    final terms = visibleTerms;
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            GakujiTopBar(
-              leftIcon: Icons.arrow_back_ios_new,
-              onLeftTap: () => Navigator.pop(context),
-              title: 'Terms',
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 14),
-              child: _header(terms.length),
-            ),
-            Expanded(
-              child: terms.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No terms yet',
-                        textScaler: TextScaler.noScaling,
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 16,
-                        ),
+      backgroundColor: GakujiColors.warmBackground,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          FocusScope.of(context).unfocus();
+        },
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              GakujiTopBar(
+                leftIcon: GakujiTopBar.backIcon,
+                leftIconSize: GakujiTopBar.backIconSize,
+                leftIconColor: GakujiColors.darkGray,
+                onLeftTap: () => Navigator.pop(context),
+                title: 'Term List',
+                titleStyle: GakujiText.medium.copyWith(
+                  color: GakujiColors.darkGray,
+                  fontWeight: FontWeight.w700,
+                ),
+                showOptionsButton: false,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _collapsingDeckHeader(widget.deck.terms.length),
+                      AnimatedContainer(
+                        duration: _headerCollapseDuration,
+                        curve: Curves.easeOutCubic,
+                        height: deckInfoCollapsed ? 8 : 18,
                       ),
-                    )
-                  : _termList(context, terms),
-            ),
-          ],
+                      _searchBar(),
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: terms.isEmpty
+                            ? _emptyState()
+                            : _termList(context, terms),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _header(int termsCount) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          deck.name,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 34,
-            height: 0.98,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.8,
-            color: Colors.black,
+  Widget _collapsingDeckHeader(int termsCount) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(
+        begin: deckInfoCollapsed ? 0 : 1,
+        end: deckInfoCollapsed ? 0 : 1,
+      ),
+      duration: _headerCollapseDuration,
+      curve: Curves.easeOutCubic,
+      child: _deckHeader(termsCount),
+      builder: (context, value, child) {
+        return ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: value,
+            child: Opacity(
+              opacity: value.clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: 0.92 + (0.08 * value),
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          '$termsCount terms',
-          textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 16,
-            height: 1,
-            fontWeight: FontWeight.w500,
-            color: metadataGray,
+        );
+      },
+    );
+  }
+
+  Widget _deckHeader(int termsCount) {
+    final countLabel = termsCount == 1 ? '1 term' : '$termsCount terms';
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            widget.deck.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.large.copyWith(
+              color: GakujiColors.darkGray,
+              fontWeight: FontWeight.w500,
+            ),
           ),
+          const SizedBox(height: 6),
+          Text(
+            countLabel,
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: const TextStyle(
+              fontSize: 16,
+              height: 1,
+              fontWeight: FontWeight.w500,
+              color: metadataGray,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _searchBar() {
+    return GakujiSearchBar(
+      controller: searchController,
+      hintText: 'Search terms',
+      showClearButton: searchQuery.isNotEmpty,
+      onChanged: (value) {
+        setState(() {
+          searchQuery = value;
+        });
+      },
+      onClear: () {
+        setState(() {
+          searchController.clear();
+          searchQuery = '';
+        });
+      },
+    );
+  }
+
+  Widget _emptyState() {
+    return Center(
+      child: Text(
+        searchQuery.trim().isEmpty ? 'No terms yet' : 'No terms found',
+        textScaler: TextScaler.noScaling,
+        style: const TextStyle(
+          color: Colors.grey,
+          fontSize: 16,
         ),
-      ],
+      ),
     );
   }
 
   Widget _termList(BuildContext context, List<Term> terms) {
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (bounds) {
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0x00000000),
-            Colors.black,
-            Colors.black,
-            Color(0x00000000),
-          ],
-          stops: [
-            0.0,
-            0.035,
-            0.94,
-            1.0,
-          ],
-        ).createShader(bounds);
-      },
+    return GakujiFadedScroll(
       child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(24, 4, 24, 120),
+        controller: termsScrollController,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: const EdgeInsets.only(bottom: 120),
         itemCount: terms.length,
         separatorBuilder: (context, index) {
           return const Divider(
             height: 1,
             thickness: 1,
-            color: dividerGray,
+            color: GakujiTermRow.dividerColor,
           );
         },
         itemBuilder: (context, index) {
           final term = terms[index];
 
-          return _TermListTile(
+          final titleText = term.kanjiBracketText.isNotEmpty
+              ? term.kanjiBracketText
+              : term.kanji;
+
+          return GakujiTermRow(
             term: term,
+            titleText: titleText,
+            readingText: term.reading,
             onTap: () {
               Navigator.push(
                 context,
@@ -133,92 +265,6 @@ class DeckTermListPage extends StatelessWidget {
             },
           );
         },
-      ),
-    );
-  }
-}
-
-class _TermListTile extends StatelessWidget {
-  static const Color deckBlue = Color(0xFF4D7EF7);
-
-  final Term term;
-  final VoidCallback onTap;
-
-  const _TermListTile({
-    required this.term,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final titleText =
-        term.kanjiBracketText.isNotEmpty ? term.kanjiBracketText : term.kanji;
-    final readingText = term.reading.trim();
-
-    return Material(
-      color: Colors.white,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 9, 0, 10),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.end,
-                      spacing: 10,
-                      runSpacing: 0,
-                      children: [
-                        Text(
-                          titleText,
-                          textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black,
-                          ),
-                        ),
-                        if (readingText.isNotEmpty)
-                          Text(
-                            '【$readingText】',
-                            textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
-                              fontSize: 19,
-                              height: 1,
-                              fontWeight: FontWeight.w600,
-                              color: deckBlue,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      term.cardMeaning,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.1,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Icon(
-                Icons.chevron_right,
-                size: 27,
-                color: Color(0xFF8A8A8A),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

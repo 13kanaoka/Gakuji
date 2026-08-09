@@ -4,10 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/deck_data.dart';
+import '../data/review_card_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
+import '../services/deck_storage.dart';
+import '../services/dictionary_service.dart';
+import '../widgets/gakuji_faded_scroll.dart';
+import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'kanji_dictionary_detail_page.dart';
+import 'sentence_detail_page.dart';
+import '../services/gakuji_user_data_store.dart';
 
 class DictionaryDetailBackResult {
   final bool returnToResults;
@@ -30,19 +37,27 @@ class DictionaryDetailPage extends StatefulWidget {
 }
 
 class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
-  static const Color sectionColor = Color(0xFFEAF0FF);
+  static Color get sectionColor => GakujiColors.warmCard;
   static const Color accentBlue = Color(0xFF4D7EF7);
-  static const Color dividerColor = Color(0xFFE3E3E3);
-  static const Color softTextGray = Color(0xFF8A8A8A);
-  static const Color softBlueFill = Color(0xFFF5F7FF);
+  static Color get dividerColor => GakujiColors.warmDivider;
+  static Color get softTextGray => GakujiColors.mediumGray;
+  static Color get softBlueFill => GakujiColors.warmCard;
+  static Color get darkText => GakujiColors.darkGray;
 
   static const double topActionPillWidth = 92;
   static const int maxNoteCharacters = 400;
+  static const int maxExamplesPerSense = 3;
+  static const Duration topBarTitleFadeDuration =
+      Duration(milliseconds: 180);
   static const String directSaveDeckPreferenceKey =
       'gakuji_direct_save_deck_id';
 
   late final TextEditingController noteController;
   late final FocusNode noteFocusNode;
+  late final ScrollController pageScrollController;
+
+  final GlobalKey entryTitleKey = GlobalKey();
+  final GlobalKey scrollViewportKey = GlobalKey();
 
   Timer? savePopupTimer;
 
@@ -50,6 +65,12 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   bool isEditingNote = false;
   bool noteLoaded = false;
   bool showSavePopup = false;
+  bool kanjiEntriesLoaded = false;
+  bool showTopBarTitle = false;
+
+  List<Term> kanjiEntries = const [];
+  final Set<int> expandedExampleSenseIndexes = <int>{};
+  int kanjiLoadRequestId = 0;
 
   String noteText = '';
   String? directSaveDeckId;
@@ -90,10 +111,19 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
 
     noteController = TextEditingController();
     noteFocusNode = FocusNode();
+    pageScrollController = ScrollController();
+
     noteFocusNode.addListener(_handleNoteFocusChange);
+    pageScrollController.addListener(_handlePageScroll);
 
     _loadSavedNote();
     _loadDirectSaveDeck();
+    unawaited(_loadKanjiEntries());
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _updateTopBarTitleVisibility();
+    });
   }
 
   @override
@@ -108,8 +138,23 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       noteLoaded = false;
       noteText = '';
       noteController.text = '';
+      kanjiEntries = const [];
+      kanjiEntriesLoaded = false;
+      showTopBarTitle = false;
+      expandedExampleSenseIndexes.clear();
 
       _loadSavedNote();
+      unawaited(_loadKanjiEntries());
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+
+        if (pageScrollController.hasClients) {
+          pageScrollController.jumpTo(0);
+        }
+
+        _updateTopBarTitleVisibility();
+      });
     }
   }
 
@@ -117,10 +162,75 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   void dispose() {
     savePopupTimer?.cancel();
     noteFocusNode.removeListener(_handleNoteFocusChange);
+    pageScrollController.removeListener(_handlePageScroll);
     noteFocusNode.dispose();
     noteController.dispose();
+    pageScrollController.dispose();
 
     super.dispose();
+  }
+
+  void _handlePageScroll() {
+    _updateTopBarTitleVisibility();
+  }
+
+  void _updateTopBarTitleVisibility() {
+    if (!mounted) return;
+
+    final titleContext = entryTitleKey.currentContext;
+    final viewportContext = scrollViewportKey.currentContext;
+
+    if (titleContext == null || viewportContext == null) return;
+
+    final titleRenderObject = titleContext.findRenderObject();
+    final viewportRenderObject = viewportContext.findRenderObject();
+
+    if (titleRenderObject is! RenderBox ||
+        viewportRenderObject is! RenderBox ||
+        !titleRenderObject.attached ||
+        !viewportRenderObject.attached ||
+        !titleRenderObject.hasSize ||
+        !viewportRenderObject.hasSize) {
+      return;
+    }
+
+    final titleBottom =
+        titleRenderObject.localToGlobal(Offset.zero).dy +
+            titleRenderObject.size.height;
+    final viewportTop =
+        viewportRenderObject.localToGlobal(Offset.zero).dy;
+    final shouldShowTitle = titleBottom <= viewportTop + 0.5;
+
+    if (showTopBarTitle == shouldShowTitle) return;
+
+    setState(() {
+      showTopBarTitle = shouldShowTitle;
+    });
+  }
+
+  Future<void> _loadKanjiEntries() async {
+    final requestId = ++kanjiLoadRequestId;
+    final kanjiText = _primaryKanjiText(widget.word);
+
+    if (!_containsKanji(kanjiText)) {
+      if (!mounted || requestId != kanjiLoadRequestId) return;
+
+      setState(() {
+        kanjiEntries = const [];
+        kanjiEntriesLoaded = true;
+      });
+
+      return;
+    }
+
+    final entries = await DictionaryService.getKanjiEntriesForText(kanjiText);
+
+    if (!mounted || requestId != kanjiLoadRequestId) return;
+
+    setState(() {
+      kanjiEntries = entries;
+      kanjiEntriesLoaded = true;
+    });
   }
 
   Future<void> _loadSavedNote() async {
@@ -278,6 +388,12 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return deck.terms.any((term) => term.sourceId == sourceId);
   }
 
+  List<Term> _deckCopiesForWord(Deck deck) {
+    return deck.terms
+        .where((term) => term.sourceId == sourceId)
+        .toList(growable: false);
+  }
+
   Term copiedWordForDeck(Deck deck) {
     return Term.deckCopyFrom(
       widget.word,
@@ -290,40 +406,95 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return deckContainsWord(directSaveDeck);
   }
 
-  void toggleDirectSaveDeck() {
-    if (isEditingNote) {
-      _saveNoteFromController(closeEditor: true);
+  void scheduleUserDataSave() {
+    GakujiUserDataStore.scheduleSave();
+  }
+
+  Future<void> _syncReviewCardsIfEnabled(Deck deck) async {
+    final reviewEnabled = await DeckStorage.loadReviewEnabled(deck.id);
+
+    if (!reviewEnabled) return;
+
+    await createReviewCardsForDeck(deck);
+  }
+
+  Future<HybridCardMode?> _chooseHybridCardMode(Deck deck) {
+    return showModalBottomSheet<HybridCardMode>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return _HybridCardModeSheet(
+          deckName: deck.name,
+        );
+      },
+    );
+  }
+
+  void _removeWordFromDeck(Deck deck) {
+    final copies = _deckCopiesForWord(deck);
+
+    for (final copy in copies) {
+      deck.removeHybridCardMode(copy);
     }
 
-    final deck = directSaveDeck;
-    final wasSaved = deckContainsWord(deck);
+    deck.terms.removeWhere((term) => term.sourceId == sourceId);
+  }
 
-    setState(() {
-      if (wasSaved) {
-        deck.terms.removeWhere((term) => term.sourceId == sourceId);
-      } else {
-        deck.terms.add(copiedWordForDeck(deck));
-      }
-    });
+  Term _addWordToDeck(
+    Deck deck, {
+    HybridCardMode? hybridMode,
+  }) {
+    final copiedWord = copiedWordForDeck(deck);
 
-    if (wasSaved) {
-      _showSavePopup(
-        'Removed from ${deck.name}',
-        icon: Icons.close_rounded,
+    deck.terms.add(copiedWord);
+
+    if (deck.type == DeckType.hybrid) {
+      deck.setHybridCardMode(
+        copiedWord,
+        hybridMode ?? HybridCardMode.both,
       );
-    } else {
-      _showSavePopup('Saved to ${deck.name}');
+    }
+
+    return copiedWord;
+  }
+
+  String _hybridCardModeLabel(HybridCardMode mode) {
+    switch (mode) {
+      case HybridCardMode.reading:
+        return 'Reading';
+      case HybridCardMode.writing:
+        return 'Writing';
+      case HybridCardMode.both:
+        return 'Reading + Writing';
     }
   }
 
-  void _toggleWordInDeck(Deck deck) {
+  Future<void> toggleDirectSaveDeck() async {
+    if (isEditingNote) {
+      await _saveNoteFromController(closeEditor: true);
+    }
+
+    if (!mounted) return;
+
+    final deck = directSaveDeck;
     final wasSaved = deckContainsWord(deck);
+    HybridCardMode? selectedHybridMode;
+
+    if (!wasSaved && deck.type == DeckType.hybrid) {
+      selectedHybridMode = await _chooseHybridCardMode(deck);
+
+      if (!mounted || selectedHybridMode == null) return;
+    }
 
     setState(() {
       if (wasSaved) {
-        deck.terms.removeWhere((term) => term.sourceId == sourceId);
+        _removeWordFromDeck(deck);
       } else {
-        deck.terms.add(copiedWordForDeck(deck));
+        _addWordToDeck(
+          deck,
+          hybridMode: selectedHybridMode,
+        );
       }
     });
 
@@ -332,9 +503,56 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         'Removed from ${deck.name}',
         icon: Icons.close_rounded,
       );
+    } else if (selectedHybridMode != null) {
+      _showSavePopup(
+        'Saved to ${deck.name} as '
+        '${_hybridCardModeLabel(selectedHybridMode)}',
+      );
     } else {
       _showSavePopup('Saved to ${deck.name}');
     }
+
+    scheduleUserDataSave();
+    await _syncReviewCardsIfEnabled(deck);
+  }
+
+  Future<void> _toggleWordInDeck(Deck deck) async {
+    final wasSaved = deckContainsWord(deck);
+    HybridCardMode? selectedHybridMode;
+
+    if (!wasSaved && deck.type == DeckType.hybrid) {
+      selectedHybridMode = await _chooseHybridCardMode(deck);
+
+      if (!mounted || selectedHybridMode == null) return;
+    }
+
+    setState(() {
+      if (wasSaved) {
+        _removeWordFromDeck(deck);
+      } else {
+        _addWordToDeck(
+          deck,
+          hybridMode: selectedHybridMode,
+        );
+      }
+    });
+
+    if (wasSaved) {
+      _showSavePopup(
+        'Removed from ${deck.name}',
+        icon: Icons.close_rounded,
+      );
+    } else if (selectedHybridMode != null) {
+      _showSavePopup(
+        'Saved to ${deck.name} as '
+        '${_hybridCardModeLabel(selectedHybridMode)}',
+      );
+    } else {
+      _showSavePopup('Saved to ${deck.name}');
+    }
+
+    scheduleUserDataSave();
+    await _syncReviewCardsIfEnabled(deck);
   }
 
   Future<void> openDeckPicker() async {
@@ -361,7 +579,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
 
     switch (result.action) {
       case _DeckSheetAction.saveToDeck:
-        _toggleWordInDeck(result.deck);
+        await _toggleWordInDeck(result.deck);
         break;
       case _DeckSheetAction.setDirectSaveDeck:
         await _setDirectSaveDeck(result.deck);
@@ -369,21 +587,71 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     }
   }
 
-  void openKanjiDetail(Term word) {
-    if (!word.hasKanjiDetails) return;
+
+  void openKanjiDetail(Term kanjiEntry) {
+    if (!kanjiEntry.hasKanjiDetails) return;
 
     if (isEditingNote) {
-      _saveNoteFromController(closeEditor: true);
+      unawaited(_saveNoteFromController(closeEditor: true));
     }
 
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => KanjiDictionaryDetailPage(
-          kanjiEntry: word,
+          kanjiEntry: kanjiEntry,
         ),
       ),
     );
+  }
+
+
+  void _openSentenceDetail({
+    required DictionaryExample example,
+    required int labelIndex,
+  }) {
+    if (isEditingNote) {
+      unawaited(_saveNoteFromController(closeEditor: true));
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SentenceDetailPage(
+          example: example,
+          senseLabel: _definitionLabel(labelIndex),
+          onTokenTap: _openSentenceToken,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openSentenceToken(
+    BuildContext pageContext,
+    DictionaryExampleToken token,
+  ) async {
+    final termId = token.termId;
+
+    if (termId == null || termId.trim().isEmpty) return;
+
+    try {
+      final term = await DictionaryService.getTermByIdAsync(termId);
+
+      if (!pageContext.mounted) return;
+
+      await Navigator.of(pageContext).push(
+        MaterialPageRoute(
+          builder: (_) => DictionaryDetailPage(word: term),
+        ),
+      );
+    } catch (_) {
+      if (!pageContext.mounted) return;
+
+      ScaffoldMessenger.of(pageContext).showSnackBar(
+        const SnackBar(
+          content: Text('Dictionary entry unavailable.'),
+        ),
+      );
+    }
   }
 
   @override
@@ -393,27 +661,52 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return WillPopScope(
       onWillPop: _handleSystemBack,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: GakujiColors.warmBackground,
         body: SafeArea(
+          bottom: false,
           child: Stack(
             children: [
               Column(
                 children: [
                   GakujiTopBar(
-                    leftIcon: Icons.arrow_back_ios_new,
+                    leftIcon: GakujiTopBar.backIcon,
+                    leftIconSize: GakujiTopBar.backIconSize,
+                    leftIconColor: GakujiColors.darkGray,
                     onLeftTap: _handleBackTap,
-                    title: _topBarTitle(word),
+                    titleWidget: AnimatedOpacity(
+                      opacity: showTopBarTitle ? 1 : 0,
+                      duration: topBarTitleFadeDuration,
+                      curve: Curves.easeOut,
+                      child: Text(
+                        _topBarTitle(word),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        textScaler: TextScaler.noScaling,
+                        style: TextStyle(
+                          fontSize: 23,
+                          fontWeight: FontWeight.w500,
+                          color: GakujiColors.darkGray,
+                        ),
+                      ),
+                    ),
                     rightWidget: _topActionPill(),
                   ),
                   Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.only(bottom: 110),
-                      children: [
-                        _entryHeader(word),
-                        _noteSection(word),
-                        if (_shouldShowKanjiSection(word)) _kanjiSection(word),
-                        _examplesSection(word),
-                      ],
+                    child: Container(
+                      key: scrollViewportKey,
+                      child: GakujiFadedScroll(
+                        child: ListView(
+                          controller: pageScrollController,
+                          padding: const EdgeInsets.only(bottom: 110),
+                          children: [
+                            _entryHeader(word),
+                            _noteSection(word),
+                            if (_shouldShowKanjiSection(word)) _kanjiSection(),
+                            _examplesSection(word),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -448,7 +741,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                 constraints: const BoxConstraints(maxWidth: 310),
                 padding: const EdgeInsets.fromLTRB(13, 9, 14, 10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: GakujiColors.warmCard,
                   borderRadius: BorderRadius.circular(15),
                   border: Border.all(
                     color: sectionColor,
@@ -477,10 +770,10 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         textScaler: TextScaler.noScaling,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14.5,
                           height: 1.12,
-                          color: Colors.black,
+                          color: darkText,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -496,8 +789,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   }
 
   Widget _entryHeader(Term word) {
-    final definitions = word.displayDefinitions;
-    final extraDefinitions = _extraRawDefinitions(word);
+    final senses = _definitionSenses(word);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 19),
@@ -523,7 +815,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             Text(
               word.partOfSpeech,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 height: 1.12,
                 color: softTextGray,
@@ -532,8 +824,8 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             ),
             const SizedBox(height: 7),
           ],
-          if (definitions.isEmpty)
-            const Text(
+          if (senses.isEmpty)
+             Text(
               'No definitions yet',
               textScaler: TextScaler.noScaling,
               style: TextStyle(
@@ -543,49 +835,51 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
               ),
             )
           else
-            ...definitions.asMap().entries.map((entry) {
+            ...senses.asMap().entries.map((entry) {
+              final sense = entry.value;
+
               return _definitionRow(
                 index: entry.key,
-                definition: entry.value,
-                relatedTerms: entry.key == definitions.length - 1
-                    ? word.relatedTerms
-                    : const [],
+                definition: sense.displayDefinition,
+                relatedTerms: sense.relatedTerms,
               );
             }),
-          if (extraDefinitions.isNotEmpty) _moreMeaningsBlock(extraDefinitions),
         ],
       ),
     );
   }
 
   Widget _wordTitleLine(Term word) {
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.end,
-      spacing: 8,
-      runSpacing: 3,
-      children: [
-        Text(
-          word.reading,
-          textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 27,
-            height: 1,
-            fontWeight: FontWeight.w700,
-            color: Colors.black,
-          ),
-        ),
-        if (word.hasKanjiBracketText)
+    return Container(
+      key: entryTitleKey,
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.end,
+        spacing: 8,
+        runSpacing: 3,
+        children: [
           Text(
-            '【${word.kanjiBracketText}】',
+            word.reading,
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
-              fontSize: 23,
+            style: TextStyle(
+              fontSize: 27,
               height: 1,
               fontWeight: FontWeight.w700,
-              color: Colors.black,
+              color: darkText,
             ),
           ),
-      ],
+          if (word.hasKanjiBracketText)
+            Text(
+              '【${word.kanjiBracketText}】',
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 23,
+                height: 1,
+                fontWeight: FontWeight.w700,
+                color: darkText,
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -616,7 +910,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
               child: Text(
                 label,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10,
                   height: 1,
                   color: softTextGray,
@@ -630,10 +924,10 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             child: RichText(
               textScaler: TextScaler.noScaling,
               text: TextSpan(
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 17.5,
                   height: 1.22,
-                  color: Colors.black,
+                  color: darkText,
                   fontWeight: FontWeight.w400,
                 ),
                 children: [
@@ -641,7 +935,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                   if (relatedTerms.isNotEmpty)
                     TextSpan(
                       text: ' (see also: ${relatedTerms.join(', ')})',
-                      style: const TextStyle(color: softTextGray),
+                      style: TextStyle(color: softTextGray),
                     ),
                 ],
               ),
@@ -675,10 +969,10 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                         ? 'Hide meanings'
                         : 'More meanings (${extraDefinitions.length})',
                     textScaler: TextScaler.noScaling,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15.5,
                       height: 1,
-                      color: accentBlue,
+                      color: softTextGray,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -688,7 +982,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                         ? Icons.keyboard_arrow_up
                         : Icons.keyboard_arrow_down,
                     size: 21,
-                    color: accentBlue,
+                    color: softTextGray,
                   ),
                 ],
               ),
@@ -744,7 +1038,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
+           Padding(
             padding: EdgeInsets.only(top: 7),
             child: SizedBox(
               width: 4.5,
@@ -762,10 +1056,10 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             child: Text(
               definition,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14.5,
                 height: 1.22,
-                color: Colors.black,
+                color: darkText,
                 fontWeight: FontWeight.w400,
               ),
             ),
@@ -809,7 +1103,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   }
 
   Widget _loadingNoteBody() {
-    return const Text(
+    return Text(
       'Loading note...',
       textScaler: TextScaler.noScaling,
       style: TextStyle(
@@ -841,7 +1135,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           style: TextStyle(
             fontSize: 16,
             height: 1.2,
-            color: hasNote ? Colors.black : accentBlue,
+            color: hasNote ? darkText : softTextGray,
             fontWeight: FontWeight.w400,
           ),
         ),
@@ -864,21 +1158,21 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
           cursorColor: accentBlue,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 16,
             height: 1.2,
-            color: Colors.black,
+            color: darkText,
             fontWeight: FontWeight.w400,
           ),
           decoration: InputDecoration(
             hintText: 'Write a note',
-            hintStyle: const TextStyle(
+            hintStyle:  TextStyle(
               color: softTextGray,
               fontWeight: FontWeight.w400,
             ),
             filled: true,
             fillColor: softBlueFill,
-            counterStyle: const TextStyle(
+            counterStyle:  TextStyle(
               fontSize: 12,
               height: 1,
               color: softTextGray,
@@ -886,7 +1180,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             contentPadding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
-              borderSide: const BorderSide(
+              borderSide:  BorderSide(
                 color: sectionColor,
                 width: 1.4,
               ),
@@ -976,30 +1270,75 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     );
   }
 
-  Widget _kanjiSection(Term word) {
-    final canOpenKanjiDetails = word.hasKanjiDetails;
-    final firstCharacter = _firstKanjiCharacter(_primaryKanjiText(word));
-
+  Widget _kanjiSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionHeader('Kanji'),
-        InkWell(
-          onTap: canOpenKanjiDetails ? () => openKanjiDetail(word) : null,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 10, 22, 11),
-            child: Row(
+        if (!kanjiEntriesLoaded)
+           Padding(
+            padding: EdgeInsets.fromLTRB(22, 15, 22, 16),
+            child: Text(
+              'Loading kanji...',
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 15.5,
+                color: softTextGray,
+              ),
+            ),
+          )
+        else if (kanjiEntries.isEmpty)
+           Padding(
+            padding: EdgeInsets.fromLTRB(22, 15, 22, 16),
+            child: Text(
+              'No kanji details found',
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 15.5,
+                color: softTextGray,
+              ),
+            ),
+          )
+        else
+          ...kanjiEntries.asMap().entries.map((entry) {
+            return _kanjiEntryRow(
+              kanjiEntry: entry.value,
+              showDivider: entry.key != kanjiEntries.length - 1,
+            );
+          }),
+      ],
+    );
+  }
+
+  Widget _kanjiEntryRow({
+    required Term kanjiEntry,
+    required bool showDivider,
+  }) {
+    final meaning = kanjiEntry.kanjiMeaning.trim().isNotEmpty
+        ? kanjiEntry.kanjiMeaning.trim()
+        : kanjiEntry.meaning.trim();
+    final canOpenKanjiDetails = kanjiEntry.hasKanjiDetails;
+
+    return InkWell(
+      onTap: canOpenKanjiDetails
+          ? () => openKanjiDetail(kanjiEntry)
+          : null,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 11, 22, 0),
+        child: Column(
+          children: [
+            Row(
               children: [
                 SizedBox(
                   width: 49,
                   child: Text(
-                    firstCharacter,
+                    kanjiEntry.kanji,
                     textScaler: TextScaler.noScaling,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 32,
                       height: 1,
                       fontWeight: FontWeight.w500,
-                      color: Colors.black,
+                      color: darkText,
                     ),
                   ),
                 ),
@@ -1007,39 +1346,39 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (word.kanjiMeaning.trim().isNotEmpty)
+                      if (meaning.isNotEmpty)
                         Text(
-                          word.kanjiMeaning,
+                          meaning,
                           textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             height: 1.14,
-                            color: Colors.black,
+                            color: darkText,
                           ),
                         ),
-                      if (word.kunyomi.isNotEmpty)
+                      if (kanjiEntry.kunyomi.isNotEmpty)
                         Padding(
-                          padding: const EdgeInsets.only(top: 2),
+                          padding: const EdgeInsets.only(top: 3),
                           child: Text(
-                            word.kunyomi.join(', '),
+                            kanjiEntry.kunyomi.join(', '),
                             textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               height: 1.14,
-                              color: Colors.black,
+                              color: softTextGray,
                             ),
                           ),
                         ),
-                      if (word.onyomi.isNotEmpty)
+                      if (kanjiEntry.onyomi.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
                           child: Text(
-                            word.onyomi.join(', '),
+                            kanjiEntry.onyomi.join(', '),
                             textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               height: 1.14,
-                              color: Colors.black,
+                              color: softTextGray,
                             ),
                           ),
                         ),
@@ -1047,28 +1386,44 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                   ),
                 ),
                 if (canOpenKanjiDetails)
-                  const Icon(
+                   Icon(
                     Icons.chevron_right,
                     size: 27,
                     color: softTextGray,
                   ),
               ],
             ),
-          ),
+            if (showDivider)
+               Padding(
+                padding: EdgeInsets.only(top: 11),
+                child: Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: dividerColor,
+                ),
+              )
+            else
+              const SizedBox(height: 11),
+          ],
         ),
-      ],
+      ),
     );
   }
 
   Widget _examplesSection(Term word) {
-    final examples = word.examples;
+    final senses = _definitionSenses(word);
+    final exampleSenseEntries = senses
+        .asMap()
+        .entries
+        .where((entry) => entry.value.examples.isNotEmpty)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionHeader('Examples'),
-        if (examples.isEmpty)
-          const Padding(
+        if (exampleSenseEntries.isEmpty)
+           Padding(
             padding: EdgeInsets.fromLTRB(22, 15, 22, 17),
             child: Text(
               'No examples yet',
@@ -1080,88 +1435,210 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             ),
           )
         else
-          ...examples.asMap().entries.map((entry) {
-            final isLast = entry.key == examples.length - 1;
-            return _exampleRow(
-              example: entry.value,
-              showDivider: !isLast,
+          ...exampleSenseEntries.asMap().entries.map((groupEntry) {
+            final indexedSense = groupEntry.value;
+
+            return _exampleSenseGroup(
+              labelIndex: indexedSense.key,
+              sense: indexedSense.value,
+              showBottomDivider:
+                  groupEntry.key != exampleSenseEntries.length - 1,
             );
           }),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(22, 13, 22, 0),
-          child: Text(
-            'More Examples',
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 16,
-              height: 1,
-              color: accentBlue.withOpacity(0.72),
-              fontWeight: FontWeight.w500,
+      ],
+    );
+  }
+
+  Widget _exampleSenseGroup({
+    required int labelIndex,
+    required DictionarySense sense,
+    required bool showBottomDivider,
+  }) {
+    final isExpanded = expandedExampleSenseIndexes.contains(sense.index);
+    final visibleExamples = isExpanded
+        ? sense.examples
+        : sense.examples.take(maxExamplesPerSense).toList();
+    final hiddenCount = sense.examples.length - visibleExamples.length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 13, 22, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _senseBadge(labelIndex),
+          const SizedBox(height: 4),
+          ...visibleExamples.asMap().entries.map((entry) {
+            return _exampleRow(
+              example: entry.value,
+              labelIndex: labelIndex,
+              showDivider: entry.key != visibleExamples.length - 1,
+            );
+          }),
+          if (sense.examples.length > maxExamplesPerSense)
+            _exampleExpansionButton(
+              senseIndex: sense.index,
+              isExpanded: isExpanded,
+              hiddenCount: hiddenCount,
             ),
+          if (showBottomDivider)
+             Padding(
+              padding: EdgeInsets.only(top: 13),
+              child: Divider(
+                height: 1,
+                thickness: 1,
+                color: dividerColor,
+              ),
+            )
+          else
+            const SizedBox(height: 13),
+        ],
+      ),
+    );
+  }
+
+  Widget _senseBadge(int labelIndex) {
+    return Container(
+      width: 19,
+      height: 19,
+      margin: const EdgeInsets.only(top: 1),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: softTextGray,
+          width: 1.5,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          _definitionLabel(labelIndex),
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: 10.5,
+            height: 1,
+            color: softTextGray,
+            fontWeight: FontWeight.w800,
           ),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _exampleExpansionButton({
+    required int senseIndex,
+    required bool isExpanded,
+    required int hiddenCount,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () {
+        setState(() {
+          if (isExpanded) {
+            expandedExampleSenseIndexes.remove(senseIndex);
+          } else {
+            expandedExampleSenseIndexes.add(senseIndex);
+          }
+        });
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 10, 6, 1),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isExpanded ? 'Show fewer' : 'More examples ($hiddenCount)',
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1,
+                color: softTextGray,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(
+              isExpanded
+                  ? Icons.keyboard_arrow_up
+                  : Icons.keyboard_arrow_down,
+              size: 20,
+              color: softTextGray,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   Widget _exampleRow({
     required DictionaryExample example,
+    required int labelIndex,
     required bool showDivider,
   }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 10, 22, 0),
+      padding: const EdgeInsets.only(top: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      example.reading,
-                      textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        height: 1.15,
-                        color: Colors.black,
-                      ),
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _openSentenceDetail(
+              example: example,
+              labelIndex: labelIndex,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (example.reading.trim().isNotEmpty) ...[
+                          Text(
+                            example.reading,
+                            textScaler: TextScaler.noScaling,
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.15,
+                              color: darkText,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                        ],
+                        Text(
+                          example.japanese,
+                          textScaler: TextScaler.noScaling,
+                          style: TextStyle(
+                            fontSize: 18,
+                            height: 1.24,
+                            color: darkText,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          example.english,
+                          textScaler: TextScaler.noScaling,
+                          style: TextStyle(
+                            fontSize: 17,
+                            height: 1.18,
+                            color: darkText,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      example.japanese,
-                      textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        height: 1.24,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      example.english,
-                      textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        height: 1.18,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                   Icon(
+                    Icons.chevron_right,
+                    size: 27,
+                    color: softTextGray,
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.chevron_right,
-                size: 27,
-                color: softTextGray,
-              ),
-            ],
+            ),
           ),
           if (showDivider)
-            const Padding(
+             Padding(
               padding: EdgeInsets.only(top: 13),
               child: Divider(
                 height: 1,
@@ -1177,16 +1654,28 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   Widget _sectionHeader(String title) {
     return Container(
       width: double.infinity,
-      color: sectionColor,
-      padding: const EdgeInsets.fromLTRB(22, 5, 22, 5),
+      padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+      decoration: BoxDecoration(
+        color: GakujiColors.sectionHeader,
+        border: Border(
+          top: BorderSide(
+            color: darkText.withOpacity(0.16),
+            width: 1,
+          ),
+          bottom: BorderSide(
+            color: darkText.withOpacity(0.16),
+            width: 1,
+          ),
+        ),
+      ),
       child: Text(
         title,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
           height: 1,
-          color: Colors.black,
+          color: darkText,
         ),
       ),
     );
@@ -1195,9 +1684,9 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   Widget _topActionPill() {
     return Container(
       height: GakujiTopBar.buttonSize,
-      padding: const EdgeInsets.symmetric(horizontal: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 3),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: GakujiColors.warmCard,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -1205,13 +1694,13 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         children: [
           _topActionButton(
             icon: isSaved ? Icons.bookmark : Icons.bookmark_border,
-            iconColor: isSaved ? Colors.black : softTextGray,
+            iconColor: isSaved ? darkText : softTextGray,
             onTap: toggleDirectSaveDeck,
           ),
           const SizedBox(width: 2),
           _topActionButton(
             icon: Icons.menu_book_outlined,
-            iconColor: Colors.black,
+            iconColor: darkText,
             onTap: openDeckPicker,
           ),
         ],
@@ -1225,7 +1714,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     required VoidCallback onTap,
   }) {
     return SizedBox(
-      width: GakujiTopBar.buttonSize - 4,
+      width: GakujiTopBar.buttonSize,
       height: GakujiTopBar.buttonSize,
       child: Material(
         color: Colors.transparent,
@@ -1235,12 +1724,18 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           onTap: onTap,
           child: Icon(
             icon,
-            size: 26,
+            size: 30,
             color: iconColor,
           ),
         ),
       ),
     );
+  }
+
+  List<DictionarySense> _definitionSenses(Term word) {
+    return word.senses
+        .where((sense) => sense.glosses.isNotEmpty)
+        .toList(growable: false);
   }
 
   List<String> _extraRawDefinitions(Term word) {
@@ -1306,24 +1801,182 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   }
 
   bool _shouldShowKanjiSection(Term word) {
-    return _firstKanjiCharacter(_primaryKanjiText(word)).isNotEmpty &&
-        word.hasKanjiDetails;
-  }
-
-  String _firstKanjiCharacter(String text) {
-    for (final codePoint in text.runes) {
-      final character = String.fromCharCode(codePoint);
-
-      if (_containsKanji(character)) {
-        return character;
-      }
-    }
-
-    return '';
+    return _containsKanji(_primaryKanjiText(word));
   }
 
   bool _containsKanji(String text) {
     return RegExp(r'[\u4E00-\u9FFF]').hasMatch(text);
+  }
+}
+
+class _HybridCardModeSheet extends StatelessWidget {
+  final String deckName;
+
+  const _HybridCardModeSheet({
+    required this.deckName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 22),
+        decoration: BoxDecoration(
+          color: GakujiColors.warmBackground,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(24),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 5,
+                margin: const EdgeInsets.only(top: 9, bottom: 13),
+                decoration: BoxDecoration(
+                  color: GakujiColors.softGray,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+             Text(
+              'Choose card type',
+              textAlign: TextAlign.center,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 19,
+                height: 1,
+                color: GakujiColors.darkGray,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'How should this term be studied in $deckName?',
+              textAlign: TextAlign.center,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.2,
+                color: GakujiColors.mediumGray,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 18),
+            _modeOption(
+              context: context,
+              mode: HybridCardMode.reading,
+              icon: Icons.menu_book_rounded,
+              color: GakujiColors.reading,
+              title: 'Reading',
+              description: 'Recognize the term and recall its meaning.',
+            ),
+            const SizedBox(height: 11),
+            _modeOption(
+              context: context,
+              mode: HybridCardMode.writing,
+              icon: Icons.edit_rounded,
+              color: GakujiColors.writing,
+              title: 'Writing',
+              description: 'Produce and write the term from its prompt.',
+            ),
+            const SizedBox(height: 11),
+            _modeOption(
+              context: context,
+              mode: HybridCardMode.both,
+              icon: Icons.compare_arrows_rounded,
+              color: GakujiColors.hybrid,
+              title: 'Both',
+              description: 'Create separate Reading and Writing cards.',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _modeOption({
+    required BuildContext context,
+    required HybridCardMode mode,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String description,
+  }) {
+    return Material(
+      color: GakujiColors.warmCard,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => Navigator.pop(context, mode),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: GakujiColors.warmDivider,
+              width: 1.4,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 24,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        fontSize: 16,
+                        height: 1,
+                        color: GakujiColors.darkGray,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      description,
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        height: 1.2,
+                        color: GakujiColors.mediumGray,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+               Icon(
+                Icons.chevron_right_rounded,
+                size: 27,
+                color: GakujiColors.mediumGray,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1359,30 +2012,30 @@ class _DeckSaveSheet extends StatefulWidget {
 
 class _DeckSaveSheetState extends State<_DeckSaveSheet> {
   late final PageController pageController;
+  late final TextEditingController deckNameController;
+
+  DeckType selectedDeckType = DeckType.reading;
+  String? deckNameError;
 
   @override
   void initState() {
     super.initState();
 
     pageController = PageController();
+    deckNameController = TextEditingController();
   }
 
   @override
   void dispose() {
     pageController.dispose();
+    deckNameController.dispose();
 
     super.dispose();
   }
 
-  void _showDirectSaveDecks() {
-    pageController.animateToPage(
-      1,
-      duration: const Duration(milliseconds: 230),
-      curve: Curves.easeOut,
-    );
-  }
-
   void _showSaveDecks() {
+    FocusScope.of(context).unfocus();
+
     pageController.animateToPage(
       0,
       duration: const Duration(milliseconds: 230),
@@ -1390,32 +2043,97 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
     );
   }
 
+  void _showDirectSaveDecks() {
+    FocusScope.of(context).unfocus();
+
+    pageController.animateToPage(
+      1,
+      duration: const Duration(milliseconds: 230),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _showCreateDeckPanel() {
+    deckNameController.clear();
+
+    setState(() {
+      selectedDeckType = DeckType.reading;
+      deckNameError = null;
+    });
+
+    pageController.animateToPage(
+      2,
+      duration: const Duration(milliseconds: 230),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _createDeckFromSheet(BuildContext context) {
+    final deckName = deckNameController.text.trim();
+
+    if (deckName.isEmpty) {
+      setState(() {
+        deckNameError = 'Deck name required';
+      });
+
+      return;
+    }
+
+    final newDeck = Deck(
+      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      name: deckName,
+      type: selectedDeckType,
+      terms: [],
+    );
+
+    widget.decks.add(newDeck);
+    GakujiUserDataStore.scheduleSave();
+
+    FocusScope.of(context).unfocus();
+
+    Navigator.pop(
+      context,
+      _DeckSheetResult(
+        action: _DeckSheetAction.saveToDeck,
+        deck: newDeck,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
     final sheetHeight = screenHeight * 0.52;
 
     return SafeArea(
       top: false,
-      child: Container(
-        height: sheetHeight,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(22),
+      bottom: false,
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: Container(
+          height: sheetHeight,
+          decoration: BoxDecoration(
+            color: GakujiColors.warmBackground,
+            borderRadius: BorderRadius.vertical(
+              top: Radius.circular(24),
+            ),
           ),
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(22),
-          ),
-          child: PageView(
-            controller: pageController,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _saveToPanel(context),
-              _directSavePanel(context),
-            ],
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(24),
+            ),
+            child: PageView(
+              controller: pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _saveToPanel(context),
+                _directSavePanel(context),
+                _createDeckPanel(context),
+              ],
+            ),
           ),
         ),
       ),
@@ -1427,29 +2145,9 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
       children: [
         _sheetHandle(),
         _sheetTitle('Save to...'),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(14),
-            onTap: _showDirectSaveDecks,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: const Text(
-                'Select direct save deck',
-                textAlign: TextAlign.center,
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontSize: 15.5,
-                  height: 1,
-                  color: _DictionaryDetailPageState.accentBlue,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ),
-        const Divider(
+        _createDeckNavButton(),
+        _directSaveNavButton(),
+         Divider(
           height: 1,
           color: _DictionaryDetailPageState.dividerColor,
         ),
@@ -1468,7 +2166,7 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (isDirectSaveDeck)
-                      const Padding(
+                       Padding(
                         padding: EdgeInsets.only(right: 8),
                         child: Text(
                           'Direct',
@@ -1476,14 +2174,14 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
                           style: TextStyle(
                             fontSize: 12.5,
                             height: 1,
-                            color: _DictionaryDetailPageState.accentBlue,
+                            color: _DictionaryDetailPageState.softTextGray,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                       ),
                     if (isSaved)
                       const Icon(
-                        Icons.check,
+                        Icons.check_circle,
                         color: _DictionaryDetailPageState.accentBlue,
                       ),
                   ],
@@ -1505,52 +2203,122 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
     );
   }
 
+  Widget _createDeckNavButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 4, 18, 10),
+      child: Material(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: _showCreateDeckPanel,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: GakujiColors.warmDivider,
+                width: 1.4,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.add_rounded,
+                  size: 27,
+                  color: _DictionaryDetailPageState.accentBlue,
+                ),
+                SizedBox(width: 13),
+                Expanded(
+                  child: Text(
+                    'Create new deck',
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      height: 1,
+                      color: _DictionaryDetailPageState.darkText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  size: 27,
+                  color: _DictionaryDetailPageState.softTextGray,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _directSaveNavButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+      child: Material(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: _showDirectSaveDecks,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 13, 14, 13),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: GakujiColors.warmDivider,
+                width: 1.4,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.bookmark_border,
+                  size: 24,
+                  color: _DictionaryDetailPageState.accentBlue,
+                ),
+                SizedBox(width: 13),
+                Expanded(
+                  child: Text(
+                    'Select direct save deck',
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      height: 1,
+                      color: _DictionaryDetailPageState.darkText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  size: 27,
+                  color: _DictionaryDetailPageState.softTextGray,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _directSavePanel(BuildContext context) {
     return Column(
       children: [
         _sheetHandle(),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 48,
-                height: 38,
-                child: Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: _showSaveDecks,
-                    child: const Icon(
-                      Icons.arrow_back_ios_new,
-                      size: 19,
-                      color: Colors.black,
-                    ),
-                  ),
-                ),
-              ),
-              const Expanded(
-                child: Text(
-                  'Select direct save deck',
-                  textAlign: TextAlign.center,
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 18,
-                    height: 1,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 48),
-            ],
-          ),
+        _panelHeader(
+          title: 'Select direct save deck',
+          onBack: _showSaveDecks,
         ),
-        const Padding(
+         Padding(
           padding: EdgeInsets.fromLTRB(22, 0, 22, 12),
           child: Text(
-            'The bookmark button saves terms to this deck.',
+            'Bookmark saves go directly to this deck.',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
             style: TextStyle(
@@ -1561,7 +2329,7 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
             ),
           ),
         ),
-        const Divider(
+         Divider(
           height: 1,
           color: _DictionaryDetailPageState.dividerColor,
         ),
@@ -1580,7 +2348,7 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
                         Icons.check_circle,
                         color: _DictionaryDetailPageState.accentBlue,
                       )
-                    : const Icon(
+                    :  Icon(
                         Icons.circle_outlined,
                         color: _DictionaryDetailPageState.softTextGray,
                       ),
@@ -1601,6 +2369,233 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
     );
   }
 
+  Widget _createDeckPanel(BuildContext context) {
+    return Column(
+      children: [
+        _sheetHandle(),
+        _panelHeader(
+          title: 'Create new deck',
+          onBack: _showSaveDecks,
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(22, 14, 22, 22),
+            children: [
+              _fieldLabel('Deck Name'),
+              const SizedBox(height: 10),
+              _deckNameField(context),
+              if (deckNameError != null) ...[
+                const SizedBox(height: 8),
+                _errorText(deckNameError),
+              ],
+              const SizedBox(height: 24),
+              _fieldLabel('Deck Type'),
+              const SizedBox(height: 10),
+              _deckTypeDropdown(),
+              const SizedBox(height: 28),
+              _createDeckButton(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _panelHeader({
+    required String title,
+    required VoidCallback onBack,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 48,
+            height: 38,
+            child: Material(
+              color: Colors.transparent,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onBack,
+                child: Icon(
+                  Icons.arrow_back_ios_new,
+                  size: 19,
+                  color: _DictionaryDetailPageState.darkText,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              title,
+              textAlign: TextAlign.center,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 18,
+                height: 1,
+                fontWeight: FontWeight.w700,
+                color: _DictionaryDetailPageState.darkText,
+              ),
+            ),
+          ),
+          const SizedBox(width: 48),
+        ],
+      ),
+    );
+  }
+
+  Widget _fieldLabel(String label) {
+    return Text(
+      label,
+      textScaler: TextScaler.noScaling,
+      style: TextStyle(
+        fontSize: 15.5,
+        height: 1,
+        color: _DictionaryDetailPageState.darkText,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+  }
+
+  Widget _deckNameField(BuildContext context) {
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(
+          color: deckNameError == null
+              ? GakujiColors.warmDivider
+              : const Color(0xFFFF6F6F),
+          width: deckNameError == null ? 1.4 : 2,
+        ),
+      ),
+      child: Center(
+        child: TextField(
+          controller: deckNameController,
+          textInputAction: TextInputAction.done,
+          cursorColor: _DictionaryDetailPageState.accentBlue,
+          onChanged: (_) {
+            if (deckNameError == null) return;
+
+            setState(() {
+              deckNameError = null;
+            });
+          },
+          onSubmitted: (_) => _createDeckFromSheet(context),
+          style: TextStyle(
+            fontSize: 17,
+            height: 1,
+            color: _DictionaryDetailPageState.darkText,
+            fontWeight: FontWeight.w500,
+          ),
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            isCollapsed: true,
+            hintText: 'Enter deck name',
+            hintStyle: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w500,
+              color: _DictionaryDetailPageState.softTextGray,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _deckTypeDropdown() {
+    return Container(
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(
+          color: GakujiColors.warmDivider,
+          width: 1.4,
+        ),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<DeckType>(
+          value: selectedDeckType,
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(17),
+          dropdownColor: GakujiColors.warmCard,
+          icon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: _DictionaryDetailPageState.softTextGray,
+            size: 30,
+          ),
+          style: TextStyle(
+            fontSize: 17,
+            height: 1,
+            fontWeight: FontWeight.w500,
+            color: _DictionaryDetailPageState.darkText,
+          ),
+          items: DeckType.values.map((type) {
+            return DropdownMenuItem(
+              value: type,
+              child: Text(
+                _deckTypeLabel(type),
+                textScaler: TextScaler.noScaling,
+              ),
+            );
+          }).toList(),
+          onChanged: (value) {
+            if (value == null) return;
+
+            setState(() {
+              selectedDeckType = value;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _createDeckButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: Material(
+        color: _DictionaryDetailPageState.accentBlue,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () => _createDeckFromSheet(context),
+          child: const Center(
+            child: Text(
+              'Create and Save',
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 17,
+                height: 1,
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _errorText(String? text) {
+    return Text(
+      text ?? '',
+      textScaler: TextScaler.noScaling,
+      style: const TextStyle(
+        fontSize: 12,
+        height: 1,
+        color: Color(0xFFFF6F6F),
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
   Widget _sheetHandle() {
     return Center(
       child: Container(
@@ -1608,7 +2603,7 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
         height: 5,
         margin: const EdgeInsets.only(top: 9, bottom: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFD8D8D8),
+          color: GakujiColors.softGray,
           borderRadius: BorderRadius.circular(999),
         ),
       ),
@@ -1622,11 +2617,11 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
         title,
         textAlign: TextAlign.center,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 18,
           height: 1,
           fontWeight: FontWeight.w700,
-          color: Colors.black,
+          color: _DictionaryDetailPageState.darkText,
         ),
       ),
     );
@@ -1645,17 +2640,17 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 16,
           height: 1.05,
           fontWeight: FontWeight.w600,
-          color: Colors.black,
+          color: _DictionaryDetailPageState.darkText,
         ),
       ),
       subtitle: Text(
         '${deck.terms.length} terms',
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 13,
           height: 1.2,
           color: _DictionaryDetailPageState.softTextGray,
@@ -1665,5 +2660,16 @@ class _DeckSaveSheetState extends State<_DeckSaveSheet> {
       trailing: trailing,
       onTap: onTap,
     );
+  }
+
+  String _deckTypeLabel(DeckType type) {
+    switch (type) {
+      case DeckType.writing:
+        return 'Writing';
+      case DeckType.reading:
+        return 'Reading';
+      case DeckType.hybrid:
+        return 'Hybrid';
+    }
   }
 }

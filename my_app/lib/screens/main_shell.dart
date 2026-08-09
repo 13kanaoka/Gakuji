@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import '../services/gakuji_user_data_store.dart';
+import '../widgets/gakuji_styles.dart';
 import 'home_page.dart';
 import 'dictionary_page.dart';
 import 'library_page.dart';
@@ -11,7 +15,7 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   late final PageController pageController;
   late final List<Widget> pages;
 
@@ -29,6 +33,8 @@ class _MainShellState extends State<MainShell> {
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addObserver(this);
+
     pageController = PageController(initialPage: selectedIndex);
 
     pages = [
@@ -44,8 +50,19 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    unawaited(GakujiUserDataStore.flushPendingSave());
+
+    WidgetsBinding.instance.removeObserver(this);
     pageController.dispose();
+
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) return;
+
+    unawaited(GakujiUserDataStore.flushPendingSave());
   }
 
   void setDictionaryInputActive(bool active) {
@@ -143,16 +160,13 @@ class _MainShellState extends State<MainShell> {
               child: Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: GakujiColors.warmCard,
                   borderRadius: BorderRadius.circular(40),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.16),
-                      blurRadius: 18,
-                      spreadRadius: 0,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
+                  border: Border.all(
+                    color: GakujiColors.warmDivider,
+                    width: 1.5,
+                  ),
+                  boxShadow: [GakujiShadows.soft],
                 ),
                 child: SizedBox(
                   width: double.infinity,
@@ -176,17 +190,27 @@ class _MainShellState extends State<MainShell> {
                               ),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEDEDED),
+                                  color: GakujiColors.warmBackground,
                                   borderRadius: BorderRadius.circular(32),
+                                  border: Border.all(
+                                    color: GakujiColors.lightDivider,
+                                    width: 1,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                           Row(
                             children: [
-                              _navIcon(Icons.home, 0),
-                              _navIcon(Icons.search, 1),
-                              _navIcon(Icons.folder_copy_outlined, 2),
+                              _navImageIcon(
+                                'assets/images/nav_home_bonsai.png',
+                                0,
+                              ),
+                              _navIcon(Icons.search_rounded, 1),
+                              _navImageIcon(
+                                'assets/images/nav_library_books.png',
+                                2,
+                              ),
                             ],
                           ),
                         ],
@@ -202,8 +226,8 @@ class _MainShellState extends State<MainShell> {
     );
   }
 
-  Widget _navIcon(IconData icon, int index) {
-    final bool selected = selectedIndex == index;
+  Widget _navImageIcon(String assetPath, int index) {
+    final selected = selectedIndex == index;
 
     return Expanded(
       child: GestureDetector(
@@ -211,13 +235,40 @@ class _MainShellState extends State<MainShell> {
         onTap: () => goToPage(index),
         child: Center(
           child: AnimatedScale(
-            scale: selected ? 1.18 : 1.0,
+            scale: selected ? 1.16 : 1.0,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            child: ImageIcon(
+              AssetImage(assetPath),
+              size: 30,
+              color: selected
+                  ? GakujiColors.darkGray
+                  : GakujiColors.mediumGray,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navIcon(IconData icon, int index) {
+    final selected = selectedIndex == index;
+
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => goToPage(index),
+        child: Center(
+          child: AnimatedScale(
+            scale: selected ? 1.16 : 1.0,
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
             child: Icon(
               icon,
               size: 28,
-              color: selected ? Colors.black : Colors.black54,
+              color: selected
+                  ? GakujiColors.darkGray
+                  : GakujiColors.mediumGray,
             ),
           ),
         ),

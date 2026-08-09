@@ -1,15 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/deck_data.dart';
 import '../data/pinned_deck_data.dart';
+import '../data/review_card_data.dart';
 import '../models/deck.dart';
+import '../models/review_card.dart';
 import '../models/term.dart';
 import '../services/deck_storage.dart';
+import '../services/gakuji_user_data_store.dart';
+import '../services/word_fusion_round_generator.dart';
+import '../widgets/gakuji_faded_scroll.dart';
+import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
+import '../widgets/review_schedule_card.dart';
 import 'deck_edit_page.dart';
 import 'deck_term_list_page.dart';
+import 'review_study_page.dart';
+import 'review_calendar_page.dart';
 import 'study_page.dart';
 import 'writing_study_page.dart';
+import 'hybrid_study_page.dart';
+import 'kanji_fusion_game_page.dart';
+import 'word_fusion_game_page.dart';
+import 'imposter_detective_page.dart';
 
 class DeckPage extends StatefulWidget {
   final Deck deck;
@@ -24,31 +38,147 @@ class DeckPage extends StatefulWidget {
 }
 
 class _DeckPageState extends State<DeckPage> {
-  static const Color deckBlue = Color(0xFF4D7EF7);
-  static const Color metadataGray = Color(0xFF6F6F6F);
-  static const Color dividerGray = Color(0xFFE1E1E1);
-  static const Color pinRed = Color(0xFFFF4B4B);
-
-  bool showMenu = false;
-  bool showStarredOnly = false;
-
   bool isShuffled = false;
   bool showFurigana = true;
   bool termFirst = true;
-  bool showWritingGrid = true;
   bool dataLoaded = false;
 
-  bool isLargeStudyButtonPressed = false;
-  bool isLargeStudyButtonTapLocked = false;
+  bool reviewEnabled = false;
+  bool reviewAvailable = false;
+  StudyMode activeStudyMode = StudyMode.study;
+  DateTime? reviewEnabledAt;
+  DateTime? reviewSessionStartedAt;
 
   int lastIndex = 0;
 
+  bool get isReadingDeck => widget.deck.type == DeckType.reading;
   bool get isWritingDeck => widget.deck.type == DeckType.writing;
-  bool get usesReadingStudyOptions => !isWritingDeck;
-  bool get deckIsPinned => isDeckPinned(widget.deck);
+  bool get isHybridDeck => widget.deck.type == DeckType.hybrid;
 
-  String get writingGridPreferenceKey {
-    return 'writing_grid_visible_${widget.deck.id}';
+  bool get deckIsPinned => isDeckPinned(widget.deck);
+  bool get isReviewMode => activeStudyMode == StudyMode.review;
+
+  Color get deckPrimaryColor {
+    switch (widget.deck.type) {
+      case DeckType.reading:
+        return GakujiColors.reading;
+      case DeckType.writing:
+        return GakujiColors.writing;
+      case DeckType.hybrid:
+        return GakujiColors.hybrid;
+    }
+  }
+
+  double get headerPatternSize {
+    if (isReadingDeck) return 520;
+    if (isWritingDeck) return 520;
+    return 620;
+  }
+
+  double get headerPatternTopOffset {
+    if (isReadingDeck) return -300;
+    if (isWritingDeck) return -304;
+    return -388;
+  }
+
+  double get headerPatternLeftOffset {
+    if (isReadingDeck) return -42;
+    if (isWritingDeck) return -46;
+    return -84;
+  }
+
+  double get headerPatternRotation {
+    if (isReadingDeck) return 0;
+    if (isWritingDeck) return 0;
+    return 0;
+  }
+
+  double get headerPatternOpacity {
+    if (isReadingDeck) return 0.18;
+    if (isWritingDeck) return 0.17;
+    return 0.16;
+  }
+
+  bool get reviewSessionStartedToday {
+    if (reviewSessionStartedAt == null) {
+      return false;
+    }
+
+    return _isSameDate(reviewSessionStartedAt!, DateTime.now());
+  }
+
+  List<ReviewCard> get deckReviewCards {
+    return getReviewCardsForDeck(widget.deck.id);
+  }
+
+  Future<List<ReviewCard>> _reviewCardsForCurrentSession({
+    DateTime? now,
+  }) {
+    return getLimitedReviewCardsForDeck(
+      widget.deck.id,
+      now: now,
+      includeShortIntervalCards: reviewSessionStartedToday,
+    );
+  }
+
+  String get reviewSessionStartedPreferenceKey {
+    return 'review_session_started_${widget.deck.id}';
+  }
+
+  String get termsCountLabel {
+    final count = widget.deck.terms.length;
+    return count == 1 ? '1 Term' : '$count Terms';
+  }
+
+  String get studyButtonLabel {
+    if (isReviewMode) {
+      if (!reviewEnabled) return 'Enable Review';
+
+      return reviewSessionStartedToday ? 'Resume Review' : 'Review';
+    }
+
+    return 'Flashcards';
+  }
+
+  void scheduleUserDataSave() {
+    GakujiUserDataStore.scheduleSave();
+  }
+
+  Future<void> refreshDeckAfterChanges() async {
+    if (reviewEnabled) {
+      await createReviewCardsForDeck(widget.deck);
+    }
+
+    final availableCards = reviewEnabled
+        ? await _reviewCardsForCurrentSession()
+        : const <ReviewCard>[];
+
+    if (!mounted) return;
+
+    setState(() {
+      reviewAvailable = availableCards.isNotEmpty;
+    });
+
+    scheduleUserDataSave();
+  }
+
+  Future<void> refreshReviewAvailability() async {
+    if (!reviewEnabled) {
+      if (!mounted) return;
+
+      setState(() {
+        reviewAvailable = false;
+      });
+      return;
+    }
+
+    final availableCards = await _reviewCardsForCurrentSession();
+
+    if (!mounted) return;
+
+    setState(() {
+      reviewAvailable = availableCards.isNotEmpty;
+    });
   }
 
   @override
@@ -58,35 +188,182 @@ class _DeckPageState extends State<DeckPage> {
   }
 
   Future<void> loadState() async {
+    await loadReviewCards();
+
     final savedIndex = await DeckStorage.loadProgress(widget.deck.id);
     final savedShuffle = await DeckStorage.loadShuffle(widget.deck.id);
+    final savedReviewEnabled =
+        await DeckStorage.loadReviewEnabled(widget.deck.id);
+    final savedActiveStudyMode =
+        await DeckStorage.loadActiveStudyMode(widget.deck.id);
+    final savedReviewEnabledAt =
+        await DeckStorage.loadReviewEnabledAt(widget.deck.id);
+
     final prefs = await SharedPreferences.getInstance();
-    final savedWritingGrid = prefs.getBool(writingGridPreferenceKey);
+    final savedReviewSessionStartedAt =
+        prefs.getString(reviewSessionStartedPreferenceKey);
 
     if (!mounted) return;
 
     setState(() {
       lastIndex = savedIndex;
       isShuffled = savedShuffle;
-      showWritingGrid = savedWritingGrid ?? true;
+      reviewEnabled = savedReviewEnabled;
+      activeStudyMode = savedActiveStudyMode;
+      reviewEnabledAt = savedReviewEnabledAt;
+      reviewSessionStartedAt = _parseSavedDate(savedReviewSessionStartedAt);
       dataLoaded = true;
     });
+
+    await refreshReviewAvailability();
   }
 
-  Future<void> saveWritingGridPreference() async {
+  List<ReviewCard> _focusCardsFor(_FocusStudyType type) {
+    return deckReviewCards.where((card) {
+      switch (type) {
+        case _FocusStudyType.newCards:
+          return card.state == ReviewCardState.newCard;
+        case _FocusStudyType.learning:
+          return card.state == ReviewCardState.learning ||
+              card.state == ReviewCardState.relearning;
+        case _FocusStudyType.review:
+          return card.state == ReviewCardState.review;
+      }
+    }).toList();
+  }
+
+  int _focusCount(_FocusStudyType type) {
+    return _focusCardsFor(type).length;
+  }
+
+  Future<void> openFocusStudy(_FocusStudyType type) async {
+    await createReviewCardsForDeck(widget.deck);
+
+    final focusCards = _focusCardsFor(type);
+    final focusTermIds = focusCards.map((card) => card.termId).toSet();
+    final focusTerms = widget.deck.terms.where((term) {
+      final termId = term.sourceId ?? term.id;
+      return focusTermIds.contains(termId);
+    }).toList();
+
+    if (focusTerms.isEmpty) {
+      _showFloatingMessage('No ${_focusLabel(type)} cards to study');
+      return;
+    }
+
+    switch (widget.deck.type) {
+      case DeckType.reading:
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StudyPage(
+              terms: focusTerms,
+              deck: widget.deck,
+              initialIsShuffled: isShuffled,
+              initialShowFurigana: showFurigana,
+              initialTermFirst: termFirst,
+            ),
+          ),
+        );
+        break;
+
+      case DeckType.writing:
+        final writingTerms = isShuffled
+            ? (List<Term>.from(focusTerms)..shuffle())
+            : focusTerms;
+
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WritingStudyPage(
+              terms: writingTerms,
+              deck: widget.deck,
+              initialIsShuffled: isShuffled,
+            ),
+          ),
+        );
+        break;
+
+      case DeckType.hybrid:
+        final cardTypesByTermId = <String, Set<ReviewCardType>>{};
+
+        for (final card in focusCards) {
+          cardTypesByTermId
+              .putIfAbsent(card.termId, () => <ReviewCardType>{})
+              .add(card.cardType);
+        }
+
+        final focusHybridModes = <String, HybridCardMode>{};
+
+        for (final term in focusTerms) {
+          final termId = term.sourceId ?? term.id;
+          final cardTypes =
+              cardTypesByTermId[termId] ?? const <ReviewCardType>{};
+
+          final hasReading = cardTypes.contains(ReviewCardType.reading);
+          final hasWriting = cardTypes.contains(ReviewCardType.writing);
+
+          if (hasReading && hasWriting) {
+            focusHybridModes[term.id] = HybridCardMode.both;
+          } else if (hasWriting) {
+            focusHybridModes[term.id] = HybridCardMode.writing;
+          } else {
+            focusHybridModes[term.id] = HybridCardMode.reading;
+          }
+        }
+
+        final focusDeck = widget.deck.copyWith(
+          terms: focusTerms,
+          hybridCardModes: focusHybridModes,
+        );
+
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HybridStudyPage(
+              deck: focusDeck,
+              initialIsShuffled: isShuffled,
+              initialShowFurigana: showFurigana,
+              initialTermFirst: termFirst,
+            ),
+          ),
+        );
+        break;
+    }
+
+    if (!mounted) return;
+
+    setState(() {});
+    scheduleUserDataSave();
+  }
+
+  String _focusLabel(_FocusStudyType type) {
+    switch (type) {
+      case _FocusStudyType.newCards:
+        return 'New';
+      case _FocusStudyType.learning:
+        return 'Learning';
+      case _FocusStudyType.review:
+        return 'Review';
+    }
+  }
+
+  Future<void> saveReviewSessionStartedAt(DateTime startedAt) async {
     final prefs = await SharedPreferences.getInstance();
 
-    await prefs.setBool(
-      writingGridPreferenceKey,
-      showWritingGrid,
+    await prefs.setString(
+      reviewSessionStartedPreferenceKey,
+      startedAt.toIso8601String(),
     );
   }
 
-  Future<void> openTermList() async {
-    setState(() {
-      showMenu = false;
-    });
+  Future<void> clearReviewSessionStartedAt() async {
+    final prefs = await SharedPreferences.getInstance();
 
+    await prefs.remove(reviewSessionStartedPreferenceKey);
+  }
+
+  Future<void> openTermList() async {
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -94,9 +371,73 @@ class _DeckPageState extends State<DeckPage> {
       ),
     );
 
+    await refreshDeckAfterChanges();
+  }
+
+  Future<void> confirmDeleteDeck() async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.55),
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: GakujiColors.warmCard,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+          ),
+          title: Text(
+            'Delete Deck?',
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.large.copyWith(
+              color: GakujiColors.darkGray,
+            ),
+          ),
+          content: Text(
+            'This will permanently delete this deck.',
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.small.copyWith(
+              color: GakujiColors.mediumGray,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: Text(
+                'Cancel',
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.small.copyWith(
+                  color: GakujiColors.mediumGray,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: Text(
+                'Delete',
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.small.copyWith(
+                  color: GakujiColors.pinRed,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true) return;
+
+    decks.removeWhere((deck) => deck.id == widget.deck.id);
+    pinnedDeckIds.remove(widget.deck.id);
+
+    scheduleUserDataSave();
+
     if (!mounted) return;
 
-    setState(() {});
+    Navigator.pop(context);
   }
 
   void togglePinnedDeck() {
@@ -105,6 +446,7 @@ class _DeckPageState extends State<DeckPage> {
         pinnedDeckIds.remove(widget.deck.id);
       });
 
+      scheduleUserDataSave();
       return;
     }
 
@@ -116,9 +458,15 @@ class _DeckPageState extends State<DeckPage> {
     setState(() {
       pinnedDeckIds.add(widget.deck.id);
     });
+
+    scheduleUserDataSave();
   }
 
   void _showPinLimitMessage() {
+    _showFloatingMessage('You can pin up to 3 decks');
+  }
+
+  void _showFloatingMessage(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -126,90 +474,172 @@ class _DeckPageState extends State<DeckPage> {
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
           backgroundColor: Colors.black.withOpacity(0.86),
-          content: const Text(
-            'You can pin up to 3 decks',
+          content: Text(
+            message,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-            ),
+            style: GakujiText.snackBar,
           ),
         ),
       );
   }
 
-  void toggleStar(Term term) {
+  Future<void> toggleStudyMode(StudyMode mode) async {
     setState(() {
-      term.marked = !term.marked;
+      activeStudyMode = mode;
     });
+
+    await DeckStorage.saveActiveStudyMode(widget.deck.id, mode);
+
+    if (mode == StudyMode.review && reviewEnabled) {
+      await refreshReviewAvailability();
+    }
+
+    scheduleUserDataSave();
   }
 
-  void toggleStarredTermFilter() {
-    setState(() {
-      showStarredOnly = !showStarredOnly;
-    });
-  }
+  Future<void> enableReviewForDeck() async {
+    if (reviewEnabled) return;
 
-  Future<void> toggleShuffle() async {
-    setState(() {
-      isShuffled = !isShuffled;
-    });
+    await createReviewCardsForDeck(widget.deck);
 
-    await DeckStorage.saveShuffle(widget.deck.id, isShuffled);
-  }
+    final enabledAt = DateTime.now();
 
-  void toggleWritingGrid() {
-    if (!isWritingDeck) return;
+    await DeckStorage.saveReviewEnabled(widget.deck.id, true);
+    await DeckStorage.saveReviewEnabledAt(widget.deck.id, enabledAt);
+
+    if (!mounted) return;
 
     setState(() {
-      showWritingGrid = !showWritingGrid;
+      reviewEnabled = true;
+      reviewEnabledAt = enabledAt;
     });
 
-    saveWritingGridPreference();
-  }
-
-  Future<void> resetDeck() async {
-    setState(() {
-      showMenu = false;
-      lastIndex = 0;
-    });
-
-    await DeckStorage.saveProgress(widget.deck.id, 0);
+    await refreshReviewAvailability();
+    scheduleUserDataSave();
   }
 
   Future<void> openStudy() async {
-    final baseStudyTerms = showStarredOnly
-        ? widget.deck.terms.where((term) => term.marked).toList()
-        : List<Term>.from(widget.deck.terms);
+    if (isReviewMode) {
+      if (!reviewEnabled) {
+        await enableReviewForDeck();
+        return;
+      }
 
-    if (widget.deck.type == DeckType.writing) {
-      final studyTerms = isShuffled
-          ? (List<Term>.from(baseStudyTerms)..shuffle())
-          : baseStudyTerms;
+      await createReviewCardsForDeck(widget.deck);
+
+      final dueCards = await _reviewCardsForCurrentSession();
+
+      if (dueCards.isEmpty) {
+        await clearReviewSessionStartedAt();
+
+        if (!mounted) return;
+
+        setState(() {
+          reviewSessionStartedAt = null;
+          reviewAvailable = false;
+        });
+
+        _showFloatingMessage('No cards due for Review');
+        return;
+      }
+
+      final startedAt = reviewSessionStartedToday
+          ? reviewSessionStartedAt!
+          : DateTime.now();
+
+      await saveReviewSessionStartedAt(startedAt);
+
+      if (!mounted) return;
+
+      setState(() {
+        reviewSessionStartedAt = startedAt;
+      });
 
       await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (context) => WritingStudyPage(
-            terms: studyTerms,
+          builder: (context) => ReviewStudyPage(
             deck: widget.deck,
+            reviewCards: dueCards,
           ),
         ),
       );
-    } else {
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => StudyPage(
-            terms: baseStudyTerms,
-            deck: widget.deck,
-            initialIsShuffled: isShuffled,
-            initialShowFurigana: showFurigana,
-            initialTermFirst: termFirst,
+
+      await loadReviewCards();
+
+      final remainingReviewCards = await _reviewCardsForCurrentSession();
+
+      if (remainingReviewCards.isEmpty) {
+        await clearReviewSessionStartedAt();
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        reviewAvailable = remainingReviewCards.isNotEmpty;
+
+        if (remainingReviewCards.isEmpty) {
+          reviewSessionStartedAt = null;
+        }
+      });
+
+      scheduleUserDataSave();
+      return;
+    }
+
+    final baseStudyTerms = List<Term>.from(widget.deck.terms);
+
+    if (baseStudyTerms.isEmpty) {
+      _showFloatingMessage('No terms to study');
+      return;
+    }
+
+    switch (widget.deck.type) {
+      case DeckType.writing:
+        final studyTerms = isShuffled
+            ? (List<Term>.from(baseStudyTerms)..shuffle())
+            : baseStudyTerms;
+
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => WritingStudyPage(
+              terms: studyTerms,
+              deck: widget.deck,
+              initialIsShuffled: isShuffled,
+            ),
           ),
-        ),
-      );
+        );
+        break;
+
+      case DeckType.hybrid:
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HybridStudyPage(
+              deck: widget.deck,
+              initialIsShuffled: isShuffled,
+              initialShowFurigana: showFurigana,
+              initialTermFirst: termFirst,
+            ),
+          ),
+        );
+        break;
+
+      case DeckType.reading:
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StudyPage(
+              terms: baseStudyTerms,
+              deck: widget.deck,
+              initialIsShuffled: isShuffled,
+              initialShowFurigana: showFurigana,
+              initialTermFirst: termFirst,
+            ),
+          ),
+        );
+        break;
     }
 
     final updatedIndex = await DeckStorage.loadProgress(widget.deck.id);
@@ -219,53 +649,89 @@ class _DeckPageState extends State<DeckPage> {
     setState(() {
       lastIndex = updatedIndex;
     });
+
+    scheduleUserDataSave();
   }
 
-  void setLargeStudyButtonPressed(bool value) {
-    if (!mounted || isLargeStudyButtonPressed == value) return;
+  Future<void> openCrosscheckGame() async {
+    final gameTerms = List<Term>.from(widget.deck.terms);
 
-    setState(() {
-      isLargeStudyButtonPressed = value;
-    });
-  }
+    if (gameTerms.isEmpty) {
+      _showFloatingMessage('No entries available for Crosscheck');
+      return;
+    }
 
-  Future<void> handleLargeStudyButtonTap() async {
-    if (isLargeStudyButtonTapLocked) return;
-
-    isLargeStudyButtonTapLocked = true;
-    setLargeStudyButtonPressed(true);
-
-    await Future.delayed(const Duration(milliseconds: 75));
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ImposterDetectivePage(
+          deck: widget.deck,
+          terms: gameTerms,
+        ),
+      ),
+    );
 
     if (!mounted) return;
 
-    setLargeStudyButtonPressed(false);
+    setState(() {});
+    scheduleUserDataSave();
+  }
 
-    await Future.delayed(const Duration(milliseconds: 35));
+  Future<void> openKanjiFusionGame() async {
+    final gameTerms = List<Term>.from(widget.deck.terms);
+
+    if (gameTerms.isEmpty) {
+      _showFloatingMessage('No terms available for Fusion');
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => KanjiFusionGamePage(
+          terms: gameTerms,
+          deckName: widget.deck.name,
+          accentColor: deckPrimaryColor,
+        ),
+      ),
+    );
 
     if (!mounted) return;
 
-    isLargeStudyButtonTapLocked = false;
-    await openStudy();
+    setState(() {});
+    scheduleUserDataSave();
   }
 
-  void toggleFurigana() {
-    setState(() {
-      showFurigana = !showFurigana;
-    });
-  }
+  Future<void> openWordFusionGame() async {
+    final gameTerms = List<Term>.from(widget.deck.terms);
 
-  void toggleCardOrientation() {
-    setState(() {
-      termFirst = !termFirst;
-    });
+    final eligibleCount = WordFusionRoundGenerator.eligibleTermCount(gameTerms);
+
+    if (eligibleCount == 0) {
+      _showFloatingMessage(
+        'Word Fusion needs a word written with 2–6 kanji',
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WordFusionGamePage(
+          terms: gameTerms,
+          deckName: widget.deck.name,
+          accentColor: deckPrimaryColor,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    setState(() {});
+    scheduleUserDataSave();
   }
 
   Future<void> openDeckEdit() async {
-    setState(() {
-      showMenu = false;
-    });
-
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -273,187 +739,195 @@ class _DeckPageState extends State<DeckPage> {
       ),
     );
 
-    if (!mounted) return;
+    await refreshDeckAfterChanges();
+  }
 
-    setState(() {});
+  DateTime? _parseSavedDate(String? savedDate) {
+    if (savedDate == null || savedDate.trim().isEmpty) {
+      return null;
+    }
+
+    return DateTime.tryParse(savedDate);
+  }
+
+  DateTime _dateOnly(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
+  }
+
+  bool _isSameDate(DateTime first, DateTime second) {
+    final firstDate = _dateOnly(first);
+    final secondDate = _dateOnly(second);
+
+    return firstDate.year == secondDate.year &&
+        firstDate.month == secondDate.month &&
+        firstDate.day == secondDate.day;
   }
 
   @override
   Widget build(BuildContext context) {
     if (!dataLoaded) {
-      return const Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: GakujiColors.warmBackground,
+        body: Center(
+          child: CircularProgressIndicator(
+            color: deckPrimaryColor,
+          ),
+        ),
       );
     }
 
-    final terms = widget.deck.terms;
-
-    final visibleTerms =
-        showStarredOnly ? terms.where((term) => term.marked).toList() : terms;
-
-    final hasProgress = lastIndex > 0;
-    final studyButtonText = hasProgress ? 'Resume' : 'Study';
-
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          if (showMenu) {
-            setState(() => showMenu = false);
-          }
-        },
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Column(
-                children: [
-                  GakujiTopBar(
-                    leftIcon: Icons.arrow_back_ios_new,
-                    onLeftTap: () => Navigator.pop(context),
-                    title: '',
-                    showOptionsButton: true,
-                    optionsSelected: showMenu,
-                    onOptionsTap: () {
-                      setState(() => showMenu = !showMenu);
-                    },
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(32, 10, 32, 0),
+      backgroundColor: GakujiColors.warmBackground,
+      body: Stack(
+        children: [
+          _deckHeaderPattern(),
+          SafeArea(
+            bottom: false,
+            child: Column(
+              children: [
+                _topBar(),
+                Expanded(
+                  child: GakujiFadedScroll(
+                    topFadeEnd: 0.09,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(
+                        GakujiSpacing.pageHorizontal,
+                        0,
+                        GakujiSpacing.pageHorizontal,
+                        GakujiSpacing.pageBottom,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _deckHeader(
-                            termsCount: terms.length,
-                            smallButtonText: 'Study',
-                          ),
-                          Transform.translate(
-                            offset: const Offset(0, -16),
-                            child: Center(
-                              child: _largeStudyButton(studyButtonText),
+                          _deckHeader(),
+                          const SizedBox(height: 10),
+                          _studySection(),
+                          if (isReviewMode && reviewEnabled) ...[
+                            const SizedBox(
+                              height: GakujiSpacing.sectionGap,
                             ),
+                            _focusSection(),
+                          ],
+                          if (isReviewMode && reviewEnabled) ...[
+                            const SizedBox(
+                              height: GakujiSpacing.sectionGap,
+                            ),
+                            _reviewScheduleSection(),
+                          ],
+                          const SizedBox(
+                            height: GakujiSpacing.sectionGap,
                           ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: visibleTerms.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      showStarredOnly
-                                          ? 'No starred terms yet'
-                                          : 'No terms yet',
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  )
-                                : _fadedTermList(visibleTerms),
-                          ),
+                          _deckInformationSection(),
                         ],
                       ),
                     ),
                   ),
-                ],
-              ),
-              if (showMenu) _menuOverlay(),
-            ],
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _deckHeader({
-    required int termsCount,
-    required String smallButtonText,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _deckHeaderPattern() {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 150,
+      child: IgnorePointer(
+        child: ShaderMask(
+          blendMode: BlendMode.dstIn,
+          shaderCallback: (bounds) {
+            return const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Colors.black,
+                Colors.black,
+                Colors.transparent,
+              ],
+              stops: [
+                0.0,
+                0.62,
+                1.0,
+              ],
+            ).createShader(bounds);
+          },
+          child: Opacity(
+            opacity: headerPatternOpacity,
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                Text(
-                  widget.deck.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textScaler: TextScaler.noScaling,
-                  style: const TextStyle(
-                    fontSize: 38,
-                    height: 0.95,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -1.1,
-                    color: Colors.black,
+                Positioned(
+                  top: headerPatternTopOffset,
+                  left: headerPatternLeftOffset,
+                  child: Transform.rotate(
+                    angle: headerPatternRotation,
+                    child: SizedBox(
+                      width: headerPatternSize,
+                      height: headerPatternSize,
+                      child: Image.asset(
+                        _deckPatternAssetPath(widget.deck.type),
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                _metadataText('Created by: You'),
-                const SizedBox(height: 3),
-                _metadataText(_deckTypeLabel(widget.deck.type)),
-                const SizedBox(height: 3),
-                _metadataText('Terms: $termsCount'),
               ],
             ),
           ),
         ),
-        const SizedBox(width: 18),
-        _smallStudyButton(smallButtonText),
-      ],
-    );
-  }
-
-  Widget _metadataText(String text) {
-    return Text(
-      text,
-      textScaler: TextScaler.noScaling,
-      style: const TextStyle(
-        fontSize: 16,
-        height: 1.08,
-        fontWeight: FontWeight.w400,
-        color: metadataGray,
       ),
     );
   }
 
-  Widget _smallStudyButton(String label) {
-    return Container(
-      width: 86,
-      height: 44,
-      decoration: BoxDecoration(
-        color: deckBlue.withOpacity(0.84),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: deckBlue,
-          width: 2,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 0,
-            offset: Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: openStudy,
+  Widget _topBar() {
+    return GakujiTopBar(
+      leftIcon: GakujiTopBar.backIcon,
+      leftIconSize: GakujiTopBar.backIconSize,
+      leftIconColor: GakujiColors.darkGray,
+      onLeftTap: () => Navigator.pop(context),
+      rightWidget: _topPinButton(),
+    );
+  }
+
+  Widget _topPinButton() {
+    final pinned = deckIsPinned;
+
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: togglePinnedDeck,
+        splashColor: GakujiColors.darkGray.withOpacity(0.08),
+        highlightColor: GakujiColors.darkGray.withOpacity(0.04),
+        child: SizedBox(
+          width: 44,
+          height: 44,
           child: Center(
-            child: Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
+            child: Image.asset(
+              'assets/images/pin_icon.png',
+              width: 30,
+              height: 30,
+              fit: BoxFit.contain,
+              color: pinned ? GakujiColors.darkGray : GakujiColors.softGray,
+              colorBlendMode: BlendMode.srcIn,
+              errorBuilder: (context, error, stackTrace) {
+                return Icon(
+                  Icons.push_pin_rounded,
+                  size: 30,
+                  color: pinned
+                      ? GakujiColors.darkGray
+                      : GakujiColors.mediumGray,
+                );
+              },
             ),
           ),
         ),
@@ -461,366 +935,822 @@ class _DeckPageState extends State<DeckPage> {
     );
   }
 
-  Widget _largeStudyButton(String label) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTapDown: (_) => setLargeStudyButtonPressed(true),
-      onTapCancel: () => setLargeStudyButtonPressed(false),
-      onTap: handleLargeStudyButtonTap,
-      child: AnimatedContainer(
-        width: 190,
-        height: 190,
-        duration: const Duration(milliseconds: 55),
-        curve: Curves.easeOut,
-        transform: Matrix4.translationValues(
-          0,
-          isLargeStudyButtonPressed ? 8 : 0,
-          0,
-        ),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: isLargeStudyButtonPressed
-              ? const []
-              : const [
-                  BoxShadow(
-                    color: Color(0x26000000),
-                    blurRadius: 0,
-                    offset: Offset(0, 8),
-                  ),
-                ],
-        ),
-        child: Material(
-          color: const Color(0xD64D7EF7),
-          shape: const CircleBorder(
-            side: BorderSide(
-              color: deckBlue,
-              width: 5,
+  Widget _deckHeader() {
+    return SizedBox(
+      height: 225,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            right: 4,
+            top: 58,
+            child: IgnorePointer(
+              child: _deckWatermark(),
             ),
           ),
-          clipBehavior: Clip.antiAlias,
-          child: Center(
-            child: Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: const TextStyle(
-                fontSize: 46,
-                fontWeight: FontWeight.w400,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _fadedTermList(List<Term> visibleTerms) {
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (bounds) {
-        return const LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0x00000000),
-            Colors.black,
-            Colors.black,
-            Color(0x00000000),
-          ],
-          stops: [
-            0.0,
-            0.06,
-            0.92,
-            1.0,
-          ],
-        ).createShader(bounds);
-      },
-      child: _termList(visibleTerms),
-    );
-  }
-
-  Widget _termList(List<Term> visibleTerms) {
-    return ListView.separated(
-      padding: const EdgeInsets.only(bottom: 8),
-      itemCount: visibleTerms.length,
-      separatorBuilder: (context, index) {
-        return const Divider(
-          height: 1,
-          thickness: 1,
-          color: Color(0xFFC8C8C8),
-        );
-      },
-      itemBuilder: (context, index) {
-        final term = visibleTerms[index];
-
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
+          Positioned(
+            left: 0,
+            top: 20,
+            right: 0,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.end,
-                      spacing: 10,
-                      runSpacing: 0,
-                      children: [
-                        Text(
-                          term.kanji,
-                          textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black,
-                          ),
-                        ),
-                        Text(
-                          '【${term.reading}】',
-                          textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 19,
-                            height: 1,
-                            fontWeight: FontWeight.w600,
-                            color: deckBlue,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      term.meaning,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.1,
-                        color: Colors.black,
+                    Expanded(
+                      child: Text(
+                        widget.deck.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textScaler: TextScaler.noScaling,
+                        style: GakujiText.xLarge,
                       ),
                     ),
                   ],
                 ),
-              ),
-              IconButton(
-                icon: Icon(
-                  term.marked ? Icons.star : Icons.star_border,
-                  color: term.marked ? deckBlue : const Color(0xFFC8C8C8),
-                ),
-                onPressed: () => toggleStar(term),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _menuOverlay() {
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              setState(() {
-                showMenu = false;
-              });
-            },
-            child: Container(
-              color: Colors.transparent,
+                const SizedBox(height: 9),
+                _headerMetaText(_deckTypeLabel(widget.deck.type)),
+                const SizedBox(height: 4),
+                _headerMetaText('Created by:'),
+                const SizedBox(height: 4),
+                _headerMetaText(termsCountLabel),
+              ],
             ),
-          ),
-          Positioned(
-            top: 58,
-            right: 22,
-            child: _deckMenuCard(),
           ),
         ],
       ),
     );
   }
 
-  Widget _deckMenuCard() {
-    return Container(
-      width: 258,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 0,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _menuItem(
-            icon: Icons.edit,
-            label: 'Edit Deck',
-            onTap: openDeckEdit,
-          ),
-          const Divider(height: 1, color: dividerGray),
-          _menuItem(
-            icon: Icons.format_list_bulleted_rounded,
-            label: 'View Term List',
-            iconColor: Colors.black,
-            onTap: openTermList,
-          ),
-          const Divider(height: 1, color: dividerGray),
-          _menuItem(
-            icon: Icons.push_pin,
-            label: deckIsPinned ? 'Unpin Deck' : 'Pin Deck',
-            iconColor: deckIsPinned ? pinRed : Colors.grey,
-            onTap: togglePinnedDeck,
-          ),
-          const Divider(height: 1, color: dividerGray),
-          _menuItem(
-            icon: showStarredOnly ? Icons.star : Icons.star_border,
-            label: showStarredOnly ? 'Starred terms only' : 'All terms',
-            iconColor: showStarredOnly ? deckBlue : Colors.grey,
-            onTap: toggleStarredTermFilter,
-          ),
-          const Divider(height: 1, color: dividerGray),
-          if (isWritingDeck) ...[
-            _menuItem(
-              icon: showWritingGrid ? Icons.visibility : Icons.visibility_off,
-              label: showWritingGrid ? 'Hide Grid' : 'Show Grid',
-              iconColor: showWritingGrid ? Colors.black : Colors.grey,
-              onTap: toggleWritingGrid,
-            ),
-            const Divider(height: 1, color: dividerGray),
-          ],
-          if (usesReadingStudyOptions) ...[
-            _textMenuItem(
-              textIcon: 'あ',
-              label: showFurigana ? 'Hide Furigana' : 'Show Furigana',
-              iconColor: showFurigana ? Colors.black : Colors.grey,
-              onTap: toggleFurigana,
-            ),
-            const Divider(height: 1, color: dividerGray),
-            _menuItem(
-              icon: Icons.swap_horiz,
-              label: termFirst ? 'Term First' : 'Definition First',
-              iconColor: termFirst ? Colors.grey : Colors.black,
-              onTap: toggleCardOrientation,
-            ),
-            const Divider(height: 1, color: dividerGray),
-          ],
-          _menuItem(
-            customIcon: _ShuffleMenuIcon(
-              color: isShuffled ? Colors.black : Colors.grey,
-            ),
-            label: isShuffled ? 'Shuffled' : 'Unshuffled',
-            onTap: toggleShuffle,
-          ),
-          const Divider(height: 1, color: dividerGray),
-          _menuItem(
-            icon: Icons.refresh,
-            label: 'Reset Deck',
-            iconColor: Colors.grey,
-            onTap: resetDeck,
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _deckWatermark() {
+    final assetPath = _deckWatermarkAssetPath(widget.deck.type);
 
-  Widget _menuItem({
-    IconData? icon,
-    Widget? customIcon,
-    required String label,
-    required VoidCallback onTap,
-    Color iconColor = Colors.black,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
+    if (assetPath == null || assetPath.isEmpty) {
+      return Opacity(
+        opacity: 0.30,
+        child: Text(
+          _deckWatermarkText(widget.deck.type),
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: 130,
+            height: 1,
+            fontWeight: FontWeight.w800,
+            color: deckPrimaryColor,
+          ),
         ),
-        child: Row(
+      );
+    }
+
+    return Opacity(
+      opacity: 0.30,
+      child: Image.asset(
+        assetPath,
+        width: 165,
+        height: 165,
+        fit: BoxFit.contain,
+        color: deckPrimaryColor,
+        colorBlendMode: BlendMode.srcIn,
+        errorBuilder: (context, error, stackTrace) {
+          return Text(
+            _deckWatermarkText(widget.deck.type),
+            textScaler: TextScaler.noScaling,
+            style: TextStyle(
+              fontSize: 130,
+              height: 1,
+              fontWeight: FontWeight.w800,
+              color: deckPrimaryColor,
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _headerMetaText(String text) {
+    return Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textScaler: TextScaler.noScaling,
+      style: GakujiText.small,
+    );
+  }
+
+  Widget _studySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Deck Activity',
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.large,
+        ),
+        const SizedBox(height: 16),
+        Row(
           children: [
-            SizedBox(
-              width: 28,
-              child: Center(
-                child: customIcon ??
-                    Icon(
-                      icon,
-                      color: iconColor,
-                      size: 24,
+            _studyModePill(
+              label: 'Study',
+              selected: activeStudyMode == StudyMode.study,
+              onTap: () => toggleStudyMode(StudyMode.study),
+            ),
+            const SizedBox(width: GakujiSpacing.pillGap),
+            _studyModePill(
+              label: 'Review',
+              selected: activeStudyMode == StudyMode.review,
+              onTap: () => toggleStudyMode(StudyMode.review),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _flashcardsButton(),
+        if (!isReviewMode) ...[
+          const SizedBox(height: GakujiSpacing.buttonGap),
+          _crosscheckButton(),
+          const SizedBox(height: GakujiSpacing.buttonGap),
+          _kanjiFusionButton(),
+          const SizedBox(height: GakujiSpacing.buttonGap),
+          _wordFusionButton(),
+        ],
+      ],
+    );
+  }
+
+  Widget _focusSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Focus',
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.large,
+        ),
+        const SizedBox(height: 16),
+        _focusButton(_FocusStudyType.newCards),
+        const SizedBox(height: GakujiSpacing.buttonGap),
+        _focusButton(_FocusStudyType.learning),
+        const SizedBox(height: GakujiSpacing.buttonGap),
+        _focusButton(_FocusStudyType.review),
+      ],
+    );
+  }
+
+  Widget _focusButton(_FocusStudyType type) {
+    final count = _focusCount(type);
+    final enabled = count > 0;
+
+    final backgroundColor = enabled
+        ? deckPrimaryColor
+        : GakujiColors.warmCard;
+
+    final contentColor = enabled
+        ? GakujiColors.warmCard
+        : GakujiColors.softGray;
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 180),
+      opacity: enabled ? 1 : 0.58,
+      child: Container(
+        height: 54,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(GakujiRadius.small),
+          border: enabled
+              ? null
+              : Border.all(
+                  color: GakujiColors.softBorder,
+                  width: 1.7,
+                ),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(GakujiRadius.small),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: enabled ? () => openFocusStudy(type) : null,
+            splashColor: enabled
+                ? Colors.white.withOpacity(0.10)
+                : Colors.transparent,
+            highlightColor: enabled
+                ? Colors.white.withOpacity(0.05)
+                : Colors.transparent,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(17, 0, 12, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _focusLabel(type),
+                      textScaler: TextScaler.noScaling,
+                      style: GakujiText.medium.copyWith(
+                        color: contentColor,
+                      ),
                     ),
+                  ),
+                  Text(
+                    '$count',
+                    textScaler: TextScaler.noScaling,
+                    style: GakujiText.small.copyWith(
+                      color: contentColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 38,
+                    color: contentColor,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _textMenuItem({
-    required String textIcon,
-    required String label,
-    required VoidCallback onTap,
-    Color iconColor = Colors.black,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
+  Future<void> openReviewCalendar() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReviewCalendarPage(
+          deck: widget.deck,
+          initialMonth: DateTime.now(),
+          initialSelectedDate: DateTime.now(),
         ),
-        child: Row(
+      ),
+    );
+  }
+
+  Widget _reviewScheduleSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Review Calendar',
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.large,
+        ),
+        const SizedBox(height: 18),
+        Stack(
           children: [
-            SizedBox(
-              width: 28,
-              child: Center(
-                child: Text(
-                  textIcon,
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 22,
-                    height: 1,
-                    fontWeight: FontWeight.w800,
-                    color: iconColor,
+            ReviewScheduleCard(
+              reviewCards: deckReviewCards,
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: openReviewCalendar,
+                  splashColor: deckPrimaryColor.withOpacity(0.08),
+                  highlightColor: deckPrimaryColor.withOpacity(0.04),
+                  child: SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 30,
+                      color: GakujiColors.mediumGray,
+                    ),
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _studyModePill({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      height: 42,
+      decoration: BoxDecoration(
+        color: selected
+            ? deckPrimaryColor.withOpacity(0.78)
+            : GakujiColors.warmBackground,
+        borderRadius: BorderRadius.circular(GakujiRadius.pill),
+        border: Border.all(
+          color: deckPrimaryColor,
+          width: 2.3,
+        ),
+        boxShadow: selected ? [GakujiShadows.soft] : const [],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(GakujiRadius.pill),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: deckPrimaryColor.withOpacity(0.08),
+          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 19),
+            child: Center(
               child: Text(
                 label,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black,
+                style: GakujiText.pill.copyWith(
+                  color: selected ? Colors.white : deckPrimaryColor,
                 ),
               ),
             ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _flashcardsButton() {
+    final enableReviewButton = isReviewMode && !reviewEnabled;
+    final reviewUnavailable =
+        isReviewMode && reviewEnabled && !reviewAvailable;
+
+    final backgroundColor = enableReviewButton || reviewUnavailable
+        ? GakujiColors.warmCard
+        : deckPrimaryColor;
+
+    final contentColor = enableReviewButton
+        ? deckPrimaryColor
+        : reviewUnavailable
+            ? GakujiColors.softGray
+            : GakujiColors.warmCard;
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 180),
+      opacity: reviewUnavailable ? 0.58 : 1,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+        child: Container(
+          key: ValueKey(
+            '${activeStudyMode.name}-$reviewEnabled-$reviewAvailable-$studyButtonLabel',
+          ),
+          height: 54,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(GakujiRadius.small),
+            border: enableReviewButton
+                ? Border.all(
+                    color: deckPrimaryColor,
+                    width: 2,
+                  )
+                : reviewUnavailable
+                    ? Border.all(
+                        color: GakujiColors.softBorder,
+                        width: 1.7,
+                      )
+                    : null,
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(GakujiRadius.small),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: reviewUnavailable
+                  ? null
+                  : () {
+                      if (enableReviewButton) {
+                        enableReviewForDeck();
+                        return;
+                      }
+
+                      openStudy();
+                    },
+              splashColor: deckPrimaryColor.withOpacity(0.08),
+              highlightColor: deckPrimaryColor.withOpacity(0.04),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(17, 0, 17, 0),
+                child: isReviewMode
+                    ? Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Center(
+                            child: Text(
+                              studyButtonLabel,
+                              textScaler: TextScaler.noScaling,
+                              style: GakujiText.medium.copyWith(
+                                color: contentColor,
+                              ),
+                            ),
+                          ),
+                          if (!enableReviewButton)
+                            Positioned(
+                              right: 0,
+                              child: Icon(
+                                Icons.chevron_right_rounded,
+                                size: 38,
+                                color: contentColor,
+                              ),
+                            ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          _flashcardsIcon(),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              studyButtonLabel,
+                              textScaler: TextScaler.noScaling,
+                              style: GakujiText.medium.copyWith(
+                                color: contentColor,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 38,
+                            color: contentColor,
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _crosscheckButton() {
+    return Container(
+      height: 54,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        border: Border.all(
+          color: deckPrimaryColor.withOpacity(0.55),
+          width: 1.7,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: openCrosscheckGame,
+          splashColor: deckPrimaryColor.withOpacity(0.08),
+          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(17, 0, 17, 0),
+            child: Row(
+              children: [
+                _crosscheckIcon(),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Crosscheck',
+                    textScaler: TextScaler.noScaling,
+                    style: GakujiText.medium.copyWith(
+                      color: deckPrimaryColor,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 38,
+                  color: deckPrimaryColor,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _kanjiFusionButton() {
+    return Container(
+      height: 54,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        border: Border.all(
+          color: deckPrimaryColor.withOpacity(0.55),
+          width: 1.7,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: openKanjiFusionGame,
+          splashColor: deckPrimaryColor.withOpacity(0.08),
+          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(17, 0, 17, 0),
+            child: Row(
+              children: [
+                _kanjiFusionIcon(),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Fusion',
+                    textScaler: TextScaler.noScaling,
+                    style: GakujiText.medium.copyWith(
+                      color: deckPrimaryColor,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 38,
+                  color: deckPrimaryColor,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _wordFusionButton() {
+    return Container(
+      height: 54,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        border: Border.all(
+          color: deckPrimaryColor.withOpacity(0.55),
+          width: 1.7,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: openWordFusionGame,
+          splashColor: deckPrimaryColor.withOpacity(0.08),
+          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(17, 0, 17, 0),
+            child: Row(
+              children: [
+                _wordFusionIcon(),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    'Word Fusion',
+                    textScaler: TextScaler.noScaling,
+                    style: GakujiText.medium.copyWith(
+                      color: deckPrimaryColor,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 38,
+                  color: deckPrimaryColor,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _wordFusionIcon() {
+    Widget miniTile(String text) {
+      return Container(
+        width: 22,
+        height: 25,
+        decoration: BoxDecoration(
+          color: GakujiColors.warmCard,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: deckPrimaryColor,
+            width: 1.5,
+          ),
+        ),
+        child: Center(
+          child: Text(
+            text,
+            textScaler: TextScaler.noScaling,
+            style: TextStyle(
+              fontFamily: GakujiFonts.japanese,
+              fontSize: 12,
+              height: 1,
+              fontWeight: FontWeight.w700,
+              color: deckPrimaryColor,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      width: 38,
+      height: 38,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(left: 0, top: 7, child: miniTile('学')),
+          Positioned(right: 0, bottom: 6, child: miniTile('校')),
+        ],
+      ),
+    );
+  }
+
+  Widget _kanjiFusionIcon() {
+    return SizedBox(
+      width: 38,
+      height: 38,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: deckPrimaryColor.withOpacity(0.16),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Icon(
+            Icons.auto_awesome_rounded,
+            size: 25,
+            color: deckPrimaryColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _flashcardsIcon() {
+    return SizedBox(
+      width: 38,
+      height: 38,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 8,
+            top: 4,
+            child: Container(
+              width: 20,
+              height: 29,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE6E1D8),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 2,
+            top: 7,
+            child: Container(
+              width: 22,
+              height: 29,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF7F2E8),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _crosscheckIcon() {
+    return SizedBox(
+      width: 38,
+      height: 38,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: deckPrimaryColor.withOpacity(0.16),
+              shape: BoxShape.circle,
+            ),
+          ),
+          Icon(
+            Icons.fact_check_rounded,
+            size: 28,
+            color: deckPrimaryColor,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _deckInformationSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Deck Information',
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.large,
+        ),
+        const SizedBox(height: 18),
+        _deckInfoButton(
+          icon: Icons.edit_rounded,
+          label: 'Edit Deck',
+          onTap: openDeckEdit,
+        ),
+        const SizedBox(height: GakujiSpacing.buttonGap),
+        _deckInfoButton(
+          icon: Icons.description_outlined,
+          label: 'View Term List',
+          onTap: openTermList,
+        ),
+        const SizedBox(height: GakujiSpacing.buttonGap),
+        _deckInfoButton(
+          icon: Icons.delete_outline_rounded,
+          label: 'Delete Deck',
+          onTap: confirmDeleteDeck,
+          isDestructive: true,
+        ),
+      ],
+    );
+  }
+
+  Widget _deckInfoButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    final iconColor =
+        isDestructive ? GakujiColors.pinRed : GakujiColors.mediumGray;
+
+    final textColor =
+        isDestructive ? GakujiColors.pinRed : GakujiColors.darkGray;
+
+    return Container(
+      height: 50,
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: GakujiColors.whiteCard,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        border: Border.all(
+          color: isDestructive
+              ? GakujiColors.pinRed.withOpacity(0.45)
+              : GakujiColors.softBorder,
+          width: 1.5,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          splashColor: isDestructive
+              ? GakujiColors.pinRed.withOpacity(0.08)
+              : deckPrimaryColor.withOpacity(0.08),
+          highlightColor: isDestructive
+              ? GakujiColors.pinRed.withOpacity(0.04)
+              : deckPrimaryColor.withOpacity(0.04),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 26,
+                  color: iconColor,
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  textScaler: TextScaler.noScaling,
+                  style: GakujiText.medium.copyWith(
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -836,31 +1766,43 @@ class _DeckPageState extends State<DeckPage> {
         return 'Hybrid';
     }
   }
+
+  String _deckPatternAssetPath(DeckType type) {
+    switch (type) {
+      case DeckType.writing:
+        return 'assets/images/deck_pattern_writing.png';
+      case DeckType.reading:
+        return 'assets/images/deck_pattern_reading.png';
+      case DeckType.hybrid:
+        return 'assets/images/deck_pattern_hybrid.png';
+    }
+  }
+
+  String? _deckWatermarkAssetPath(DeckType type) {
+    switch (type) {
+      case DeckType.writing:
+        return 'assets/images/deck_page_watermark_writing.png';
+      case DeckType.reading:
+        return 'assets/images/deck_page_watermark_reading.png';
+      case DeckType.hybrid:
+        return 'assets/images/deck_page_watermark_hybrid.png';
+    }
+  }
+
+  String _deckWatermarkText(DeckType type) {
+    switch (type) {
+      case DeckType.writing:
+        return '書';
+      case DeckType.reading:
+        return '読';
+      case DeckType.hybrid:
+        return '合';
+    }
+  }
 }
 
-class _ShuffleMenuIcon extends StatelessWidget {
-  const _ShuffleMenuIcon({
-    required this.color,
-  });
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/images/shuffle_menu_icon.png',
-      width: 24,
-      height: 24,
-      fit: BoxFit.contain,
-      color: color,
-      colorBlendMode: BlendMode.srcIn,
-      errorBuilder: (context, error, stackTrace) {
-        return Icon(
-          Icons.shuffle,
-          size: 24,
-          color: color,
-        );
-      },
-    );
-  }
+enum _FocusStudyType {
+  newCards,
+  learning,
+  review,
 }

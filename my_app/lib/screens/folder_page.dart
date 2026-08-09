@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../data/deck_data.dart';
 import '../models/deck.dart';
 import '../models/folder.dart';
+import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_deck_card.dart';
+import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_search_bar.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'deck_page.dart';
@@ -38,6 +40,7 @@ class _FolderPageState extends State<FolderPage> {
   @override
   void dispose() {
     searchController.dispose();
+
     super.dispose();
   }
 
@@ -45,6 +48,10 @@ class _FolderPageState extends State<FolderPage> {
     return decks.where((deck) {
       return widget.folder.deckIds.contains(deck.id);
     }).toList();
+  }
+
+  void scheduleUserDataSave() {
+    GakujiUserDataStore.scheduleSave();
   }
 
   void closeMenu() {
@@ -93,6 +100,8 @@ class _FolderPageState extends State<FolderPage> {
       selectedDeckIds.clear();
       isRemovingDecks = false;
     });
+
+    scheduleUserDataSave();
   }
 
   @override
@@ -108,6 +117,7 @@ class _FolderPageState extends State<FolderPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
+        bottom: false,
         child: Stack(
           children: [
             GestureDetector(
@@ -121,7 +131,8 @@ class _FolderPageState extends State<FolderPage> {
               child: Column(
                 children: [
                   GakujiTopBar(
-                    leftIcon: Icons.arrow_back_ios_new,
+                    leftIcon: GakujiTopBar.backIcon,
+                    leftIconSize: GakujiTopBar.backIconSize,
                     onLeftTap: () {
                       if (isRemovingDecks) {
                         cancelRemoveMode();
@@ -182,20 +193,26 @@ class _FolderPageState extends State<FolderPage> {
                                       ),
                                     ),
                                   )
-                                : ListView.separated(
-                                    padding:
-                                        const EdgeInsets.fromLTRB(0, 12, 0, 190),
-                                    itemCount: visibleDecks.length,
-                                    separatorBuilder: (context, index) {
-                                      return const SizedBox(height: 18);
-                                    },
-                                    itemBuilder: (context, index) {
-                                      final deck = visibleDecks[index];
-                                      final isSelected =
-                                          selectedDeckIds.contains(deck.id);
+                                : GakujiFadedScroll(
+                                    child: ListView.separated(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        0,
+                                        12,
+                                        0,
+                                        190,
+                                      ),
+                                      itemCount: visibleDecks.length,
+                                      separatorBuilder: (context, index) {
+                                        return const SizedBox(height: 18);
+                                      },
+                                      itemBuilder: (context, index) {
+                                        final deck = visibleDecks[index];
+                                        final isSelected =
+                                            selectedDeckIds.contains(deck.id);
 
-                                      return _deckCard(deck, isSelected);
-                                    },
+                                        return _deckCard(deck, isSelected);
+                                      },
+                                    ),
                                   ),
                           ),
                         ],
@@ -247,6 +264,7 @@ class _FolderPageState extends State<FolderPage> {
           if (!mounted) return;
 
           setState(() {});
+          scheduleUserDataSave();
         },
       ),
     );

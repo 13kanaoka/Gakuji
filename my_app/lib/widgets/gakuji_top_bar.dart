@@ -5,10 +5,13 @@ class GakujiTopBar extends StatelessWidget {
   static const double topPadding = 16;
   static const double buttonSize = 44;
   static const double actionGap = 8;
+  static const IconData backIcon = Icons.arrow_back_ios_new_rounded;
+  static const double backIconSize = 34;
 
   final IconData? leftIcon;
   final VoidCallback? onLeftTap;
   final Color? leftIconColor;
+  final double? leftIconSize;
   final Widget? leftWidget;
 
   final String? title;
@@ -18,6 +21,7 @@ class GakujiTopBar extends StatelessWidget {
   final IconData? rightIcon;
   final VoidCallback? onRightTap;
   final Color? rightIconColor;
+  final double? rightIconSize;
   final Widget? rightWidget;
 
   final bool showOptionsButton;
@@ -29,6 +33,7 @@ class GakujiTopBar extends StatelessWidget {
     this.leftIcon,
     this.onLeftTap,
     this.leftIconColor,
+    this.leftIconSize,
     this.leftWidget,
     this.title,
     this.titleWidget,
@@ -36,6 +41,7 @@ class GakujiTopBar extends StatelessWidget {
     this.rightIcon,
     this.onRightTap,
     this.rightIconColor,
+    this.rightIconSize,
     this.rightWidget,
     this.showOptionsButton = false,
     this.onOptionsTap,
@@ -67,10 +73,10 @@ class GakujiTopBar extends StatelessWidget {
                       icon: leftIcon,
                       onTap: onLeftTap,
                       iconColor: leftIconColor,
+                      iconSize: leftIconSize,
                     ),
               ),
             ),
-
             Expanded(
               child: Center(
                 child: titleWidget ??
@@ -79,6 +85,7 @@ class GakujiTopBar extends StatelessWidget {
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      textScaler: TextScaler.noScaling,
                       style: titleStyle ??
                           const TextStyle(
                             fontSize: 26,
@@ -88,7 +95,6 @@ class GakujiTopBar extends StatelessWidget {
                     ),
               ),
             ),
-
             SizedBox(
               width: sideWidth,
               child: Align(
@@ -108,6 +114,7 @@ class GakujiTopBar extends StatelessWidget {
         icon: Icons.more_horiz,
         onTap: onOptionsTap,
         iconColor: Colors.black,
+        iconSize: rightIconSize,
         selected: optionsSelected,
       );
     }
@@ -116,6 +123,7 @@ class GakujiTopBar extends StatelessWidget {
       icon: rightIcon,
       onTap: onRightTap,
       iconColor: rightIconColor,
+      iconSize: rightIconSize,
     );
   }
 }
@@ -124,12 +132,14 @@ class _TopBarButton extends StatelessWidget {
   final IconData? icon;
   final VoidCallback? onTap;
   final Color? iconColor;
+  final double? iconSize;
   final bool selected;
 
   const _TopBarButton({
     required this.icon,
     required this.onTap,
     this.iconColor,
+    this.iconSize,
     this.selected = false,
   });
 
@@ -142,18 +152,16 @@ class _TopBarButton extends StatelessWidget {
       );
     }
 
-    return SizedBox(
-      width: GakujiTopBar.buttonSize,
-      height: GakujiTopBar.buttonSize,
-      child: Material(
-        color: selected ? const Color(0xFFEDEDED) : Colors.white,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: SizedBox(
+        width: GakujiTopBar.buttonSize,
+        height: GakujiTopBar.buttonSize,
+        child: Center(
           child: Icon(
             icon,
-            size: 24,
+            size: iconSize ?? 28,
             color: iconColor ?? Colors.black,
           ),
         ),

@@ -43,3 +43,5 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+assets/dictionary/dictionary.db
+tools/source/links.tar.bz2
