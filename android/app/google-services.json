@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "970161125324-60l3d16imiucr4ap1fnfgnpbc335irkc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.mattrohde.gakuji",
+            "certificate_hash": "38971eddc9d4f1bb6b55a17bf421b157668771f2"
+          }
+        },
+        {
           "client_id": "970161125324-h9ejkbtq6b8a5rn1v90ntt98atg24bjq.apps.googleusercontent.com",
           "client_type": 3
         }

@@ -66,7 +66,15 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: _signInWithGoogle,
                   child: const Text('Sign in with Google'),
                 ),
+              if (errorMessage != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
               ],
+            ],
           ),
           ),
         ),
