@@ -37,6 +37,7 @@ jobs:
         with:
           issue-form: ${{ steps.issue-parser-bug.outputs.jsonString }}
           section: priority
+          template: bug_report.yml
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set priority label (feature)
@@ -45,4 +46,5 @@ jobs:
         with:
           issue-form: ${{ steps.issue-parser-feature.outputs.jsonString }}
           section: priority
+          template: feature_request.yml
           token: ${{ secrets.GITHUB_TOKEN }}
