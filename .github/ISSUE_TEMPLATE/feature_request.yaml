@@ -14,7 +14,7 @@ body:
       label: 🎯 Priority Level
       description: |
         Low -> Nice-to-have, minor quality-of-life tweak  
-        Medium -> Solid enhancement, improves core user experience
+        Medium -> Solid enhancement, improves core user experience  
         High -> Critical roadblock, essential for product launch
       options:
         - "Low"

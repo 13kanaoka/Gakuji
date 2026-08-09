@@ -13,8 +13,8 @@ body:
     attributes:
       label: 🚦 Priority Level
       description: |
-        Low -> Cosmetic issues, layout tweaks, text truncation
-        Medium -> Feature is degraded but usable, broken workaround
+        Low -> Cosmetic issues, layout tweaks, text truncation  
+        Medium -> Feature is degraded but usable, broken workaround  
         High -> App crash, broken core loop, login failure, data loss
       options:
         - "Low"
