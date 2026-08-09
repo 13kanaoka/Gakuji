@@ -63,7 +63,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   Timer? _rushTimer;
   DateTime? _rushDeadline;
   int _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
-  bool _rushTimedOut = false;
   bool _rushCheckReading = true;
   bool _rushCheckDefinition = true;
 
@@ -217,7 +216,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       mistakeCount = 0;
       streak = 0;
       bestStreak = 0;
-      _rushTimedOut = false;
+  
       _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
       currentRound = _generateRoundForCurrentIndex();
     });
@@ -300,7 +299,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
 
     setState(() {
       _rushRemainingMilliseconds = 0;
-      _rushTimedOut = true;
       mistakeCount++;
       streak = 0;
       roundsPlayed++;
@@ -424,7 +422,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       setState(() {
         correctCount++;
         streak++;
-        _rushTimedOut = false;
+    
 
         if (streak > bestStreak) {
           bestStreak = streak;
@@ -508,7 +506,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       mistakeCount = 0;
       streak = 0;
       bestStreak = 0;
-      _rushTimedOut = false;
+  
       _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
     });
   }
@@ -1465,7 +1463,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
                   currentRound = _generateRoundForCurrentIndex();
                   _rushRemainingMilliseconds =
                       _rushRoundDuration.inMilliseconds;
-                  _rushTimedOut = false;
+              
                 }
               });
 
