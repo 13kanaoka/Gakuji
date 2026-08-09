@@ -39,6 +39,27 @@ class KanjiFusionSlot {
   });
 }
 
+/// A visual boundary around leaf slots that together form a reusable kanji
+/// component. The component name is retained for future feedback and review,
+/// but is intentionally not shown before the answer is submitted.
+class KanjiFusionGroup {
+  final String component;
+  final double left;
+  final double top;
+  final double width;
+  final double height;
+  final int depth;
+
+  const KanjiFusionGroup({
+    required this.component,
+    required this.left,
+    required this.top,
+    required this.width,
+    required this.height,
+    this.depth = 0,
+  });
+}
+
 class KanjiFusionRound {
   final Term term;
   final String targetKanji;
@@ -46,6 +67,7 @@ class KanjiFusionRound {
   final List<String> componentChoices;
   final List<List<String>> componentFormChoices;
   final List<KanjiFusionSlot> structuralSlots;
+  final List<KanjiFusionGroup> structuralGroups;
 
   const KanjiFusionRound({
     required this.term,
@@ -54,6 +76,7 @@ class KanjiFusionRound {
     required this.componentChoices,
     this.componentFormChoices = const [],
     this.structuralSlots = const [],
+    this.structuralGroups = const [],
   });
 
   List<String> formsForChoice(int index) {

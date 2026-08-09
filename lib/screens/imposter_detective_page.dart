@@ -1,11 +1,18 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/deck.dart';
 import '../models/imposter_round.dart';
 import '../models/term.dart';
 import '../services/imposter_round_generator.dart';
 import '../widgets/gakuji_styles.dart';
+
+enum CrosscheckMode { normal, rush, endless }
+
+enum _RushField { reading, definition }
 
 class ImposterDetectivePage extends StatefulWidget {
   final Deck deck;
@@ -22,11 +29,19 @@ class ImposterDetectivePage extends StatefulWidget {
 }
 
 class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
-  static const int maxMistakes = 3;
+  static const Duration _rushRoundDuration = Duration(seconds: 5);
+  static const Duration _rushTickInterval = Duration(milliseconds: 50);
+
+  // Match the Study page's correct/incorrect feedback palette.
+  static const Color _incorrectRed = Color(0xFFF6A3A3);
+  static const Color _incorrectRedOutline = Color(0xFFE06F6F);
+  static const Color _correctGreen = Color(0xFFC5E7A5);
+  static const Color _correctGreenOutline = Color(0xFF8DBB66);
 
   late final List<Term> gameTerms;
 
   final ImposterRoundGenerator _generator = ImposterRoundGenerator();
+  final math.Random _random = math.Random();
 
   ImposterRound? currentRound;
   ImposterRound? correctionRound;
@@ -36,11 +51,60 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   bool gameOver = false;
   bool showingCorrection = false;
 
+  CrosscheckMode? selectedMode;
+
   int currentIndex = 0;
+  int roundsPlayed = 0;
   int correctCount = 0;
   int mistakeCount = 0;
   int streak = 0;
   int bestStreak = 0;
+
+  Timer? _rushTimer;
+  DateTime? _rushDeadline;
+  int _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
+  bool _rushTimedOut = false;
+  bool _rushCheckReading = true;
+  bool _rushCheckDefinition = true;
+
+  final Map<CrosscheckMode, int> highScores = {
+    CrosscheckMode.normal: 0,
+    CrosscheckMode.rush: 0,
+    CrosscheckMode.endless: 0,
+  };
+
+  int get mistakeLimit {
+    return selectedMode == CrosscheckMode.rush ? 1 : 3;
+  }
+
+  bool get isEndlessMode => selectedMode == CrosscheckMode.endless;
+
+  bool get isRushMode => selectedMode == CrosscheckMode.rush;
+
+  bool get isLoopingMode => isEndlessMode || isRushMode;
+
+  String get _rushFieldLabel {
+    if (_rushCheckReading && _rushCheckDefinition) {
+      return 'Reading + Definition';
+    }
+    if (_rushCheckReading) return 'Reading';
+    return 'Definition';
+  }
+
+  bool get _rushTimerShouldRun {
+    return isRushMode &&
+        gameStarted &&
+        !gameOver &&
+        !showingCorrection &&
+        currentRound != null;
+  }
+
+  double get _rushProgress {
+    return (_rushRemainingMilliseconds / _rushRoundDuration.inMilliseconds)
+        .clamp(0.0, 1.0)
+        .toDouble();
+  }
+
 
   Color get deckPrimaryColor {
     switch (widget.deck.type) {
@@ -53,69 +117,292 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     }
   }
 
+  bool get clearedDeck {
+    return selectedMode == CrosscheckMode.normal &&
+        gameTerms.isNotEmpty &&
+        currentIndex >= gameTerms.length;
+  }
+
   @override
   void initState() {
     super.initState();
-
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-
     gameTerms = List<Term>.from(widget.terms)..shuffle();
+    unawaited(_loadHighScores());
+    unawaited(_loadRushSettings());
   }
 
   @override
   void dispose() {
-    _restorePortrait();
+    _cancelRushTimer();
     super.dispose();
   }
 
-  Future<void> _restorePortrait() async {
-    await SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
+  Future<void> _loadHighScores() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (!mounted) return;
+
+    setState(() {
+      for (final mode in CrosscheckMode.values) {
+        highScores[mode] = prefs.getInt(_highScoreKey(mode)) ?? 0;
+      }
+    });
+  }
+
+  Future<void> _loadRushSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedReading = prefs.getBool('crosscheck_rush_check_reading_v1');
+    final savedDefinition = prefs.getBool('crosscheck_rush_check_definition_v1');
+
+    if (!mounted) return;
+
+    setState(() {
+      _rushCheckReading = savedReading ?? true;
+      _rushCheckDefinition = savedDefinition ?? true;
+
+      if (!_rushCheckReading && !_rushCheckDefinition) {
+        _rushCheckReading = true;
+        _rushCheckDefinition = true;
+      }
+    });
+  }
+
+  Future<void> _persistRushSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.setBool('crosscheck_rush_check_reading_v1', _rushCheckReading),
+      prefs.setBool('crosscheck_rush_check_definition_v1', _rushCheckDefinition),
     ]);
   }
 
-  Future<void> _leavePage(BuildContext context) async {
-    await _restorePortrait();
-
-    if (!context.mounted) return;
-
-    Navigator.pop(context);
+  String _highScoreKey(CrosscheckMode mode) {
+    return 'crosscheck_high_score_v1_${widget.deck.id}_${mode.name}';
   }
 
-  int get clearedCount => currentIndex;
-
-  bool get clearedDeck {
-    return gameTerms.isNotEmpty && currentIndex >= gameTerms.length;
+  Future<void> _persistHighScore(CrosscheckMode mode, int score) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_highScoreKey(mode), score);
   }
 
-  void startGame() {
+  void _recordHighScoreIfNeeded() {
+    final mode = selectedMode;
+    if (mode == null) return;
+
+    final previousBest = highScores[mode] ?? 0;
+    if (correctCount <= previousBest) return;
+
+    setState(() {
+      highScores[mode] = correctCount;
+    });
+
+    unawaited(_persistHighScore(mode, correctCount));
+  }
+
+  void startGame(CrosscheckMode mode) {
+    if (gameTerms.isEmpty) return;
+
+    _cancelRushTimer();
     gameTerms.shuffle();
 
     setState(() {
+      selectedMode = mode;
       gameStarted = true;
       gameOver = false;
       showingCorrection = false;
       correctionRound = null;
       correctionUserApproved = null;
       currentIndex = 0;
+      roundsPlayed = 0;
       correctCount = 0;
       mistakeCount = 0;
       streak = 0;
       bestStreak = 0;
+      _rushTimedOut = false;
+      _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
       currentRound = _generateRoundForCurrentIndex();
+    });
+
+    if (mode == CrosscheckMode.rush) {
+      _startRushTimer(reset: true);
+    }
+  }
+
+  void _startRushTimer({required bool reset}) {
+    _cancelRushTimer();
+
+    if (!_rushTimerShouldRun) return;
+
+    if (reset) {
+      _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
+    }
+
+    if (_rushRemainingMilliseconds <= 0) {
+      _handleRushTimeout();
+      return;
+    }
+
+    _rushDeadline = DateTime.now().add(
+      Duration(milliseconds: _rushRemainingMilliseconds),
+    );
+
+    _rushTimer = Timer.periodic(_rushTickInterval, (_) {
+      if (!mounted || !_rushTimerShouldRun) {
+        _cancelRushTimer();
+        return;
+      }
+
+      final deadline = _rushDeadline;
+      if (deadline == null) return;
+
+      final remaining = deadline.difference(DateTime.now()).inMilliseconds;
+
+      if (remaining <= 0) {
+        _cancelRushTimer();
+        _handleRushTimeout();
+        return;
+      }
+
+      setState(() {
+        _rushRemainingMilliseconds = remaining;
+      });
+    });
+  }
+
+  void _pauseRushTimer() {
+    if (!isRushMode || _rushTimer == null) return;
+
+    final deadline = _rushDeadline;
+    var remaining = _rushRemainingMilliseconds;
+
+    if (deadline != null) {
+      remaining = deadline.difference(DateTime.now()).inMilliseconds;
+    }
+
+    _cancelRushTimer();
+
+    if (!mounted) return;
+
+    setState(() {
+      _rushRemainingMilliseconds = remaining
+          .clamp(0, _rushRoundDuration.inMilliseconds)
+          .toInt();
+    });
+  }
+
+  void _cancelRushTimer() {
+    _rushTimer?.cancel();
+    _rushTimer = null;
+    _rushDeadline = null;
+  }
+
+  void _handleRushTimeout() {
+    if (!mounted || !_rushTimerShouldRun) return;
+
+    setState(() {
+      _rushRemainingMilliseconds = 0;
+      _rushTimedOut = true;
+      mistakeCount++;
+      streak = 0;
+      roundsPlayed++;
+      gameOver = true;
+      currentRound = null;
     });
   }
 
   ImposterRound? _generateRoundForCurrentIndex() {
     if (currentIndex >= gameTerms.length) return null;
 
+    final visitor = gameTerms[currentIndex];
+
+    if (isRushMode) {
+      return _generateRushRound(visitor);
+    }
+
     return _generator.generate(
-      visitor: gameTerms[currentIndex],
+      visitor: visitor,
       deckTerms: gameTerms,
     );
+  }
+
+  ImposterRound _generateRushRound(Term visitor) {
+    final correctFile = _correctIdentityFile(visitor);
+    final mismatchOptions = <_RushMismatchOption>[];
+
+    if (_rushCheckReading) {
+      final alternative = _alternativeRushReading(visitor);
+      if (alternative != null) {
+        mismatchOptions.add(
+          _RushMismatchOption(
+            field: _RushField.reading,
+            value: alternative,
+          ),
+        );
+      }
+    }
+
+    if (_rushCheckDefinition) {
+      final alternative = _alternativeRushDefinition(visitor);
+      if (alternative != null) {
+        mismatchOptions.add(
+          _RushMismatchOption(
+            field: _RushField.definition,
+            value: alternative,
+          ),
+        );
+      }
+    }
+
+    final shouldBeValid = mismatchOptions.isEmpty || _random.nextBool();
+
+    if (shouldBeValid) {
+      return ImposterRound(
+        visitor: visitor,
+        file: correctFile,
+        isValid: true,
+      );
+    }
+
+    final mismatch = mismatchOptions[_random.nextInt(mismatchOptions.length)];
+
+    return ImposterRound(
+      visitor: visitor,
+      file: IdentityFile(
+        reading: mismatch.field == _RushField.reading
+            ? mismatch.value
+            : correctFile.reading,
+        definition: mismatch.field == _RushField.definition
+            ? mismatch.value
+            : correctFile.definition,
+        partOfSpeech: correctFile.partOfSpeech,
+      ),
+      isValid: false,
+    );
+  }
+
+  String? _alternativeRushReading(Term visitor) {
+    final current = _normalized(_safeValue(visitor.reading));
+    final candidates = gameTerms
+        .where((term) => term.id != visitor.id)
+        .map((term) => _safeValue(term.reading))
+        .where((value) => value != '—' && _normalized(value) != current)
+        .toSet()
+        .toList();
+
+    if (candidates.isEmpty) return null;
+    return candidates[_random.nextInt(candidates.length)];
+  }
+
+  String? _alternativeRushDefinition(Term visitor) {
+    final current = _normalized(_definitionText(visitor));
+    final candidates = gameTerms
+        .where((term) => term.id != visitor.id)
+        .map(_definitionText)
+        .where((value) => value != '—' && _normalized(value) != current)
+        .toSet()
+        .toList();
+
+    if (candidates.isEmpty) return null;
+    return candidates[_random.nextInt(candidates.length)];
   }
 
   void answer({
@@ -123,7 +410,13 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }) {
     final round = currentRound;
 
-    if (!gameStarted || gameOver || showingCorrection || round == null) return;
+    if (!gameStarted || gameOver || showingCorrection || round == null) {
+      return;
+    }
+
+    if (isRushMode) {
+      _cancelRushTimer();
+    }
 
     final isCorrect = approved == round.isValid;
 
@@ -131,6 +424,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       setState(() {
         correctCount++;
         streak++;
+        _rushTimedOut = false;
 
         if (streak > bestStreak) {
           bestStreak = streak;
@@ -139,12 +433,20 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         _advanceToNextRound();
       });
 
+      _recordHighScoreIfNeeded();
+
+      if (_rushTimerShouldRun) {
+        _startRushTimer(reset: true);
+      }
       return;
     }
 
     setState(() {
       mistakeCount++;
       streak = 0;
+      if (isRushMode) {
+        _rushRemainingMilliseconds = 0;
+      }
       showingCorrection = true;
       correctionRound = round;
       correctionUserApproved = approved;
@@ -158,25 +460,57 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       showingCorrection = false;
       correctionRound = null;
       correctionUserApproved = null;
-
       _advanceToNextRound();
     });
   }
 
   void _advanceToNextRound() {
+    roundsPlayed++;
     currentIndex++;
 
-    if (mistakeCount >= maxMistakes || currentIndex >= gameTerms.length) {
+    if (mistakeCount >= mistakeLimit) {
       gameOver = true;
       currentRound = null;
       return;
+    }
+
+    if (currentIndex >= gameTerms.length) {
+      if (!isLoopingMode) {
+        gameOver = true;
+        currentRound = null;
+        return;
+      }
+
+      gameTerms.shuffle();
+      currentIndex = 0;
     }
 
     currentRound = _generateRoundForCurrentIndex();
   }
 
   void restartGame() {
-    startGame();
+    startGame(selectedMode ?? CrosscheckMode.normal);
+  }
+
+  void _returnToModeSelection() {
+    _cancelRushTimer();
+
+    setState(() {
+      gameStarted = false;
+      gameOver = false;
+      showingCorrection = false;
+      correctionRound = null;
+      correctionUserApproved = null;
+      currentRound = null;
+      currentIndex = 0;
+      roundsPlayed = 0;
+      correctCount = 0;
+      mistakeCount = 0;
+      streak = 0;
+      bestStreak = 0;
+      _rushTimedOut = false;
+      _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
+    });
   }
 
   @override
@@ -193,83 +527,147 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }
 
   Widget _startScreen(BuildContext context) {
-    final termCount = gameTerms.length;
-    final termLabel = termCount == 1 ? '1 term' : '$termCount terms';
-
     return Scaffold(
       backgroundColor: GakujiColors.warmBackground,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-          child: Row(
-            children: [
-              _sideExitRail(
-                context: context,
-                icon: Icons.arrow_back_ios_new_rounded,
+        child: Column(
+          children: [
+            _simpleTopBar(
+              context: context,
+              icon: Icons.close_rounded,
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(
+                      GakujiSpacing.pageHorizontal,
+                      12,
+                      GakujiSpacing.pageHorizontal,
+                      28,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight - 40,
+                      ),
+                      child: Column(
+                        children: [
+                          SizedBox(height: constraints.maxHeight * 0.02),
+                          Text(
+                            'Crosscheck',
+                            textAlign: TextAlign.center,
+                            textScaler: TextScaler.noScaling,
+                            style: GakujiText.xLarge.copyWith(
+                              color: GakujiColors.darkGray,
+                            ),
+                          ),
+                          SizedBox(height: 34 + constraints.maxHeight * 0.06),
+                          _modeCard(
+                            mode: CrosscheckMode.normal,
+                            title: 'Normal',
+                            description: '3 mistakes • Complete the deck',
+                          ),
+                          const SizedBox(height: 18),
+                          _modeCard(
+                            mode: CrosscheckMode.rush,
+                            title: 'Rush',
+                            description: '5 seconds • $_rushFieldLabel • Sudden death',
+                          ),
+                          const SizedBox(height: 18),
+                          _modeCard(
+                            mode: CrosscheckMode.endless,
+                            title: 'Endless',
+                            description: 'Loop the deck • 3 mistakes end the run',
+                          ),
+                          const SizedBox(height: 24),
+                          if (gameTerms.isEmpty)
+                            Text(
+                              'No entries are available for Crosscheck.',
+                              textAlign: TextAlign.center,
+                              textScaler: TextScaler.noScaling,
+                              style: GakujiText.small.copyWith(
+                                color: GakujiColors.mediumGray,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 6,
-                child: _landscapePanel(
-                  color: GakujiColors.warmCard,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Detective',
-                        textScaler: TextScaler.noScaling,
-                        style: GakujiText.large,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Inspect identity files and decide who belongs in the library.',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textScaler: TextScaler.noScaling,
-                        style: GakujiText.xSmall.copyWith(
-                          color: GakujiColors.mediumGray,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: _compactInfoCard(termLabel),
-                      ),
-                    ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _modeCard({
+    required CrosscheckMode mode,
+    required String title,
+    required String description,
+  }) {
+    final enabled = gameTerms.isNotEmpty;
+    final best = highScores[mode] ?? 0;
+
+    return Opacity(
+      opacity: enabled ? 1 : 0.42,
+      child: SizedBox(
+        width: double.infinity,
+        height: 118,
+        child: Material(
+          color: deckPrimaryColor,
+          borderRadius: BorderRadius.circular(22),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: enabled ? () => startGame(mode) : null,
+            splashColor: Colors.white.withValues(alpha: 0.12),
+            highlightColor: Colors.white.withValues(alpha: 0.06),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    textScaler: TextScaler.noScaling,
+                    style: const TextStyle(
+                      fontSize: 27,
+                      height: 1,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 4,
-                child: _landscapePanel(
-                  color: GakujiColors.whiteCard,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Inspection Desk',
-                        textScaler: TextScaler.noScaling,
-                        style: GakujiText.medium.copyWith(
-                          color: deckPrimaryColor,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Clear the full deck before reaching 3 mistakes.',
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        textScaler: TextScaler.noScaling,
-                        style: GakujiText.xSmall.copyWith(
-                          color: GakujiColors.mediumGray,
-                        ),
-                      ),
-                      const Spacer(),
-                      _startButton(),
-                    ],
+                  const SizedBox(height: 9),
+                  Text(
+                    description,
+                    textAlign: TextAlign.center,
+                    textScaler: TextScaler.noScaling,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.2,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xE6FFFFFF),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 9),
+                  Text(
+                    'BEST  $best',
+                    textAlign: TextAlign.center,
+                    textScaler: TextScaler.noScaling,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      height: 1,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.9,
+                      color: Color(0xCCFFFFFF),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -286,163 +684,413 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     return Scaffold(
       backgroundColor: GakujiColors.warmBackground,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
-          child: Column(
-            children: [
-              _landscapeGameHeader(context),
-              const SizedBox(height: 4),
-              _progressBar(),
-              const SizedBox(height: 8),
-              Expanded(
-                child: Row(
+        child: Column(
+          children: [
+            _gameTopBar(context),
+            _progressBar(),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  18,
+                  14,
+                  18,
+                  18,
+                ),
+                child: Column(
                   children: [
-                    Expanded(
-                      flex: 4,
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: _visitorStack(round),
+                    Row(
+                      children: [
+                        if (!isRushMode)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: List.generate(3, (index) {
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  right: index == 2 ? 0 : 6,
+                                ),
+                                child: Text(
+                                  'X',
+                                  textScaler: TextScaler.noScaling,
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    height: 1,
+                                    fontWeight: FontWeight.w900,
+                                    color: index < mistakeCount
+                                        ? GakujiColors.pinRed
+                                        : GakujiColors.softGray,
+                                  ),
+                                ),
+                              );
+                            }),
                           ),
-                          const SizedBox(height: 8),
-                          _scoreRow(),
-                        ],
+                        const Spacer(),
+                        Text(
+                          'Score  $correctCount',
+                          textScaler: TextScaler.noScaling,
+                          style: GakujiText.small.copyWith(
+                            color: GakujiColors.mediumGray,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    _targetWord(round.visitor),
+                    const SizedBox(height: 42),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: FractionallySizedBox(
+                            widthFactor: 0.94,
+                            alignment: Alignment.centerLeft,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ..._evidenceFieldsForRound(round),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 5,
-                      child: _identityFile(
-                        file: round.file,
-                        visitor: round.visitor,
-                      )
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 3,
-                      child: _decisionPanel(),
-                    ),
+                    if (showingCorrection) ...[
+                      const SizedBox(height: 18),
+                      _correctionSection(),
+                      const SizedBox(height: 18),
+                      _primaryButton(
+                        label: mistakeCount >= mistakeLimit
+                            ? 'VIEW RESULTS'
+                            : 'CONTINUE',
+                        onTap: continueAfterCorrection,
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 30),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _verdictButton(
+                              label: 'Incorrect',
+                              fillColor: _incorrectRed,
+                              foregroundColor: _incorrectRedOutline,
+                              onTap: () => answer(approved: false),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: _verdictButton(
+                              label: 'Correct',
+                              fillColor: _correctGreen,
+                              foregroundColor: _correctGreenOutline,
+                              onTap: () => answer(approved: true),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _resultsScreen(BuildContext context) {
-    final cleared = clearedCount.clamp(0, gameTerms.length);
-    final completed = cleared >= gameTerms.length && mistakeCount < maxMistakes;
+    final mode = selectedMode ?? CrosscheckMode.normal;
+    final best = highScores[mode] ?? 0;
 
     return Scaffold(
       backgroundColor: GakujiColors.warmBackground,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
-          child: Row(
-            children: [
-              _sideExitRail(
-                context: context,
-                icon: Icons.arrow_back_ios_new_rounded,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 6,
-                child: _landscapePanel(
-                  color: GakujiColors.warmCard,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        completed ? 'Inspection Complete!' : 'Inspection Failed',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textScaler: TextScaler.noScaling,
-                        style: GakujiText.large,
+        child: Column(
+          children: [
+            _simpleTopBar(
+              context: context,
+              icon: Icons.close_rounded,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 34),
+                    Text(
+                      'Complete!',
+                      textAlign: TextAlign.center,
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        fontSize: 42,
+                        height: 1,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.3,
+                        color: GakujiColors.darkGray,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        completed
-                            ? 'Every term was cleared for the library.'
-                            : 'Too many suspicious files slipped through the desk.',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        textScaler: TextScaler.noScaling,
-                        style: GakujiText.xSmall.copyWith(
-                          color: GakujiColors.mediumGray,
+                    ),
+                    const SizedBox(height: 46),
+                    Text(
+                      'SCORE',
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2.4,
+                        color: GakujiColors.mediumGray,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '$correctCount',
+                      textAlign: TextAlign.center,
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        fontSize: 54,
+                        height: 0.95,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -1.8,
+                        color: GakujiColors.darkGray,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'High Score $best',
+                      textAlign: TextAlign.center,
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1,
+                        fontWeight: FontWeight.w700,
+                        color: GakujiColors.mediumGray,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+                      decoration: BoxDecoration(
+                        color: GakujiColors.warmCard.withValues(alpha: 0.42),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: GakujiColors.softBorder,
+                          width: 1.2,
                         ),
                       ),
-                      const Spacer(),
-                      _restartButton(),
-                    ],
-                  ),
+                      child: Column(
+                        children: [
+                          _completionStatRow(
+                            label: 'Mode',
+                            value: _modeLabel(mode),
+                          ),
+                          const SizedBox(height: 12),
+                          _completionStatRow(
+                            label: 'Rounds played',
+                            value: '$roundsPlayed',
+                          ),
+                          const SizedBox(height: 12),
+                          _completionStatRow(
+                            label: 'Correct checks',
+                            value: '$correctCount',
+                          ),
+                          const SizedBox(height: 12),
+                          _completionStatRow(
+                            label: 'Incorrect checks',
+                            value: '$mistakeCount',
+                          ),
+                          const SizedBox(height: 12),
+                          _completionStatRow(
+                            label: 'Best streak',
+                            value: '$bestStreak',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Spacer(),
+                    _completionPrimaryButton(
+                      label: 'PLAY AGAIN',
+                      onTap: restartGame,
+                    ),
+                    const SizedBox(height: 12),
+                    _completionSecondaryButton(
+                      label: 'RETURN TO MODES',
+                      onTap: _returnToModeSelection,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 5,
-                child: _resultsCard(cleared),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _completionStatRow({
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.small.copyWith(
+              color: GakujiColors.mediumGray,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: 16,
+            height: 1,
+            fontWeight: FontWeight.w800,
+            color: GakujiColors.darkGray,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _completionPrimaryButton({
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 58,
+      child: Material(
+        color: deckPrimaryColor,
+        borderRadius: BorderRadius.circular(GakujiRadius.pill),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(GakujiRadius.pill),
+          onTap: onTap,
+          splashColor: Colors.white.withValues(alpha: 0.12),
+          highlightColor: Colors.white.withValues(alpha: 0.06),
+          child: Center(
+            child: Text(
+              label,
+              textScaler: TextScaler.noScaling,
+              style: GakujiText.medium.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
               ),
-            ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _landscapeGameHeader(BuildContext context) {
+  Widget _completionSecondaryButton({
+    required String label,
+    required VoidCallback onTap,
+  }) {
     return SizedBox(
-      height: 40,
-      child: Row(
-        children: [
-          _smallTopIconButton(
-            icon: Icons.close_rounded,
-            iconSize: 30,
-            onTap: () => _leavePage(context),
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                '${currentIndex + 1}/${gameTerms.length}',
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontSize: 18,
-                  height: 1,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.2,
-                  color: GakujiColors.darkGray,
-                ),
+      width: double.infinity,
+      height: 54,
+      child: Material(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(GakujiRadius.pill),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(GakujiRadius.pill),
+          onTap: onTap,
+          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
+          child: Center(
+            child: Text(
+              label,
+              textScaler: TextScaler.noScaling,
+              style: GakujiText.small.copyWith(
+                color: deckPrimaryColor,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
-          const SizedBox(width: 40),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _sideExitRail({
+  String _modeLabel(CrosscheckMode mode) {
+    switch (mode) {
+      case CrosscheckMode.normal:
+        return 'Normal';
+      case CrosscheckMode.rush:
+        return 'Rush';
+      case CrosscheckMode.endless:
+        return 'Endless';
+    }
+  }
+
+  Widget _gameTopBar(BuildContext context) {
+    return SizedBox(
+      height: 72,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+        child: Row(
+          children: [
+            _topIconButton(
+              icon: Icons.arrow_back_ios_new_rounded,
+              onTap: _returnToModeSelection,
+            ),
+            Expanded(
+              child: Center(
+                child: isLoopingMode
+                    ? const SizedBox.shrink()
+                    : Text(
+                        '${currentIndex + 1}/${gameTerms.length}',
+                        textScaler: TextScaler.noScaling,
+                        style: TextStyle(
+                          fontSize: 20,
+                          height: 1,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
+                          color: GakujiColors.darkGray,
+                        ),
+                      ),
+              ),
+            ),
+            _topIconButton(
+              icon: Icons.more_horiz_rounded,
+              onTap: () => _showOptions(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _simpleTopBar({
     required BuildContext context,
     required IconData icon,
   }) {
     return SizedBox(
-      width: 42,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: _smallTopIconButton(
-          icon: icon,
-          iconSize: 28,
-          onTap: () => _leavePage(context),
+      height: 72,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+        child: Row(
+          children: [
+            _topIconButton(
+              icon: icon,
+              onTap: () => Navigator.pop(context),
+            ),
+            const Spacer(),
+          ],
         ),
       ),
     );
   }
 
-  Widget _smallTopIconButton({
+  Widget _topIconButton({
     required IconData icon,
-    required double iconSize,
     required VoidCallback onTap,
   }) {
     return Material(
@@ -454,11 +1102,11 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         splashColor: deckPrimaryColor.withValues(alpha: 0.08),
         highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
         child: SizedBox(
-          width: 40,
-          height: 40,
+          width: 44,
+          height: 44,
           child: Icon(
             icon,
-            size: iconSize,
+            size: 34,
             color: GakujiColors.darkGray,
           ),
         ),
@@ -466,30 +1114,13 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     );
   }
 
-  Widget _landscapePanel({
-    required Widget child,
-    required Color color,
-  }) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: GakujiColors.softBorder,
-          width: 1.3,
-        ),
-        boxShadow: [GakujiShadows.soft],
-      ),
-      child: child,
-    );
-  }
-
   Widget _progressBar() {
     final total = gameTerms.isEmpty ? 1 : gameTerms.length;
-    final progress = (currentIndex / total).clamp(0.0, 1.0).toDouble();
+    final progress = isRushMode
+        ? _rushProgress
+        : isEndlessMode
+            ? 0.0
+            : (currentIndex / total).clamp(0.0, 1.0).toDouble();
 
     return SizedBox(
       height: 4,
@@ -506,7 +1137,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
             alignment: Alignment.centerLeft,
             child: Container(
               height: 4,
-              color: GakujiColors.darkGray,
+              color: isRushMode ? deckPrimaryColor : GakujiColors.darkGray,
             ),
           ),
         ],
@@ -514,488 +1145,222 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     );
   }
 
-  Widget _scoreRow() {
-    return SizedBox(
-      height: 36,
-      child: Row(
-        children: [
-          _statPill(
-            label: 'Errors',
-            value: '$mistakeCount/$maxMistakes',
-            color: const Color(0xFFFF8C8C),
+  Widget _targetWord(Term term) {
+    final text = _termDisplayText(term);
+
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          text,
+          maxLines: 1,
+          textAlign: TextAlign.center,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: _termFontSizeFor(text),
+            height: 1,
+            fontWeight: FontWeight.w600,
+            color: GakujiColors.darkGray,
           ),
-          const SizedBox(width: 8),
-          _statPill(
-            label: 'Streak',
-            value: '$streak',
-            color: const Color(0xFFC8F29D),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _statPill({
+  List<Widget> _evidenceFieldsForRound(ImposterRound round) {
+    final fields = <Widget>[];
+    final correctFile = showingCorrection && correctionRound == round
+        ? _correctIdentityFile(round.visitor)
+        : null;
+
+    void addField(
+      String label,
+      String value, {
+      String? correctValue,
+    }) {
+      final displayValue = label == 'Definition'
+          ? _primaryDefinition(value)
+          : _safeValue(value);
+      final displayCorrectValue = correctValue == null
+          ? null
+          : label == 'Definition'
+              ? _primaryDefinition(correctValue)
+              : _safeValue(correctValue);
+      final correctionValue = !round.isValid &&
+              displayCorrectValue != null &&
+              _normalized(displayValue) != _normalized(displayCorrectValue)
+          ? displayCorrectValue
+          : null;
+
+      if (fields.isNotEmpty) {
+        fields.add(const SizedBox(height: 22));
+      }
+      fields.add(
+        _evidenceField(
+          label: label,
+          value: displayValue,
+          correctionValue: correctionValue,
+        ),
+      );
+    }
+
+    if (!isRushMode || _rushCheckReading) {
+      addField(
+        'Reading',
+        round.file.reading,
+        correctValue: correctFile?.reading,
+      );
+    }
+
+    if (!isRushMode || _rushCheckDefinition) {
+      addField(
+        'Definition',
+        round.file.definition,
+        correctValue: correctFile?.definition,
+      );
+    }
+
+    if (!isRushMode) {
+      addField(
+        'Part of Speech',
+        round.file.partOfSpeech,
+        correctValue: correctFile?.partOfSpeech,
+      );
+    }
+
+    return fields;
+  }
+
+  Widget _evidenceField({
     required String label,
     required String value,
-    required Color color,
+    String? correctionValue,
   }) {
-    return Expanded(
-      child: Container(
-        height: 36,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(GakujiRadius.pill),
-          border: Border.all(
-            color: color,
-            width: 2,
-          ),
-        ),
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              '$label: $value',
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.xSmall.copyWith(
-                color: GakujiColors.darkGray,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _visitorStack(ImposterRound round) {
-    final activeCorrectionRound = correctionRound;
-    final userApproved = correctionUserApproved;
-
-    return Stack(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Positioned.fill(
-          child: _visitorCard(round.visitor),
+        Text(
+          label.toUpperCase(),
+          textAlign: TextAlign.center,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: isRushMode ? 15 : 14,
+            height: 1,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.9,
+            color: deckPrimaryColor,
+          ),
         ),
-        Positioned.fill(
-          child: IgnorePointer(
-            ignoring: !showingCorrection,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 260),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              transitionBuilder: (child, animation) {
-                final slideAnimation = Tween<Offset>(
-                  begin: const Offset(-0.35, 0),
-                  end: Offset.zero,
-                ).animate(animation);
-
-                return SlideTransition(
-                  position: slideAnimation,
-                  child: FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
-                );
-              },
-              child: showingCorrection &&
-                      activeCorrectionRound != null &&
-                      userApproved != null
-                  ? _correctionPaper(
-                      key: const ValueKey('correction-paper'),
-                      round: activeCorrectionRound,
-                      userApproved: userApproved,
-                    )
-                  : const SizedBox(
-                      key: ValueKey('no-correction-paper'),
-                    ),
+        const SizedBox(height: 10),
+        Text(
+          _safeValue(value),
+          textAlign: TextAlign.center,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: isRushMode ? 30 : 26,
+            height: 1.3,
+            fontWeight: FontWeight.w600,
+            color: GakujiColors.darkGray,
+          ),
+        ),
+        if (correctionValue != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Correct: ${_safeValue(correctionValue)}',
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.small.copyWith(
+              color: GakujiColors.pinRed,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
             ),
           ),
+        ],
+        const SizedBox(height: 14),
+        Container(
+          height: 1,
+          width: double.infinity,
+          color: GakujiColors.softBorder,
         ),
       ],
     );
   }
 
-  Widget _visitorCard(Term term) {
-    final termText = _termDisplayText(term);
+  Widget _correctionSection() {
+    final round = correctionRound;
+    final userApproved = correctionUserApproved;
 
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: GakujiColors.warmCard,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: deckPrimaryColor.withValues(alpha: 0.42),
-          width: 1.5,
-        ),
-        boxShadow: [GakujiShadows.soft],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            termText,
-            maxLines: 1,
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: _termFontSizeFor(termText),
-              height: 1,
-              fontWeight: FontWeight.w700,
-              color: GakujiColors.darkGray,
-            ),
-          ),
-        ),
+    if (round == null || userApproved == null) {
+      return const SizedBox.shrink();
+    }
+
+    final message = round.isValid
+        ? 'Not quite — this entry was correct.'
+        : 'Not quite — the corrected field is shown above.';
+
+    return Text(
+      message,
+      textAlign: TextAlign.center,
+      textScaler: TextScaler.noScaling,
+      style: GakujiText.small.copyWith(
+        color: GakujiColors.pinRed,
+        fontWeight: FontWeight.w700,
+        height: 1.3,
       ),
     );
   }
 
- Widget _identityFile({
-    required IdentityFile file,
-    required Term visitor,
-  }) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-      decoration: BoxDecoration(
-        color: GakujiColors.whiteCard,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: GakujiColors.softBorder,
-          width: 1.3,
-        ),
-        boxShadow: [GakujiShadows.soft],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Identity File',
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.medium.copyWith(
-              color: deckPrimaryColor,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: [
-                  _fileRow(
-                    label: 'Visitor',
-                    value: _termDisplayText(visitor),
-                  ),
-                  _fileRow(
-                    label: 'Reading',
-                    value: file.reading,
-                  ),
-                  _fileRow(
-                    label: 'Part of Speech',
-                    value: file.partOfSpeech,
-                  ),
-                  _fileRow(
-                    label: 'Definition',
-                    value: file.definition,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _correctionPaper({
-    required Key key,
-    required ImposterRound round,
-    required bool userApproved,
-  }) {
-    final correctFile = _correctIdentityFile(round.visitor);
-    final correctDecision = round.isValid;
-    final fileStatus = round.isValid ? 'This file was real.' : 'This file was fake.';
-
-    return Container(
-      key: key,
-      width: double.infinity,
-      height: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF8EA),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: const Color(0xFFE0B86F),
-          width: 1.6,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x33000000),
-            blurRadius: 18,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.description_rounded,
-                size: 22,
-                color: deckPrimaryColor,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Correction Notice',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textScaler: TextScaler.noScaling,
-                  style: GakujiText.small.copyWith(
-                    color: deckPrimaryColor,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'You chose ${_decisionLabel(userApproved)}. Correct call: ${_decisionLabel(correctDecision)}.',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.xSmall.copyWith(
-              color: GakujiColors.darkGray,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            fileStatus,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.xSmall.copyWith(
-              color: GakujiColors.mediumGray,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            height: 1,
-            color: GakujiColors.softBorder,
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: [
-                  _correctionRow(
-                    label: 'Visitor',
-                    value: _termDisplayText(round.visitor),
-                  ),
-                  _correctionRow(
-                    label: 'Reading',
-                    value: correctFile.reading,
-                  ),
-                  _correctionRow(
-                    label: 'Part of Speech',
-                    value: correctFile.partOfSpeech,
-                  ),
-                  _correctionRow(
-                    label: 'Definition',
-                    value: correctFile.definition,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _continueCorrectionButton(),
-        ],
-      ),
-    );
-  }
-
-  Widget _correctionRow({
+  Widget _verdictButton({
     required String label,
-    required String value,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 92,
-            child: Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.xSmall.copyWith(
-                color: GakujiColors.mediumGray,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.xSmall.copyWith(
-                color: GakujiColors.darkGray,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _continueCorrectionButton() {
-    return Container(
-      width: double.infinity,
-      height: 38,
-      decoration: BoxDecoration(
-        color: deckPrimaryColor,
-        borderRadius: BorderRadius.circular(GakujiRadius.small),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(GakujiRadius.small),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: continueAfterCorrection,
-          splashColor: Colors.white.withValues(alpha: 0.12),
-          highlightColor: Colors.white.withValues(alpha: 0.06),
-          child: Center(
-            child: Text(
-              mistakeCount >= maxMistakes ? 'View Results' : 'Continue',
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.xSmall.copyWith(
-                color: GakujiColors.warmCard,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _decisionPanel() {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      decoration: BoxDecoration(
-        color: GakujiColors.warmCard,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: GakujiColors.softBorder,
-          width: 1.3,
-        ),
-        boxShadow: [GakujiShadows.soft],
-      ),
-      child: Column(
-        children: [
-          Text(
-            'Decision',
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.medium.copyWith(
-              color: deckPrimaryColor,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            showingCorrection
-                ? 'Review the correction notice and compare it with the file.'
-                : 'Does this file belong to the visitor?',
-            maxLines: 4,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.xSmall.copyWith(
-              color: GakujiColors.mediumGray,
-            ),
-          ),
-          const Spacer(),
-          _decisionButton(
-            label: 'Deny',
-            color: const Color(0xFFFF8C8C),
-            textColor: const Color(0xFFB84848),
-            onTap: () => answer(approved: false),
-          ),
-          const SizedBox(height: 8),
-          _decisionButton(
-            label: 'Approve',
-            color: const Color(0xFFC8F29D),
-            textColor: const Color(0xFF4F8F35),
-            onTap: () => answer(approved: true),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _fileRow({
-    required String label,
-    required String value,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 92,
-            child: Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.xSmall.copyWith(
-                color: GakujiColors.mediumGray,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.xSmall.copyWith(
-                color: GakujiColors.darkGray,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _decisionButton({
-    required String label,
-    required Color color,
-    required Color textColor,
+    required Color fillColor,
+    required Color foregroundColor,
     required VoidCallback onTap,
   }) {
-    return Container(
-      width: double.infinity,
-      height: 46,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(GakujiRadius.small),
-        boxShadow: [GakujiShadows.soft],
-      ),
+    return SizedBox(
+      height: 116,
       child: Material(
-        color: Colors.transparent,
+        color: fillColor,
+        borderRadius: BorderRadius.circular(GakujiRadius.small),
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(GakujiRadius.small),
+            border: Border.all(
+              color: foregroundColor,
+              width: 2,
+            ),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            splashColor: foregroundColor.withValues(alpha: 0.12),
+            highlightColor: foregroundColor.withValues(alpha: 0.06),
+            child: Center(
+              child: Text(
+                label,
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.medium.copyWith(
+                  color: foregroundColor,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _primaryButton({
+    required String label,
+    required VoidCallback? onTap,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 58,
+      child: Material(
+        color: onTap == null
+            ? deckPrimaryColor.withValues(alpha: 0.35)
+            : deckPrimaryColor,
         borderRadius: BorderRadius.circular(GakujiRadius.small),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1006,8 +1371,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: GakujiText.small.copyWith(
-                color: textColor,
+              style: GakujiText.medium.copyWith(
+                color: GakujiColors.warmCard,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1017,183 +1382,223 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     );
   }
 
-  Widget _compactInfoCard(String termLabel) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: GakujiColors.whiteCard,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: GakujiColors.softBorder,
-          width: 1.2,
-        ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _compactInfoRow(
-            label: 'Deck',
-            value: widget.deck.name,
-          ),
-          const SizedBox(height: 8),
-          _compactInfoRow(
-            label: 'Run',
-            value: 'Full deck • $termLabel',
-          ),
-          const SizedBox(height: 8),
-          _compactInfoRow(
-            label: 'Limit',
-            value: '3 mistakes',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _compactInfoRow({
+  Widget _rushToggleRow({
     required String label,
-    required String value,
+    required bool value,
+    required VoidCallback onTap,
   }) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 48,
-          child: Text(
-            label,
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.xSmall.copyWith(
-              color: GakujiColors.mediumGray,
-            ),
+    return Material(
+      color: GakujiColors.warmCard,
+      borderRadius: BorderRadius.circular(GakujiRadius.small),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+        highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  textScaler: TextScaler.noScaling,
+                  style: GakujiText.medium.copyWith(
+                    color: GakujiColors.darkGray,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                width: 48,
+                height: 28,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  color: value ? deckPrimaryColor : GakujiColors.softBorder,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Align(
+                  alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: GakujiColors.warmCard,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.xSmall.copyWith(
-              color: GakujiColors.darkGray,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _resultsCard(int cleared) {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      decoration: BoxDecoration(
-        color: GakujiColors.whiteCard,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: GakujiColors.softBorder,
-          width: 1.3,
-        ),
-        boxShadow: [GakujiShadows.soft],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _resultRow('Cleared', '$cleared/${gameTerms.length}'),
-          const SizedBox(height: 12),
-          _resultRow('Correct', '$correctCount'),
-          const SizedBox(height: 12),
-          _resultRow('Errors', '$mistakeCount/$maxMistakes'),
-          const SizedBox(height: 12),
-          _resultRow('Best Streak', '$bestStreak'),
-        ],
       ),
     );
   }
 
-  Widget _resultRow(String label, String value) {
-    return Row(
-      children: [
-        Text(
-          label,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.xSmall.copyWith(
-            color: GakujiColors.mediumGray,
-          ),
+  Future<void> _showOptions(BuildContext context) async {
+    final pausedRush = _rushTimerShouldRun;
+    if (pausedRush) {
+      _pauseRushTimer();
+    }
+
+    var checkReading = _rushCheckReading;
+    var checkDefinition = _rushCheckDefinition;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: GakujiColors.warmBackground,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(28),
         ),
-        const Spacer(),
-        Text(
-          value,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.small.copyWith(
-            color: GakujiColors.darkGray,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            void applyRushSettings() {
+              setState(() {
+                _rushCheckReading = checkReading;
+                _rushCheckDefinition = checkDefinition;
+
+                if (isRushMode && currentRound != null) {
+                  currentRound = _generateRoundForCurrentIndex();
+                  _rushRemainingMilliseconds =
+                      _rushRoundDuration.inMilliseconds;
+                  _rushTimedOut = false;
+                }
+              });
+
+              unawaited(_persistRushSettings());
+            }
+
+            return SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 14, 22, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: GakujiColors.softBorder,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    if (isRushMode) ...[
+                      Text(
+                        'Rush Fields',
+                        textScaler: TextScaler.noScaling,
+                        style: GakujiText.small.copyWith(
+                          color: GakujiColors.mediumGray,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      _rushToggleRow(
+                        label: 'Reading',
+                        value: checkReading,
+                        onTap: () {
+                          if (checkReading && !checkDefinition) return;
+                          setSheetState(() {
+                            checkReading = !checkReading;
+                          });
+                          applyRushSettings();
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      _rushToggleRow(
+                        label: 'Definition',
+                        value: checkDefinition,
+                        onTap: () {
+                          if (checkDefinition && !checkReading) return;
+                          setSheetState(() {
+                            checkDefinition = !checkDefinition;
+                          });
+                          applyRushSettings();
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    _optionRow(
+                      icon: Icons.refresh_rounded,
+                      label: 'Restart Session',
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        restartGame();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _optionRow(
+                      icon: Icons.grid_view_rounded,
+                      label: 'Return to Modes',
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        _returnToModeSelection();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _optionRow(
+                      icon: Icons.close_rounded,
+                      label: 'Exit Crosscheck',
+                      onTap: () {
+                        Navigator.pop(sheetContext);
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
+
+    if (!mounted) return;
+
+    if (pausedRush && _rushTimerShouldRun && _rushTimer == null) {
+      _startRushTimer(reset: false);
+    }
   }
 
-  Widget _startButton() {
-    return Container(
-      width: double.infinity,
-      height: 46,
-      decoration: BoxDecoration(
-        color: deckPrimaryColor,
-        borderRadius: BorderRadius.circular(GakujiRadius.small),
-        boxShadow: [GakujiShadows.soft],
-      ),
+  Widget _optionRow({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      height: 52,
       child: Material(
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(GakujiRadius.small),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: startGame,
-          splashColor: Colors.white.withValues(alpha: 0.12),
-          highlightColor: Colors.white.withValues(alpha: 0.06),
-          child: Center(
-            child: Text(
-              'Start Inspection',
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.small.copyWith(
-                color: GakujiColors.warmCard,
-                fontWeight: FontWeight.w800,
+          onTap: onTap,
+          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                size: 25,
+                color: GakujiColors.mediumGray,
               ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _restartButton() {
-    return Container(
-      width: double.infinity,
-      height: 46,
-      decoration: BoxDecoration(
-        color: deckPrimaryColor,
-        borderRadius: BorderRadius.circular(GakujiRadius.small),
-        boxShadow: [GakujiShadows.soft],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(GakujiRadius.small),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: restartGame,
-          splashColor: Colors.white.withValues(alpha: 0.12),
-          highlightColor: Colors.white.withValues(alpha: 0.06),
-          child: Center(
-            child: Text(
-              'Try Again',
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.small.copyWith(
-                color: GakujiColors.warmCard,
-                fontWeight: FontWeight.w800,
+              const SizedBox(width: 14),
+              Text(
+                label,
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.small.copyWith(
+                  color: GakujiColors.darkGray,
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -1208,10 +1613,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     );
   }
 
-  String _decisionLabel(bool approved) {
-    return approved ? 'Approve' : 'Deny';
-  }
-
   String _termDisplayText(Term term) {
     final kanji = term.kanji.trim();
 
@@ -1221,11 +1622,29 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }
 
   String _definitionText(Term term) {
-    final meaning = term.meaning.trim();
+    final cardMeaning = term.cardMeaning.trim();
 
-    if (meaning.isNotEmpty) return meaning;
+    if (cardMeaning.isNotEmpty) {
+      return _primaryDefinition(cardMeaning);
+    }
 
-    return _safeValue(term.cardMeaning);
+    return _primaryDefinition(term.meaning);
+  }
+
+  String _primaryDefinition(String value) {
+    final trimmed = value.trim();
+
+    if (trimmed.isEmpty) return '—';
+
+    final definitions = trimmed
+        .split(RegExp(r'\s*(?:/|;|\n)\s*'))
+        .map((definition) => definition.trim())
+        .where((definition) => definition.isNotEmpty)
+        .toList(growable: false);
+
+    if (definitions.isEmpty) return trimmed;
+
+    return definitions.first;
   }
 
   String _safeValue(String value) {
@@ -1236,11 +1655,26 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     return trimmed;
   }
 
-  double _termFontSizeFor(String text) {
-    if (text.length >= 7) return 34;
-    if (text.length >= 5) return 40;
-    if (text.length >= 3) return 48;
-
-    return 54;
+  String _normalized(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
+
+  double _termFontSizeFor(String text) {
+    if (text.length >= 9) return 34;
+    if (text.length >= 7) return 38;
+    if (text.length >= 5) return 42;
+    if (text.length >= 3) return 46;
+
+    return 52;
+  }
+}
+
+class _RushMismatchOption {
+  final _RushField field;
+  final String value;
+
+  const _RushMismatchOption({
+    required this.field,
+    required this.value,
+  });
 }
