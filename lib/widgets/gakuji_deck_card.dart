@@ -180,9 +180,9 @@ class GakujiDeckCard extends StatelessWidget {
   double get pinIconSize {
     switch (size) {
       case GakujiDeckCardSize.large:
-        return 22;
+        return 20;
       case GakujiDeckCardSize.compact:
-        return 18;
+        return 16;
     }
   }
 
@@ -409,35 +409,34 @@ class GakujiDeckCard extends StatelessWidget {
   }
 
   Widget _pinIcon() {
-    final assetPath = pinAssetPath;
+    final assetPath = pinAssetPath != null && pinAssetPath!.isNotEmpty
+        ? pinAssetPath!
+        : 'assets/images/pin_icon.png';
 
     return Positioned(
       top: pinIconTop,
       right: pinIconRight,
       child: IgnorePointer(
-        child: assetPath != null && assetPath.isNotEmpty
-            ? Image.asset(
-                assetPath,
-                width: pinIconSize,
-                height: pinIconSize,
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return _fallbackPinIcon();
-                },
-              )
-            : _fallbackPinIcon(),
+        child: Image.asset(
+          assetPath,
+          width: pinIconSize,
+          height: pinIconSize,
+          fit: BoxFit.contain,
+          color: GakujiColors.darkGray,
+          colorBlendMode: BlendMode.srcIn,
+          errorBuilder: (context, error, stackTrace) {
+            return _fallbackPinIcon();
+          },
+        ),
       ),
     );
   }
 
   Widget _fallbackPinIcon() {
-    return Transform.rotate(
-      angle: 0.72,
-      child: Icon(
-        Icons.push_pin,
-        size: pinIconSize,
-        color: GakujiColors.darkGray,
-      ),
+    return Icon(
+      Icons.push_pin_rounded,
+      size: pinIconSize,
+      color: GakujiColors.darkGray,
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/deck_data.dart';
 import '../data/folder_data.dart';
 import '../data/pinned_deck_data.dart';
+import '../data/recent_deck_data.dart';
 import '../models/deck.dart';
 import '../models/folder.dart';
 import '../services/gakuji_user_data_store.dart';
@@ -11,7 +12,6 @@ import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_folder_card.dart';
 import '../widgets/gakuji_search_bar.dart';
 import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
 import 'create_deck_page.dart';
 import 'deck_page.dart';
 import 'folder_page.dart';
@@ -37,6 +37,7 @@ class _LibraryPageState extends State<LibraryPage> {
   static const Duration deleteAnimationDuration = Duration(milliseconds: 260);
 
   bool showDecks = true;
+  bool showMenu = false;
   bool isDeletingItems = false;
 
   final Set<String> selectedDeckIds = <String>{};
@@ -59,6 +60,19 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _loadRecentDeckOrder();
+  }
+
+  Future<void> _loadRecentDeckOrder() async {
+    await loadRecentlyOpenedDeckIds();
+
+    if (!mounted) return;
+    setState(() {});
+  }
+
+  @override
   void dispose() {
     searchFocusNode.dispose();
     searchController.dispose();
@@ -73,6 +87,10 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Future<void> openNewDeckPopup() async {
+    setState(() {
+      showMenu = false;
+    });
+
     FocusScope.of(context).unfocus();
     deckNameController.clear();
 
@@ -178,6 +196,10 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Future<void> openNewFolderPopup() async {
+    setState(() {
+      showMenu = false;
+    });
+
     FocusScope.of(context).unfocus();
     folderNameController.clear();
 
@@ -275,49 +297,20 @@ class _LibraryPageState extends State<LibraryPage> {
     }
   }
 
-  Future<void> openCreateDeckPage() async {
-    final created = await Navigator.push<bool>(
-      context,
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 320),
-        reverseTransitionDuration: const Duration(milliseconds: 260),
-        pageBuilder: (context, animation, secondaryAnimation) {
-          return const CreateDeckPage();
-        },
-        transitionsBuilder: (
-          context,
-          animation,
-          secondaryAnimation,
-          child,
-        ) {
-          final curvedAnimation = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-            reverseCurve: Curves.easeInCubic,
-          );
-
-          return SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, 1),
-              end: Offset.zero,
-            ).animate(curvedAnimation),
-            child: child,
-          );
-        },
-      ),
-    );
-
-    if (!mounted || created != true) return;
-
+  void closeMenu() {
     setState(() {
-      showDecks = true;
+      showMenu = false;
     });
-
-    scheduleUserDataSave();
   }
 
-  void exitSearch() {
+  void exitSearchAndCloseMenu() {
     FocusScope.of(context).unfocus();
+
+    if (!showMenu) return;
+
+    setState(() {
+      showMenu = false;
+    });
   }
 
   void toggleLibraryView() {
@@ -328,6 +321,7 @@ class _LibraryPageState extends State<LibraryPage> {
 
   void startDeleteMode() {
     setState(() {
+      showMenu = false;
       isDeletingItems = true;
       selectedDeckIds.clear();
       selectedFolderIds.clear();
@@ -376,6 +370,10 @@ class _LibraryPageState extends State<LibraryPage> {
     final deckIdsToDelete = Set<String>.from(selectedDeckIds);
     final folderIdsToDelete = Set<String>.from(selectedFolderIds);
 
+    if (deckIdsToDelete.isNotEmpty) {
+      removeDecksFromRecentOrder(deckIdsToDelete);
+    }
+
     setState(() {
       if (deckIdsToDelete.isNotEmpty) {
         decks.removeWhere((deck) {
@@ -408,15 +406,59 @@ class _LibraryPageState extends State<LibraryPage> {
     scheduleUserDataSave();
   }
 
+  List<Deck> _orderDecksForLibrary(List<Deck> sourceDecks) {
+    final deckById = <String, Deck>{
+      for (final deck in sourceDecks) deck.id: deck,
+    };
+    final originalIndex = <String, int>{
+      for (var index = 0; index < sourceDecks.length; index++)
+        sourceDecks[index].id: index,
+    };
+    final recentIndex = <String, int>{
+      for (var index = 0; index < recentlyOpenedDeckIds.length; index++)
+        recentlyOpenedDeckIds[index]: index,
+    };
+
+    final orderedDecks = <Deck>[];
+
+    for (final pinnedDeckId in pinnedDeckIds) {
+      final pinnedDeck = deckById.remove(pinnedDeckId);
+      if (pinnedDeck != null) {
+        orderedDecks.add(pinnedDeck);
+      }
+    }
+
+    final unpinnedDecks = deckById.values.toList();
+    unpinnedDecks.sort((first, second) {
+      final firstRecentIndex = recentIndex[first.id];
+      final secondRecentIndex = recentIndex[second.id];
+
+      if (firstRecentIndex != null && secondRecentIndex != null) {
+        return firstRecentIndex.compareTo(secondRecentIndex);
+      }
+
+      if (firstRecentIndex != null) return -1;
+      if (secondRecentIndex != null) return 1;
+
+      return originalIndex[first.id]!.compareTo(originalIndex[second.id]!);
+    });
+
+    return <Deck>[
+      ...orderedDecks,
+      ...unpinnedDecks,
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final normalizedSearchQuery = searchQuery.trim().toLowerCase();
 
-    final visibleDecks = decks.where((deck) {
+    final matchingDecks = decks.where((deck) {
       if (normalizedSearchQuery.isEmpty) return true;
 
       return deck.name.toLowerCase().contains(normalizedSearchQuery);
     }).toList();
+    final visibleDecks = _orderDecksForLibrary(matchingDecks);
 
     final visibleFolders = folders.where((folder) {
       if (normalizedSearchQuery.isEmpty) return true;
@@ -430,7 +472,7 @@ class _LibraryPageState extends State<LibraryPage> {
         children: [
           GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onTap: exitSearch,
+            onTap: exitSearchAndCloseMenu,
             child: Column(
               children: [
                 _libraryHeader(),
@@ -469,25 +511,41 @@ class _LibraryPageState extends State<LibraryPage> {
             ),
           ),
           _deleteModeControls(),
+          if (showMenu) _menuOverlay(),
         ],
       ),
     );
   }
 
   Widget _libraryHeader() {
-    return SafeArea(
-      bottom: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      height: topInset + 96,
+      color: GakujiColors.warmBackground,
+      padding: EdgeInsets.fromLTRB(28, topInset + 18, 28, 18),
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          GakujiTopBar(
-            title: 'Library',
-            titleStyle: GakujiText.large.copyWith(
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+            ),
+          ),
+          Text(
+            'Library',
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.large.copyWith(
               color: GakujiColors.darkGray,
             ),
-            rightWidget: _headerAddDeckButton(),
           ),
-          const SizedBox(height: 36),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _headerAddDeckButton(),
+          ),
         ],
       ),
     );
@@ -500,9 +558,48 @@ class _LibraryPageState extends State<LibraryPage> {
         behavior: HitTestBehavior.opaque,
         onTap: isDeletingItems
             ? null
-            : () {
-                FocusScope.of(context).unfocus();
-                openCreateDeckPage();
+            : () async {
+                final created = await Navigator.push<bool>(
+                  context,
+                  PageRouteBuilder(
+                    transitionDuration: const Duration(milliseconds: 320),
+                    reverseTransitionDuration:
+                        const Duration(milliseconds: 260),
+                    pageBuilder: (context, animation, secondaryAnimation) {
+                      return const CreateDeckPage();
+                    },
+                    transitionsBuilder: (
+                      context,
+                      animation,
+                      secondaryAnimation,
+                      child,
+                    ) {
+                      final curvedAnimation = CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                        reverseCurve: Curves.easeInCubic,
+                      );
+
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 1),
+                          end: Offset.zero,
+                        ).animate(curvedAnimation),
+                        child: child,
+                      );
+                    },
+                  ),
+                );
+
+                if (!mounted) return;
+
+                if (created == true) {
+                  setState(() {
+                    showDecks = true;
+                  });
+
+                  scheduleUserDataSave();
+                }
               },
         child: SizedBox(
           width: 44,
@@ -665,6 +762,60 @@ class _LibraryPageState extends State<LibraryPage> {
             onTap: () {},
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _menuOverlay() {
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          GestureDetector(
+            onTap: closeMenu,
+            child: Container(
+              color: Colors.transparent,
+            ),
+          ),
+          Positioned(
+            top: topInset + 58,
+            right: 28,
+            child: Container(
+              width: 214,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: BoxDecoration(
+                color: GakujiColors.warmCard,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x26000000),
+                    blurRadius: 0,
+                    offset: Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _menuItem(
+                    icon: Icons.add,
+                    label: 'New Deck',
+                    onTap: openNewDeckPopup,
+                  ),
+                  const Divider(height: 1, color: dividerGray),
+                  _menuItem(
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Delete',
+                    iconColor: deleteRed,
+                    textColor: deleteRed,
+                    onTap: startDeleteMode,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1135,6 +1286,42 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
+  Widget _menuItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color iconColor = Colors.black,
+    Color textColor = Colors.black,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: iconColor,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              label,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: textColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _deckTypeLabel(DeckType type) {
     switch (type) {
       case DeckType.writing:
@@ -1185,12 +1372,12 @@ class _Pushable extends StatefulWidget {
     required this.child,
     required this.onTap,
     this.pressedOffset = 4,
-  });
+  }) : duration = const Duration(milliseconds: 90);
 
   final Widget child;
   final VoidCallback? onTap;
   final double pressedOffset;
-  static const Duration duration = Duration(milliseconds: 90);
+  final Duration duration;
 
   @override
   State<_Pushable> createState() => _PushableState();
@@ -1258,7 +1445,7 @@ class _PushableState extends State<_Pushable> {
       onTapCancel: releaseAfterMinimumPress,
       onTap: handleTap,
       child: AnimatedContainer(
-        duration: _Pushable.duration,
+        duration: widget.duration,
         curve: Curves.easeOutCubic,
         transform: Matrix4.translationValues(
           0,

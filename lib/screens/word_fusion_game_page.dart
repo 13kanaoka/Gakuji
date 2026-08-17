@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/term.dart';
 import '../models/word_fusion_round.dart';
 import '../services/word_fusion_round_generator.dart';
+import '../widgets/gakuji_domino.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 
@@ -543,8 +544,8 @@ class _WordFusionGamePageState extends State<WordFusionGamePage> {
               final child = interactive
                   ? DragTarget<int>(
                       onWillAcceptWithDetails: (_) => !hasSubmitted,
-                      onAcceptWithDetails: (choiceIndex) {
-                        _placeChoiceInSlot(choiceIndex as int, slotIndex);
+                      onAcceptWithDetails: (details) {
+                        _placeChoiceInSlot(details.data, slotIndex);
                       },
                       builder: (context, candidates, rejected) {
                         return AnimatedScale(
@@ -694,35 +695,10 @@ class _WordFusionGamePageState extends State<WordFusionGamePage> {
     bool invisible = false,
     bool dragging = false,
   }) {
-    return AnimatedOpacity(
-      opacity: invisible ? 0 : 1,
-      duration: const Duration(milliseconds: 120),
-      child: Container(
-        width: 58,
-        height: 68,
-        decoration: BoxDecoration(
-          color: GakujiColors.whiteCard,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: GakujiColors.softBorder,
-            width: 1.7,
-          ),
-          boxShadow: [dragging ? GakujiShadows.card : GakujiShadows.soft],
-        ),
-        child: Center(
-          child: Text(
-            kanji,
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontFamily: GakujiFonts.japanese,
-              fontSize: 31,
-              height: 1,
-              fontWeight: FontWeight.w600,
-              color: GakujiColors.darkGray,
-            ),
-          ),
-        ),
-      ),
+    return GakujiDomino(
+      text: kanji,
+      invisible: invisible,
+      dragging: dragging,
     );
   }
 

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/deck_data.dart';
 import '../data/pinned_deck_data.dart';
+import '../data/recent_deck_data.dart';
 import '../data/review_card_data.dart';
 import '../models/deck.dart';
 import '../models/review_card.dart';
@@ -179,6 +180,7 @@ class _DeckPageState extends State<DeckPage> {
   @override
   void initState() {
     super.initState();
+    markDeckOpenedRecently(widget.deck.id);
     loadState();
   }
 
@@ -427,6 +429,7 @@ class _DeckPageState extends State<DeckPage> {
 
     decks.removeWhere((deck) => deck.id == widget.deck.id);
     pinnedDeckIds.remove(widget.deck.id);
+    await removeDeckFromRecentOrder(widget.deck.id);
 
     scheduleUserDataSave();
 
@@ -911,7 +914,7 @@ class _DeckPageState extends State<DeckPage> {
         children: [
           Positioned(
             right: 4,
-            top: 58,
+            top: 64,
             child: IgnorePointer(child: _deckWatermark()),
           ),
           Positioned(

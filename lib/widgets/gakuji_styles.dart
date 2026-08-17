@@ -18,9 +18,11 @@ class GakujiColors {
   static const Color deckBlue = Color(0xFF4D7EF7);
 
   static const Color reading = Color(0xFF5B84B8);
+  static const Color starred = reading;
   static const Color writing = Color(0xFF7C8F3A);
   static const Color hybrid = Color(0xFFA57A48);
   static const Color review = Color(0xFFD9825B);
+  static const Color learning = Color(0xFFD66F6B);
 
   static const Color pinRed = Color(0xFFFF4B4B);
   static const Color watermarkBlue = Color(0x1A4D7EF7);
@@ -278,19 +280,19 @@ class GakujiText {
 class GakujiShadows {
   static BoxShadow get soft => BoxShadow(
         color: GakujiColors.isDarkMode
-            ? const Color(0x66000000)
+            ? const Color(0x28000000)
             : const Color(0x22000000),
-        blurRadius: GakujiColors.isDarkMode ? 16 : 10,
-        spreadRadius: GakujiColors.isDarkMode ? -2 : 0,
-        offset: Offset(0, GakujiColors.isDarkMode ? 7 : 4),
+        blurRadius: GakujiColors.isDarkMode ? 11 : 10,
+        spreadRadius: 0,
+        offset: Offset(0, GakujiColors.isDarkMode ? 4 : 4),
       );
 
   static BoxShadow get card => BoxShadow(
         color: GakujiColors.isDarkMode
-            ? const Color(0x99000000)
+            ? const Color(0x40000000)
             : const Color(0x36000000),
-        blurRadius: GakujiColors.isDarkMode ? 28 : 18,
-        spreadRadius: GakujiColors.isDarkMode ? -3 : 0,
-        offset: Offset(0, GakujiColors.isDarkMode ? 14 : 8),
+        blurRadius: GakujiColors.isDarkMode ? 18 : 18,
+        spreadRadius: GakujiColors.isDarkMode ? -1 : 0,
+        offset: Offset(0, GakujiColors.isDarkMode ? 7 : 8),
       );
 }

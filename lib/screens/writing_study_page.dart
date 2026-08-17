@@ -51,7 +51,7 @@ class WritingSessionController {
   List<Term> activeTerms;
 
   final List<Term> answeredTerms = [];
-  final List<_WritingHistoryEntry> _history = [];
+  final List<WritingHistoryEntry> history = [];
   final List<Term> incorrectReviewTerms = [];
 
   final String deckId;
@@ -198,7 +198,7 @@ class WritingSessionController {
       activeTerms = [];
       correctCount = 0;
       incorrectCount = 0;
-      _history.clear();
+      history.clear();
       incorrectReviewTerms.clear();
       _initSlots();
       return;
@@ -218,7 +218,7 @@ class WritingSessionController {
 
     correctCount = 0;
     incorrectCount = 0;
-    _history.clear();
+    history.clear();
     incorrectReviewTerms.clear();
 
     _initSlots();
@@ -238,7 +238,7 @@ class WritingSessionController {
     }
 
     answeredTerms.clear();
-    _history.clear();
+    history.clear();
 
     correctCount = 0;
     incorrectCount = 0;
@@ -342,8 +342,8 @@ class WritingSessionController {
 
     final answeredTerm = activeTerms.first;
 
-    _history.add(
-      _WritingHistoryEntry(
+    history.add(
+      WritingHistoryEntry(
         term: answeredTerm,
         correct: correct,
       ),
@@ -371,8 +371,8 @@ class WritingSessionController {
 
     final skippedTerm = activeTerms.first;
 
-    _history.add(
-      _WritingHistoryEntry(
+    history.add(
+      WritingHistoryEntry(
         term: skippedTerm,
         correct: false,
       ),
@@ -392,9 +392,9 @@ class WritingSessionController {
   void previousCard({
     bool saveProgress = true,
   }) {
-    if (_history.isEmpty) return;
+    if (history.isEmpty) return;
 
-    final last = _history.removeLast();
+    final last = history.removeLast();
 
     if (last.correct) {
       correctCount--;
@@ -461,6 +461,14 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
   void scheduleUserDataSave() {
     GakujiUserDataStore.scheduleSave();
+  }
+
+  void _toggleFavorite(Term term) {
+    setState(() {
+      term.marked = !term.marked;
+    });
+
+    scheduleUserDataSave();
   }
 
   @override
@@ -1224,6 +1232,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     final activeStrokes = controller.slotStrokes.isNotEmpty
         ? controller.slotStrokes[controller.activeSlotIndex]
         : <List<WritingPoint>>[];
+    final term = controller.currentTerm;
 
     return WritingStudyCard(
       prompt: prompt,
@@ -1238,6 +1247,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       swipeColor: swipeColor,
       swipeOpacity: swipeOpacity,
       contentOpacity: contentOpacity,
+      isStarred: term.marked,
+      onStarTap: () => _toggleFavorite(term),
       onSelectSlot: (index) {
         if (isAnswerRevealed) return;
 
@@ -1676,11 +1687,11 @@ class _PushableState extends State<_Pushable> {
   }
 }
 
-class _WritingHistoryEntry {
+class WritingHistoryEntry {
   final Term term;
   final bool correct;
 
-  const _WritingHistoryEntry({
+  const WritingHistoryEntry({
     required this.term,
     required this.correct,
   });

@@ -22,6 +22,8 @@ class ReadingCardFrame extends StatelessWidget {
   final double borderWidth;
   final Color? backgroundColor;
   final List<BoxShadow>? boxShadow;
+  final bool? isStarred;
+  final VoidCallback? onStarTap;
 
   const ReadingCardFrame({
     super.key,
@@ -33,6 +35,8 @@ class ReadingCardFrame extends StatelessWidget {
     this.borderWidth = 1.2,
     this.backgroundColor,
     this.boxShadow,
+    this.isStarred,
+    this.onStarTap,
   });
 
   @override
@@ -54,7 +58,42 @@ class ReadingCardFrame extends StatelessWidget {
         ),
         boxShadow: boxShadow ?? [GakujiShadows.card],
       ),
-      child: child,
+      child: _cardChild(),
+    );
+  }
+
+  Widget _cardChild() {
+    if (isStarred == null || onStarTap == null) {
+      return child;
+    }
+
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          top: 8,
+          right: 8,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onStarTap,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Center(
+                child: Icon(
+                  isStarred!
+                      ? Icons.star_rounded
+                      : Icons.star_border_rounded,
+                  size: 30,
+                  color: isStarred!
+                      ? GakujiColors.starred
+                      : GakujiColors.mediumGray,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -81,6 +120,7 @@ class ReadingCardBackContent extends StatelessWidget {
   final String? photoPath;
   final String readingText;
   final bool showReadingOnBack;
+  final Color? glossColor;
   final VoidCallback? onGlossTap;
   final VoidCallback? onNoteTap;
   final VoidCallback? onExamplesTap;
@@ -94,6 +134,7 @@ class ReadingCardBackContent extends StatelessWidget {
     this.photoPath,
     this.readingText = '',
     this.showReadingOnBack = false,
+    this.glossColor,
     this.onGlossTap,
     this.onNoteTap,
     this.onExamplesTap,
@@ -153,6 +194,7 @@ class ReadingCardBackContent extends StatelessWidget {
                             onTap: onGlossTap,
                             child: _ReadingCardGlosses(
                               glosses: glosses,
+                              color: glossColor ?? GakujiColors.darkGray,
                             ),
                           ),
                           if (hasNote) ...[
@@ -245,9 +287,11 @@ class ReadingCardBackContent extends StatelessWidget {
 
 class _ReadingCardGlosses extends StatelessWidget {
   final List<String> glosses;
+  final Color color;
 
   const _ReadingCardGlosses({
     required this.glosses,
+    required this.color,
   });
 
   @override
@@ -263,7 +307,7 @@ class _ReadingCardGlosses extends StatelessWidget {
           height: ReadingCardBackContent.contentLineHeight,
           fontWeight: FontWeight.w800,
           letterSpacing: -0.35,
-          color: GakujiColors.darkGray,
+          color: color,
         ),
       );
     }
@@ -289,7 +333,7 @@ class _ReadingCardGlosses extends StatelessWidget {
               height: ReadingCardBackContent.contentLineHeight,
               fontWeight: FontWeight.w800,
               letterSpacing: -0.35,
-              color: GakujiColors.darkGray,
+              color: color,
             ),
           ),
         );

@@ -490,6 +490,14 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     GakujiUserDataStore.scheduleSave();
   }
 
+  void _toggleFavorite(Term term) {
+    setState(() {
+      term.marked = !term.marked;
+    });
+
+    _scheduleUserDataSave();
+  }
+
   void _saveProgress() {
     if (isReviewingIncorrect) return;
 
@@ -1439,6 +1447,8 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     final currentPosition = answeredItems.length + 1;
     final totalPosition = totalSessionCount;
 
+    final compactStudyLayout = MediaQuery.sizeOf(context).height < 820;
+
     return Scaffold(
       backgroundColor: GakujiColors.warmBackground,
       body: SafeArea(
@@ -1452,7 +1462,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
               onRightTap: _openStudyOptions,
             ),
             _progressBar(deckProgress),
-            const SizedBox(height: 24),
+            SizedBox(height: compactStudyLayout ? 16 : 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1468,16 +1478,16 @@ class _HybridStudyPageState extends State<HybridStudyPage>
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: compactStudyLayout ? 12 : 24),
             Expanded(
               child: _cardArea(),
             ),
-            const SizedBox(height: 28),
+            SizedBox(height: compactStudyLayout ? 12 : 28),
             Padding(
-              padding: const EdgeInsets.only(
+              padding: EdgeInsets.only(
                 left: 24,
                 right: 24,
-                bottom: 10,
+                bottom: compactStudyLayout ? 6 : 10,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1655,6 +1665,8 @@ class _HybridStudyPageState extends State<HybridStudyPage>
           ? swipeFeedbackColor!
           : GakujiColors.softBorder,
       borderWidth: hasSwipeFeedback ? 5 : 1.2,
+      isStarred: term.marked,
+      onStarTap: () => _toggleFavorite(term),
       child: Center(
         child: Opacity(
           opacity: contentOpacity,
@@ -1748,31 +1760,19 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   }) {
     final hasSwipeFeedback = swipeColor != null && swipeOpacity > 0;
 
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(
-        minHeight: 590,
-      ),
+    final term = currentItem.term;
+
+    return ReadingCardFrame(
       margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      decoration: BoxDecoration(
-        color: GakujiColors.warmCard,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: hasSwipeFeedback ? swipeColor : GakujiColors.softBorder,
-          width: hasSwipeFeedback ? 5 : 1.2,
-        ),
-        boxShadow: [GakujiShadows.card],
-      ),
-      child: Stack(
-        children: [
-          Opacity(
-            opacity: contentOpacity,
-            child: isWritingAnswerRevealed
-                ? _writingAnswerRevealContent(prompt)
-                : _writingInputContent(prompt),
-          ),
-        ],
+      borderColor: hasSwipeFeedback ? swipeColor : GakujiColors.softBorder,
+      borderWidth: hasSwipeFeedback ? 5 : 1.2,
+      isStarred: term.marked,
+      onStarTap: () => _toggleFavorite(term),
+      child: Opacity(
+        opacity: contentOpacity,
+        child: isWritingAnswerRevealed
+            ? _writingAnswerRevealContent(prompt)
+            : _writingInputContent(prompt),
       ),
     );
   }
@@ -2173,7 +2173,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
                   final legendGap = compact ? 18.0 : 22.0;
                   final buttonHeight = compact ? 56.0 : 62.0;
                   final buttonGap = compact ? 18.0 : 22.0;
-                  final bottomGap = compact ? 52.0 : 64.0;
+                  final bottomGap = compact ? 40.0 : 64.0;
 
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),

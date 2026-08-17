@@ -310,6 +310,14 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     GakujiUserDataStore.scheduleSave();
   }
 
+  void _toggleFavorite(Term term) {
+    setState(() {
+      term.marked = !term.marked;
+    });
+
+    scheduleUserDataSave();
+  }
+
   void _saveProgress() {
     if (isReviewingIncorrect) return;
 
@@ -1113,7 +1121,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                   : Icons.star_border_rounded,
               label: showStarredOnly ? 'Starred terms only' : 'All terms',
               iconColor: showStarredOnly
-                  ? GakujiColors.darkGray
+                  ? GakujiColors.starred
                   : GakujiColors.mediumGray,
               onTap: toggleStarredTermFilter,
             ),
@@ -1753,18 +1761,16 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       borderColor:
           hasSwipeFeedback ? swipeColor : GakujiColors.softBorder,
       borderWidth: hasSwipeFeedback ? 5 : 1.2,
-      child: Stack(
-        children: [
-          Center(
-            child: Opacity(
-              opacity: contentOpacity,
-              child: _cardContent(
-                term,
-                showDefinition: showDefinition,
-              ),
-            ),
+      isStarred: term.marked,
+      onStarTap: () => _toggleFavorite(term),
+      child: Center(
+        child: Opacity(
+          opacity: contentOpacity,
+          child: _cardContent(
+            term,
+            showDefinition: showDefinition,
           ),
-        ],
+        ),
       ),
     );
   }

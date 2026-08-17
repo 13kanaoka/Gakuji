@@ -12,6 +12,7 @@ import '../services/deck_storage.dart';
 import '../services/dictionary_service.dart';
 import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_faded_scroll.dart';
+import '../widgets/gakuji_deck_save_sheet.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'dictionary_detail_page.dart';
@@ -32,8 +33,7 @@ class KanjiDictionaryDetailPage extends StatefulWidget {
 class _KanjiDictionaryDetailPageState
     extends State<KanjiDictionaryDetailPage> {
   static Color get sectionColor => GakujiColors.warmCard;
-  static const Color sectionHighlightColor = Color(0xFFFAF7F2);
-  static const Color accentBlue = Color(0xFF4D7EF7);
+  static const Color accentBlue = GakujiColors.reading;
   static Color get dividerColor => GakujiColors.warmDivider;
   static Color get softTextGray => GakujiColors.mediumGray;
   static Color get darkText => GakujiColors.darkGray;
@@ -450,124 +450,23 @@ class _KanjiDictionaryDetailPageState
 
     if (!mounted) return;
 
-    await showModalBottomSheet<void>(
+    final result = await showGakujiDeckSaveSheet(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return SafeArea(
-              top: false,
-              child: Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.62,
-                ),
-                decoration: BoxDecoration(
-                  color: GakujiColors.warmBackground,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(24),
-                  ),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _sheetHandle(),
-                     Padding(
-                      padding: EdgeInsets.fromLTRB(18, 0, 18, 12),
-                      child: Text(
-                        'Save to...',
-                        textAlign: TextAlign.center,
-                        textScaler: TextScaler.noScaling,
-                        style: TextStyle(
-                          fontSize: 18,
-                          height: 1,
-                          fontWeight: FontWeight.w700,
-                          color: darkText,
-                        ),
-                      ),
-                    ),
-                     Divider(
-                      height: 1,
-                      color: dividerColor,
-                    ),
-                    Flexible(
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        padding: const EdgeInsets.only(bottom: 12),
-                        itemCount: decks.length,
-                        itemBuilder: (context, index) {
-                          final deck = decks[index];
-                          final saved = deckContainsEntry(deck);
-                          final isDirect = deck.id == directSaveDeck.id;
-
-                          return ListTile(
-                            minVerticalPadding: 11,
-                            contentPadding:
-                                const EdgeInsets.fromLTRB(22, 0, 12, 0),
-                            title: Text(
-                              deck.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textScaler: TextScaler.noScaling,
-                              style: TextStyle(
-                                fontSize: 16,
-                                height: 1.05,
-                                fontWeight: FontWeight.w600,
-                                color: darkText,
-                              ),
-                            ),
-                            subtitle: Text(
-                              '${deck.terms.length} terms',
-                              textScaler: TextScaler.noScaling,
-                              style: TextStyle(
-                                fontSize: 13,
-                                height: 1.2,
-                                color: softTextGray,
-                              ),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Set as direct save deck',
-                                  onPressed: () async {
-                                    await _setDirectSaveDeck(deck);
-                                    setSheetState(() {});
-                                  },
-                                  icon: Icon(
-                                    isDirect
-                                        ? Icons.bookmark
-                                        : Icons.bookmark_border,
-                                    color: isDirect
-                                        ? accentBlue
-                                        : softTextGray,
-                                  ),
-                                ),
-                                Icon(
-                                  saved
-                                      ? Icons.check_circle
-                                      : Icons.circle_outlined,
-                                  color: saved ? accentBlue : softTextGray,
-                                ),
-                              ],
-                            ),
-                            onTap: () async {
-                              await _toggleEntryInDeck(deck);
-                              setSheetState(() {});
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      decks: decks,
+      directSaveDeckId: directSaveDeck.id,
+      deckContainsTerm: deckContainsEntry,
     );
+
+    if (!mounted || result == null) return;
+
+    switch (result.action) {
+      case GakujiDeckSheetAction.saveToDeck:
+        await _toggleEntryInDeck(result.deck);
+        break;
+      case GakujiDeckSheetAction.setDirectSaveDeck:
+        await _setDirectSaveDeck(result.deck);
+        break;
+    }
   }
 
   void _showSavePopup(
@@ -865,7 +764,7 @@ class _KanjiDictionaryDetailPageState
     for (var index = 0; index < safeCount; index++) {
       final stroke = data.strokes[index];
       final isNewestStroke = index == safeCount - 1;
-      final strokeColor = isNewestStroke ? '#4D7EF7' : '#414247';
+      final strokeColor = isNewestStroke ? '#5B84B8' : '#414247';
 
       buffer
         ..write('<path stroke="$strokeColor" d="')
@@ -1340,7 +1239,7 @@ class _KanjiDictionaryDetailPageState
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
       decoration: BoxDecoration(
-        color: sectionHighlightColor,
+        color: GakujiColors.sectionHeader,
         border: Border(
           top: BorderSide(
             color: darkText.withValues(alpha: 0.16),
@@ -1485,19 +1384,6 @@ class _KanjiDictionaryDetailPageState
     );
   }
 
-  Widget _sheetHandle() {
-    return Center(
-      child: Container(
-        width: 42,
-        height: 5,
-        margin: const EdgeInsets.only(top: 9, bottom: 10),
-        decoration: BoxDecoration(
-          color: GakujiColors.softGray,
-          borderRadius: BorderRadius.circular(999),
-        ),
-      ),
-    );
-  }
 }
 
 

@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../models/deck.dart';
 import '../models/term.dart';
-import '../services/gakuji_user_data_store.dart';
-import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_search_bar.dart';
 import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_term_row.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'reading_card_edit_page.dart';
 
@@ -73,10 +70,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
     super.dispose();
   }
 
-  void scheduleUserDataSave() {
-    GakujiUserDataStore.scheduleSave();
-  }
-
   void handleCardListScroll() {
     if (!cardsScrollController.hasClients) return;
 
@@ -140,8 +133,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
       dragDistance = 0;
       term.marked = !term.marked;
     });
-
-    scheduleUserDataSave();
   }
 
   void showReadingOnlyMessage() {
@@ -188,8 +179,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
       widget.deck.terms.removeWhere((deckTerm) => deckTerm.id == term.id);
       deletingTermIds.remove(term.id);
     });
-
-    scheduleUserDataSave();
   }
 
   void toggleSelect(Term term) {
@@ -215,8 +204,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
   }
 
   void deleteSelected() {
-    if (selectedTerms.isEmpty) return;
-
     setState(() {
       widget.deck.terms.removeWhere(
         (term) => selectedTerms.contains(term.id),
@@ -229,11 +216,9 @@ class _DeckEditPageState extends State<DeckEditPage> {
       dragDistance = 0;
       showMenu = false;
     });
-
-    scheduleUserDataSave();
   }
 
-  Future<void> openCardSettings(Term term) async {
+  void openCardSettings(Term term) {
     if (deletingTermIds.contains(term.id)) return;
 
     if (selectionMode) {
@@ -250,7 +235,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
       return;
     }
 
-    await Navigator.push(
+    Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => ReadingCardEditPage(
@@ -259,11 +244,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
         ),
       ),
     );
-
-    if (!mounted) return;
-
-    setState(() {});
-    scheduleUserDataSave();
   }
 
   void handleSwipeStart(Term term) {
@@ -403,7 +383,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
                     leftIconSize: GakujiTopBar.backIconSize,
                     leftIconColor: GakujiColors.darkGray,
                     onLeftTap: () => Navigator.pop(context),
-                    title: 'Card Settings',
+                    title: 'Edit Deck',
                     titleStyle: GakujiText.medium.copyWith(
                       color: GakujiColors.darkGray,
                       fontWeight: FontWeight.w700,
@@ -411,8 +391,8 @@ class _DeckEditPageState extends State<DeckEditPage> {
                     rightIcon: selectionMode
                         ? Icons.delete
                         : showStarredOnly
-                            ? Icons.star
-                            : Icons.star_border,
+                            ? Icons.star_rounded
+                            : Icons.star_border_rounded,
                     rightIconSize: selectionMode ? 28 : 31,
                     onRightTap: selectionMode
                         ? deleteSelected
@@ -439,7 +419,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
                             height: deckInfoCollapsed ? 8 : 18,
                           ),
                           _searchBar(),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 20),
                           Expanded(
                             child: visibleCards.isEmpty
                                 ? _emptyState()
@@ -554,17 +534,39 @@ class _DeckEditPageState extends State<DeckEditPage> {
   }
 
   Widget _termList(List<Term> visibleCards) {
-    return GakujiFadedScroll(
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) {
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x00000000),
+            Colors.black,
+            Colors.black,
+            Color(0x00000000),
+          ],
+          stops: [
+            0.0,
+            0.035,
+            0.94,
+            1.0,
+          ],
+        ).createShader(bounds);
+      },
       child: ListView.separated(
         controller: cardsScrollController,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.only(bottom: 120),
+        padding: const EdgeInsets.only(
+          top: 14,
+          bottom: 140,
+        ),
         itemCount: visibleCards.length,
         separatorBuilder: (context, index) {
           return const Divider(
             height: 1,
             thickness: 1,
-            color: GakujiTermRow.dividerColor,
+            color: rowDividerGray,
           );
         },
         itemBuilder: (context, index) {
@@ -589,9 +591,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
       curve: Curves.easeOutCubic,
       child: GestureDetector(
         onLongPress: () => toggleSelect(term),
-        onTap: () {
-          openCardSettings(term);
-        },
+        onTap: () => openCardSettings(term),
         onHorizontalDragStart: (_) => handleSwipeStart(term),
         onHorizontalDragUpdate: handleSwipeUpdate,
         onHorizontalDragEnd: (_) => handleSwipeEnd(term),
@@ -618,44 +618,49 @@ class _DeckEditPageState extends State<DeckEditPage> {
                 duration: duration,
                 curve: Curves.easeOutCubic,
                 transform: Matrix4.translationValues(offset, 0, 0),
-                child: GakujiTermRow(
-                  term: term,
-                  titleText: term.kanjiBracketText.isNotEmpty
-                      ? term.kanjiBracketText
-                      : term.kanji,
-                  readingText: term.reading,
-                  isSelected: isSelected,
-                  showChevron: false,
-                  leading: selectionMode
-                      ? Icon(
-                          isSelected
-                              ? Icons.check_circle
-                              : Icons.circle_outlined,
-                          color: isSelected ? Colors.red : softTextGray,
-                          size: 24,
-                        )
-                      : null,
-                  trailing: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      if (selectionMode) {
-                        toggleSelect(term);
-                        return;
-                      }
+                child: Container(
+                  color: GakujiColors.warmBackground,
+                  padding: const EdgeInsets.fromLTRB(0, 4, 0, 5),
+                  child: Row(
+                    children: [
+                      if (selectionMode)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: Icon(
+                            isSelected
+                                ? Icons.check_circle
+                                : Icons.circle_outlined,
+                            color: isSelected ? Colors.red : softTextGray,
+                            size: 24,
+                          ),
+                        ),
+                      Expanded(
+                        child: _termText(term, isSelected),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          if (selectionMode) {
+                            toggleSelect(term);
+                            return;
+                          }
 
-                      toggleStarred(term);
-                    },
-                    child: SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Center(
-                        child: Icon(
-                          term.marked ? Icons.star : Icons.star_border,
-                          color: term.marked ? accentBlue : rowDividerGray,
-                          size: 26,
+                          toggleStarred(term);
+                        },
+                        child: SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: Center(
+                            child: Icon(
+                              term.marked ? Icons.star_rounded : Icons.star_border_rounded,
+                              color: term.marked ? accentBlue : rowDividerGray,
+                              size: 26,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ),
@@ -666,5 +671,57 @@ class _DeckEditPageState extends State<DeckEditPage> {
     );
   }
 
+  Widget _termText(Term term, bool isSelected) {
+    final titleText = term.kanjiBracketText.isNotEmpty
+        ? term.kanjiBracketText
+        : term.reading;
+    final readingText =
+        term.kanjiBracketText.isNotEmpty ? term.reading.trim() : '';
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 10,
+          runSpacing: 0,
+          children: [
+            Text(
+              titleText,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 22,
+                height: 1,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+                color: GakujiColors.darkGray,
+              ),
+            ),
+            if (readingText.isNotEmpty)
+              Text(
+                '【$readingText】',
+                textScaler: TextScaler.noScaling,
+                style: const TextStyle(
+                  fontSize: 19,
+                  height: 1,
+                  fontWeight: FontWeight.w600,
+                  color: GakujiColors.reading,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          term.cardMeaning,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textScaler: TextScaler.noScaling,
+          style: TextStyle(
+            fontSize: 14,
+            height: 1,
+            color: GakujiColors.darkGray,
+          ),
+        ),
+      ],
+    );
+  }
 }

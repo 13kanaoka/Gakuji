@@ -4,6 +4,7 @@ import '../models/writing_point.dart';
 import '../models/writing_prompt.dart';
 import '../services/writing_answer_checker.dart';
 import 'gakuji_styles.dart';
+import 'reading_card_back.dart';
 
 class WritingStudyBlankCard extends StatelessWidget {
   const WritingStudyBlankCard({super.key});
@@ -42,6 +43,8 @@ class WritingStudyCard extends StatelessWidget {
   final double swipeOpacity;
   final double contentOpacity;
   final bool showSwipeInstructions;
+  final bool? isStarred;
+  final VoidCallback? onStarTap;
   final ValueChanged<int> onSelectSlot;
   final VoidCallback onClear;
   final VoidCallback? onCheck;
@@ -68,6 +71,8 @@ class WritingStudyCard extends StatelessWidget {
     this.swipeOpacity = 0,
     this.contentOpacity = 1,
     this.showSwipeInstructions = true,
+    this.isStarred,
+    this.onStarTap,
   });
 
   bool get _hasSwipeFeedback {
@@ -85,24 +90,13 @@ class WritingStudyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(
-        minHeight: 590,
-      ),
+    return ReadingCardFrame(
       margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      decoration: BoxDecoration(
-        color: GakujiColors.warmCard,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: _hasSwipeFeedback
-              ? swipeColor!
-              : GakujiColors.softBorder,
-          width: _hasSwipeFeedback ? 5 : 1.2,
-        ),
-        boxShadow: [GakujiShadows.card],
-      ),
+      borderColor:
+          _hasSwipeFeedback ? swipeColor! : GakujiColors.softBorder,
+      borderWidth: _hasSwipeFeedback ? 5 : 1.2,
+      isStarred: isStarred,
+      onStarTap: onStarTap,
       child: Opacity(
         opacity: contentOpacity,
         child: isAnswerRevealed

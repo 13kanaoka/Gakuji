@@ -610,6 +610,14 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     GakujiUserDataStore.scheduleSave();
   }
 
+  void _toggleFavorite(Term term) {
+    setState(() {
+      term.marked = !term.marked;
+    });
+
+    scheduleUserDataSave();
+  }
+
   void handleExit() {
     scheduleUserDataSave();
 
@@ -1063,6 +1071,8 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
       isCheckingAnswer: isCheckingWritingAnswer,
       isCheckingFinalSlot: isCheckingFinalWritingSlot,
       showSwipeInstructions: false,
+      isStarred: term.marked,
+      onStarTap: () => _toggleFavorite(term),
       onSelectSlot: selectWritingSlot,
       onClear: clearActiveWritingSlot,
       onCheck: isCheckingWritingAnswer ? null : checkWritingAnswer,
@@ -1084,15 +1094,13 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     final showDefinition = answerShown;
 
     return ReadingCardFrame(
-      child: Stack(
-        children: [
-          Center(
-            child: _cardContent(
-              term,
-              showDefinition: showDefinition,
-            ),
-          ),
-        ],
+      isStarred: term.marked,
+      onStarTap: () => _toggleFavorite(term),
+      child: Center(
+        child: _cardContent(
+          term,
+          showDefinition: showDefinition,
+        ),
       ),
     );
   }

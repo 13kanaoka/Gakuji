@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../models/deck.dart';
 import '../models/term.dart';
-import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_search_bar.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_term_row.dart';
@@ -94,8 +93,7 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
           child: Column(
             children: [
               GakujiTopBar(
-                leftIcon: GakujiTopBar.backIcon,
-                leftIconSize: GakujiTopBar.backIconSize,
+                leftIcon: Icons.arrow_back_ios_new,
                 leftIconColor: GakujiColors.darkGray,
                 onLeftTap: () => Navigator.pop(context),
                 title: 'Term List',
@@ -118,7 +116,7 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
                         height: deckInfoCollapsed ? 8 : 18,
                       ),
                       _searchBar(),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 20),
                       Expanded(
                         child: terms.isEmpty
                             ? _emptyState()
@@ -231,11 +229,33 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
   }
 
   Widget _termList(BuildContext context, List<Term> terms) {
-    return GakujiFadedScroll(
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (bounds) {
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x00000000),
+            Colors.black,
+            Colors.black,
+            Color(0x00000000),
+          ],
+          stops: [
+            0.0,
+            0.035,
+            0.94,
+            1.0,
+          ],
+        ).createShader(bounds);
+      },
       child: ListView.separated(
         controller: termsScrollController,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.only(bottom: 120),
+        padding: const EdgeInsets.only(
+          top: 14,
+          bottom: 140,
+        ),
         itemCount: terms.length,
         separatorBuilder: (context, index) {
           return const Divider(

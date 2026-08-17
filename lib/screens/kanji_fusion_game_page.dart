@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/kanji_fusion_round.dart';
 import '../models/term.dart';
 import '../services/kanji_fusion_round_generator.dart';
+import '../widgets/gakuji_domino.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 
@@ -266,36 +267,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                   spacing: 12,
                   runSpacing: 12,
                   children: forms.map((form) {
-                    return Material(
-                      color: _blockFillColor,
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () => Navigator.pop(sheetContext, form),
-                        child: Container(
-                          width: 70,
-                          height: 70,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: _blockOutlineColor,
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Text(
-                            form,
-                            textScaler: TextScaler.noScaling,
-                            style: TextStyle(
-                              fontFamily: GakujiFonts.japanese,
-                              fontSize: form.length > 1 ? 28 : 38,
-                              height: 1,
-                              fontWeight: FontWeight.w600,
-                              color: _blockTextColor,
-                            ),
-                          ),
-                        ),
-                      ),
+                    return GakujiDomino(
+                      text: form,
+                      onTap: () => Navigator.pop(sheetContext, form),
                     );
                   }).toList(growable: false),
                 ),
@@ -1191,8 +1165,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   bool get _compactChoiceTiles =>
       currentRound.componentChoices.length > 15;
 
-  double get _choiceTileHeight => _compactChoiceTiles ? 60 : 75.5;
-
   Widget _easyAnswerSlots() {
     final slotCount = currentRound.requiredComponents.length;
 
@@ -1545,8 +1517,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   }) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final feedbackWidth = math.min(76.0, math.max(56.0, constraints.maxWidth));
-
         return Draggable<_FusionDragData>(
           data: _FusionDragData(
             choiceIndex: choiceIndex,
@@ -1557,7 +1527,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
           maxSimultaneousDrags: hasSubmitted ? 0 : 1,
           feedback: Material(
             color: Colors.transparent,
-            child: _dragFeedback(component, feedbackWidth),
+            child: _dragFeedback(component),
           ),
           childWhenDragging: Opacity(
             opacity: 0.18,
@@ -1756,38 +1726,15 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final choiceCount = currentRound.componentChoices.length;
-        final compactTiles = choiceCount > 15;
-        final columns = choiceCount >= 9 ? 5 : 4;
-        const horizontalGap = 8.0;
-        final verticalGap = compactTiles ? 8.0 : 12.0;
-
-        late final double gridWidth;
-        late final double tileWidth;
-
-        if (compactTiles) {
-          gridWidth = math.min(constraints.maxWidth, 348.0);
-          tileWidth =
-              (gridWidth - (horizontalGap * (columns - 1))) / columns;
-        } else {
-          // All rounds with 15 or fewer choices use one consistent base
-          // domino size. The base is 2% larger than the previous five-column
-          // tile size, while still shrinking safely on narrower screens.
-          const standardColumnCount = 5;
-          const standardTileWidth = 67.73;
-          final availableTileWidth = math.max(
-            44.0,
-            (constraints.maxWidth -
-                    (horizontalGap * (standardColumnCount - 1))) /
-                standardColumnCount,
-          ).toDouble();
-
-          tileWidth = math.min(standardTileWidth, availableTileWidth);
-          gridWidth = math.min(
-            constraints.maxWidth,
-            (tileWidth * standardColumnCount) +
-                (horizontalGap * (standardColumnCount - 1)),
-          );
-        }
+        const horizontalGap = 11.0;
+        const verticalGap = 13.0;
+        const fiveColumnWidth =
+            (GakujiDomino.width * 5) + (horizontalGap * 4);
+        final canFitFiveColumns = constraints.maxWidth >= fiveColumnWidth;
+        final columns = choiceCount >= 9 && canFitFiveColumns ? 5 : 4;
+        final gridWidth =
+            (GakujiDomino.width * columns) +
+            (horizontalGap * (columns - 1));
 
         final rows = <List<int>>[];
 
@@ -1806,7 +1753,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                 ),
                 child: _componentChoiceRow(
                   indexes: rows[rowIndex],
-                  tileWidth: tileWidth,
                   gap: horizontalGap,
                 ),
               );
@@ -1819,7 +1765,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
   Widget _componentChoiceRow({
     required List<int> indexes,
-    required double tileWidth,
     required double gap,
   }) {
     return Row(
@@ -1829,32 +1774,23 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
           padding: EdgeInsets.only(
             right: position == indexes.length - 1 ? 0 : gap,
           ),
-          child: _componentTile(
-            index: indexes[position],
-            width: tileWidth,
-          ),
+          child: _componentTile(index: indexes[position]),
         );
       }),
     );
   }
 
-  Widget _componentTile({
-    required int index,
-    required double width,
-  }) {
+  Widget _componentTile({required int index}) {
     switch (selectedDifficulty) {
       case KanjiFusionDifficulty.easy:
       case KanjiFusionDifficulty.normal:
-        return _slottedComponentTile(index: index, width: width);
+        return _slottedComponentTile(index: index);
       case KanjiFusionDifficulty.hard:
-        return _hardComponentTile(index: index, width: width);
+        return _hardComponentTile(index: index);
     }
   }
 
-  Widget _slottedComponentTile({
-    required int index,
-    required double width,
-  }) {
+  Widget _slottedComponentTile({required int index}) {
     final component = currentRound.componentChoices[index];
     final placed = placedChoiceIndexes.contains(index);
 
@@ -1867,7 +1803,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
           : 0;
       final tile = _choiceTileSurface(
         component: currentForm,
-        width: width,
         showFormControl: transformable,
         formCount: forms.length,
         selectedFormIndex: selectedFormIndex,
@@ -1881,7 +1816,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         child: placed
             ? _emptyChoiceFootprint(
                 key: ValueKey('slotted_empty_$index'),
-                width: width,
               )
             : Draggable<_FusionDragData>(
                 key: ValueKey('slotted_choice_$index'),
@@ -1893,9 +1827,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                 maxSimultaneousDrags: hasSubmitted ? 0 : 1,
                 feedback: Material(
                   color: Colors.transparent,
-                  child: _dragFeedback(currentForm, width),
+                  child: _dragFeedback(currentForm),
                 ),
-                childWhenDragging: _emptyChoiceFootprint(width: width),
+                childWhenDragging: _emptyChoiceFootprint(),
                 child: tile,
               ),
       );
@@ -1914,7 +1848,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
     final tile = _choiceTileSurface(
       component: displayComponent,
-      width: width,
       selected: active,
       onTap: () {
         _toggleChoice(index);
@@ -1928,7 +1861,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       child: placed
           ? _emptyChoiceFootprint(
               key: ValueKey('slotted_empty_$index'),
-              width: width,
             )
           : resolvedForm == null
               ? KeyedSubtree(
@@ -1945,18 +1877,15 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                   maxSimultaneousDrags: hasSubmitted ? 0 : 1,
                   feedback: Material(
                     color: Colors.transparent,
-                    child: _dragFeedback(resolvedForm, width),
+                    child: _dragFeedback(resolvedForm),
                   ),
-                  childWhenDragging: _emptyChoiceFootprint(width: width),
+                  childWhenDragging: _emptyChoiceFootprint(),
                   child: tile,
                 ),
     );
   }
 
-  Widget _hardComponentTile({
-    required int index,
-    required double width,
-  }) {
+  Widget _hardComponentTile({required int index}) {
     final component = currentRound.componentChoices[index];
     final placed = placedBlocks.any(
       (block) => block.choiceIndex == index,
@@ -1969,7 +1898,6 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       child: placed
           ? _emptyChoiceFootprint(
               key: ValueKey('hard_empty_$index'),
-              width: width,
             )
           : Draggable<_FusionDragData>(
               key: ValueKey('hard_choice_$index'),
@@ -1981,173 +1909,45 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
               maxSimultaneousDrags: hasSubmitted ? 0 : 1,
               feedback: Material(
                 color: Colors.transparent,
-                child: _dragFeedback(component, width),
+                child: _dragFeedback(component),
               ),
-              childWhenDragging: _emptyChoiceFootprint(width: width),
-              child: _choiceTileSurface(
-                component: component,
-                width: width,
-              ),
+              childWhenDragging: _emptyChoiceFootprint(),
+              child: _choiceTileSurface(component: component),
             ),
     );
   }
 
-  Widget _emptyChoiceFootprint({
-    Key? key,
-    required double width,
-  }) {
+  Widget _emptyChoiceFootprint({Key? key}) {
     return SizedBox(
       key: key,
-      width: width,
-      height: _choiceTileHeight,
+      width: GakujiDomino.width,
+      height: GakujiDomino.height,
     );
   }
 
   Widget _choiceTileSurface({
     required String component,
-    required double width,
     bool selected = false,
     bool showFormControl = false,
     int formCount = 1,
     int selectedFormIndex = 0,
     VoidCallback? onTap,
   }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 140),
-      width: width,
-      height: _choiceTileHeight,
-      padding: EdgeInsets.all(_compactChoiceTiles ? 2 : 3),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(
-          _compactChoiceTiles ? 15 : 18,
-        ),
-        border: Border.all(
-          color: selected ? _blockSelectionColor : Colors.transparent,
-          width: 2.5,
-        ),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: _blockFillColor,
-          borderRadius: BorderRadius.circular(
-            _compactChoiceTiles ? 12 : 14,
-          ),
-          border: Border.all(
-            color: _blockOutlineColor,
-            width: 1.5,
-          ),
-          boxShadow: [GakujiShadows.soft],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(
-            _compactChoiceTiles ? 11 : 13,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            child: Stack(
-              children: [
-                Center(
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      bottom: showFormControl
-                          ? (_compactChoiceTiles ? 9 : 11)
-                          : 0,
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 140),
-                      switchInCurve: Curves.easeOut,
-                      switchOutCurve: Curves.easeIn,
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: Tween<double>(begin: 0.88, end: 1).animate(
-                              animation,
-                            ),
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: KeyedSubtree(
-                        key: ValueKey(component),
-                        child: _componentText(component),
-                      ),
-                    ),
-                  ),
-                ),
-                if (showFormControl)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: _compactChoiceTiles ? 5 : 7,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(formCount, (dotIndex) {
-                        final isCurrent = dotIndex == selectedFormIndex;
-
-                        return Container(
-                          width: isCurrent
-                              ? (_compactChoiceTiles ? 6 : 7)
-                              : (_compactChoiceTiles ? 5 : 6),
-                          height: isCurrent
-                              ? (_compactChoiceTiles ? 6 : 7)
-                              : (_compactChoiceTiles ? 5 : 6),
-                          margin: EdgeInsets.only(
-                            right: dotIndex == formCount - 1
-                                ? 0
-                                : (_compactChoiceTiles ? 3 : 4),
-                          ),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isCurrent
-                                ? _blockTextColor
-                                : _blockOutlineColor.withValues(alpha: 0.55),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return GakujiDomino(
+      text: component,
+      selected: selected,
+      selectionColor: _blockSelectionColor,
+      showFormControl: showFormControl,
+      formCount: formCount,
+      selectedFormIndex: selectedFormIndex,
+      onTap: onTap,
     );
   }
 
-  Widget _componentText(String component) {
-    return Text(
-      component,
-      textScaler: TextScaler.noScaling,
-      style: TextStyle(
-        fontFamily: GakujiFonts.japanese,
-        fontSize: component.length > 1
-            ? (_compactChoiceTiles ? 18 : 22)
-            : (_compactChoiceTiles ? 26 : 31),
-        height: 1,
-        fontWeight: FontWeight.w600,
-        color: _blockTextColor,
-      ),
-    );
-  }
-
-  Widget _dragFeedback(String component, double width) {
-    return Container(
-      width: width,
-      height: _choiceTileHeight,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: _blockFillColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _blockOutlineColor,
-          width: 1.5,
-        ),
-        boxShadow: [GakujiShadows.soft],
-      ),
-      child: _componentText(component),
+  Widget _dragFeedback(String component) {
+    return GakujiDomino(
+      text: component,
+      dragging: true,
     );
   }
 

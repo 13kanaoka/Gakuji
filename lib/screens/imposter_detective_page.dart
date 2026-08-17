@@ -216,7 +216,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       mistakeCount = 0;
       streak = 0;
       bestStreak = 0;
-  
       _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
       currentRound = _generateRoundForCurrentIndex();
     });
@@ -422,7 +421,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       setState(() {
         correctCount++;
         streak++;
-    
 
         if (streak > bestStreak) {
           bestStreak = streak;
@@ -506,7 +504,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       mistakeCount = 0;
       streak = 0;
       bestStreak = 0;
-  
       _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
     });
   }
@@ -739,12 +736,12 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
                       child: SingleChildScrollView(
                         physics: const BouncingScrollPhysics(),
                         child: Align(
-                          alignment: Alignment.centerLeft,
+                          alignment: Alignment.topCenter,
                           child: FractionallySizedBox(
                             widthFactor: 0.94,
-                            alignment: Alignment.centerLeft,
+                            alignment: Alignment.topCenter,
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 ..._evidenceFieldsForRound(round),
                               ],
@@ -1463,7 +1460,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
                   currentRound = _generateRoundForCurrentIndex();
                   _rushRemainingMilliseconds =
                       _rushRoundDuration.inMilliseconds;
-              
                 }
               });
 

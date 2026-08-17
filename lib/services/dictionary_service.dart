@@ -577,6 +577,22 @@ class DictionaryService {
 
     if (!_isSingleKanjiCharacter(character)) return null;
 
+    return _getCharacterStrokeData(character);
+  }
+
+  static Future<KanjiStrokeData?> getCharacterStrokeData(
+    String rawCharacter,
+  ) async {
+    final character = rawCharacter.trim();
+
+    if (character.runes.length != 1) return null;
+
+    return _getCharacterStrokeData(character);
+  }
+
+  static Future<KanjiStrokeData?> _getCharacterStrokeData(
+    String character,
+  ) async {
     await loadDictionary();
 
     final database = _database;
@@ -626,10 +642,10 @@ class DictionaryService {
         strokes: strokes,
       );
     } on DatabaseException catch (error) {
-      debugPrint('Kanji stroke data unavailable for $character: $error');
+      debugPrint('Stroke data unavailable for $character: $error');
       return null;
     } on FormatException catch (error) {
-      debugPrint('Kanji stroke JSON is invalid for $character: $error');
+      debugPrint('Stroke JSON is invalid for $character: $error');
       return null;
     }
   }
