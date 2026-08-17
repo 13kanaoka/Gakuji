@@ -10,476 +10,476 @@ import '../widgets/gakuji_top_bar.dart';
 class KanaPage extends StatefulWidget {
   const KanaPage({super.key});
 
-  static const List<_KanaRow> hiraganaRows = [
-    _KanaRow(
+  static const List<KanaRow> hiraganaRows = [
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'あ', romaji: 'a'),
-        _KanaEntry(character: 'い', romaji: 'i'),
-        _KanaEntry(character: 'う', romaji: 'u'),
-        _KanaEntry(character: 'え', romaji: 'e'),
-        _KanaEntry(character: 'お', romaji: 'o'),
+        KanaEntry(character: 'あ', romaji: 'a'),
+        KanaEntry(character: 'い', romaji: 'i'),
+        KanaEntry(character: 'う', romaji: 'u'),
+        KanaEntry(character: 'え', romaji: 'e'),
+        KanaEntry(character: 'お', romaji: 'o'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'か', romaji: 'ka'),
-        _KanaEntry(character: 'き', romaji: 'ki'),
-        _KanaEntry(character: 'く', romaji: 'ku'),
-        _KanaEntry(character: 'け', romaji: 'ke'),
-        _KanaEntry(character: 'こ', romaji: 'ko'),
+        KanaEntry(character: 'か', romaji: 'ka'),
+        KanaEntry(character: 'き', romaji: 'ki'),
+        KanaEntry(character: 'く', romaji: 'ku'),
+        KanaEntry(character: 'け', romaji: 'ke'),
+        KanaEntry(character: 'こ', romaji: 'ko'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'さ', romaji: 'sa'),
-        _KanaEntry(character: 'し', romaji: 'shi'),
-        _KanaEntry(character: 'す', romaji: 'su'),
-        _KanaEntry(character: 'せ', romaji: 'se'),
-        _KanaEntry(character: 'そ', romaji: 'so'),
+        KanaEntry(character: 'さ', romaji: 'sa'),
+        KanaEntry(character: 'し', romaji: 'shi'),
+        KanaEntry(character: 'す', romaji: 'su'),
+        KanaEntry(character: 'せ', romaji: 'se'),
+        KanaEntry(character: 'そ', romaji: 'so'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'た', romaji: 'ta'),
-        _KanaEntry(character: 'ち', romaji: 'chi'),
-        _KanaEntry(character: 'つ', romaji: 'tsu'),
-        _KanaEntry(character: 'て', romaji: 'te'),
-        _KanaEntry(character: 'と', romaji: 'to'),
+        KanaEntry(character: 'た', romaji: 'ta'),
+        KanaEntry(character: 'ち', romaji: 'chi'),
+        KanaEntry(character: 'つ', romaji: 'tsu'),
+        KanaEntry(character: 'て', romaji: 'te'),
+        KanaEntry(character: 'と', romaji: 'to'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'な', romaji: 'na'),
-        _KanaEntry(character: 'に', romaji: 'ni'),
-        _KanaEntry(character: 'ぬ', romaji: 'nu'),
-        _KanaEntry(character: 'ね', romaji: 'ne'),
-        _KanaEntry(character: 'の', romaji: 'no'),
+        KanaEntry(character: 'な', romaji: 'na'),
+        KanaEntry(character: 'に', romaji: 'ni'),
+        KanaEntry(character: 'ぬ', romaji: 'nu'),
+        KanaEntry(character: 'ね', romaji: 'ne'),
+        KanaEntry(character: 'の', romaji: 'no'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'は', romaji: 'ha'),
-        _KanaEntry(character: 'ひ', romaji: 'hi'),
-        _KanaEntry(character: 'ふ', romaji: 'fu'),
-        _KanaEntry(character: 'へ', romaji: 'he'),
-        _KanaEntry(character: 'ほ', romaji: 'ho'),
+        KanaEntry(character: 'は', romaji: 'ha'),
+        KanaEntry(character: 'ひ', romaji: 'hi'),
+        KanaEntry(character: 'ふ', romaji: 'fu'),
+        KanaEntry(character: 'へ', romaji: 'he'),
+        KanaEntry(character: 'ほ', romaji: 'ho'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ま', romaji: 'ma'),
-        _KanaEntry(character: 'み', romaji: 'mi'),
-        _KanaEntry(character: 'む', romaji: 'mu'),
-        _KanaEntry(character: 'め', romaji: 'me'),
-        _KanaEntry(character: 'も', romaji: 'mo'),
+        KanaEntry(character: 'ま', romaji: 'ma'),
+        KanaEntry(character: 'み', romaji: 'mi'),
+        KanaEntry(character: 'む', romaji: 'mu'),
+        KanaEntry(character: 'め', romaji: 'me'),
+        KanaEntry(character: 'も', romaji: 'mo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'や', romaji: 'ya'),
+        KanaEntry(character: 'や', romaji: 'ya'),
         null,
-        _KanaEntry(character: 'ゆ', romaji: 'yu'),
+        KanaEntry(character: 'ゆ', romaji: 'yu'),
         null,
-        _KanaEntry(character: 'よ', romaji: 'yo'),
+        KanaEntry(character: 'よ', romaji: 'yo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ら', romaji: 'ra'),
-        _KanaEntry(character: 'り', romaji: 'ri'),
-        _KanaEntry(character: 'る', romaji: 'ru'),
-        _KanaEntry(character: 'れ', romaji: 're'),
-        _KanaEntry(character: 'ろ', romaji: 'ro'),
+        KanaEntry(character: 'ら', romaji: 'ra'),
+        KanaEntry(character: 'り', romaji: 'ri'),
+        KanaEntry(character: 'る', romaji: 'ru'),
+        KanaEntry(character: 'れ', romaji: 're'),
+        KanaEntry(character: 'ろ', romaji: 'ro'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'わ', romaji: 'wa'),
-        null,
-        null,
-        null,
-        _KanaEntry(character: 'を', romaji: 'wo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        null,
-        null,
-        _KanaEntry(character: 'ん', romaji: 'n'),
-        null,
-        null,
-      ],
-    ),
-  ];
-
-  static const List<_KanaRow> katakanaRows = [
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ア', romaji: 'a'),
-        _KanaEntry(character: 'イ', romaji: 'i'),
-        _KanaEntry(character: 'ウ', romaji: 'u'),
-        _KanaEntry(character: 'エ', romaji: 'e'),
-        _KanaEntry(character: 'オ', romaji: 'o'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'カ', romaji: 'ka'),
-        _KanaEntry(character: 'キ', romaji: 'ki'),
-        _KanaEntry(character: 'ク', romaji: 'ku'),
-        _KanaEntry(character: 'ケ', romaji: 'ke'),
-        _KanaEntry(character: 'コ', romaji: 'ko'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'サ', romaji: 'sa'),
-        _KanaEntry(character: 'シ', romaji: 'shi'),
-        _KanaEntry(character: 'ス', romaji: 'su'),
-        _KanaEntry(character: 'セ', romaji: 'se'),
-        _KanaEntry(character: 'ソ', romaji: 'so'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'タ', romaji: 'ta'),
-        _KanaEntry(character: 'チ', romaji: 'chi'),
-        _KanaEntry(character: 'ツ', romaji: 'tsu'),
-        _KanaEntry(character: 'テ', romaji: 'te'),
-        _KanaEntry(character: 'ト', romaji: 'to'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ナ', romaji: 'na'),
-        _KanaEntry(character: 'ニ', romaji: 'ni'),
-        _KanaEntry(character: 'ヌ', romaji: 'nu'),
-        _KanaEntry(character: 'ネ', romaji: 'ne'),
-        _KanaEntry(character: 'ノ', romaji: 'no'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ハ', romaji: 'ha'),
-        _KanaEntry(character: 'ヒ', romaji: 'hi'),
-        _KanaEntry(character: 'フ', romaji: 'fu'),
-        _KanaEntry(character: 'ヘ', romaji: 'he'),
-        _KanaEntry(character: 'ホ', romaji: 'ho'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'マ', romaji: 'ma'),
-        _KanaEntry(character: 'ミ', romaji: 'mi'),
-        _KanaEntry(character: 'ム', romaji: 'mu'),
-        _KanaEntry(character: 'メ', romaji: 'me'),
-        _KanaEntry(character: 'モ', romaji: 'mo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ヤ', romaji: 'ya'),
-        null,
-        _KanaEntry(character: 'ユ', romaji: 'yu'),
-        null,
-        _KanaEntry(character: 'ヨ', romaji: 'yo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ラ', romaji: 'ra'),
-        _KanaEntry(character: 'リ', romaji: 'ri'),
-        _KanaEntry(character: 'ル', romaji: 'ru'),
-        _KanaEntry(character: 'レ', romaji: 're'),
-        _KanaEntry(character: 'ロ', romaji: 'ro'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ワ', romaji: 'wa'),
+        KanaEntry(character: 'わ', romaji: 'wa'),
         null,
         null,
         null,
-        _KanaEntry(character: 'ヲ', romaji: 'wo'),
+        KanaEntry(character: 'を', romaji: 'wo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
         null,
         null,
-        _KanaEntry(character: 'ン', romaji: 'n'),
+        KanaEntry(character: 'ん', romaji: 'n'),
         null,
         null,
       ],
     ),
   ];
 
-  static const List<_KanaRow> hiraganaDakuonRows = [
-    _KanaRow(
+  static const List<KanaRow> katakanaRows = [
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'が', romaji: 'ga'),
-        _KanaEntry(character: 'ぎ', romaji: 'gi'),
-        _KanaEntry(character: 'ぐ', romaji: 'gu'),
-        _KanaEntry(character: 'げ', romaji: 'ge'),
-        _KanaEntry(character: 'ご', romaji: 'go'),
+        KanaEntry(character: 'ア', romaji: 'a'),
+        KanaEntry(character: 'イ', romaji: 'i'),
+        KanaEntry(character: 'ウ', romaji: 'u'),
+        KanaEntry(character: 'エ', romaji: 'e'),
+        KanaEntry(character: 'オ', romaji: 'o'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ざ', romaji: 'za'),
-        _KanaEntry(character: 'じ', romaji: 'ji'),
-        _KanaEntry(character: 'ず', romaji: 'zu'),
-        _KanaEntry(character: 'ぜ', romaji: 'ze'),
-        _KanaEntry(character: 'ぞ', romaji: 'zo'),
+        KanaEntry(character: 'カ', romaji: 'ka'),
+        KanaEntry(character: 'キ', romaji: 'ki'),
+        KanaEntry(character: 'ク', romaji: 'ku'),
+        KanaEntry(character: 'ケ', romaji: 'ke'),
+        KanaEntry(character: 'コ', romaji: 'ko'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'だ', romaji: 'da'),
-        _KanaEntry(character: 'ぢ', romaji: 'ji'),
-        _KanaEntry(character: 'づ', romaji: 'zu'),
-        _KanaEntry(character: 'で', romaji: 'de'),
-        _KanaEntry(character: 'ど', romaji: 'do'),
+        KanaEntry(character: 'サ', romaji: 'sa'),
+        KanaEntry(character: 'シ', romaji: 'shi'),
+        KanaEntry(character: 'ス', romaji: 'su'),
+        KanaEntry(character: 'セ', romaji: 'se'),
+        KanaEntry(character: 'ソ', romaji: 'so'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ば', romaji: 'ba'),
-        _KanaEntry(character: 'び', romaji: 'bi'),
-        _KanaEntry(character: 'ぶ', romaji: 'bu'),
-        _KanaEntry(character: 'べ', romaji: 'be'),
-        _KanaEntry(character: 'ぼ', romaji: 'bo'),
+        KanaEntry(character: 'タ', romaji: 'ta'),
+        KanaEntry(character: 'チ', romaji: 'chi'),
+        KanaEntry(character: 'ツ', romaji: 'tsu'),
+        KanaEntry(character: 'テ', romaji: 'te'),
+        KanaEntry(character: 'ト', romaji: 'to'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ぱ', romaji: 'pa'),
-        _KanaEntry(character: 'ぴ', romaji: 'pi'),
-        _KanaEntry(character: 'ぷ', romaji: 'pu'),
-        _KanaEntry(character: 'ぺ', romaji: 'pe'),
-        _KanaEntry(character: 'ぽ', romaji: 'po'),
+        KanaEntry(character: 'ナ', romaji: 'na'),
+        KanaEntry(character: 'ニ', romaji: 'ni'),
+        KanaEntry(character: 'ヌ', romaji: 'nu'),
+        KanaEntry(character: 'ネ', romaji: 'ne'),
+        KanaEntry(character: 'ノ', romaji: 'no'),
       ],
     ),
-  ];
-
-  static const List<_KanaRow> katakanaDakuonRows = [
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ガ', romaji: 'ga'),
-        _KanaEntry(character: 'ギ', romaji: 'gi'),
-        _KanaEntry(character: 'グ', romaji: 'gu'),
-        _KanaEntry(character: 'ゲ', romaji: 'ge'),
-        _KanaEntry(character: 'ゴ', romaji: 'go'),
+        KanaEntry(character: 'ハ', romaji: 'ha'),
+        KanaEntry(character: 'ヒ', romaji: 'hi'),
+        KanaEntry(character: 'フ', romaji: 'fu'),
+        KanaEntry(character: 'ヘ', romaji: 'he'),
+        KanaEntry(character: 'ホ', romaji: 'ho'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ザ', romaji: 'za'),
-        _KanaEntry(character: 'ジ', romaji: 'ji'),
-        _KanaEntry(character: 'ズ', romaji: 'zu'),
-        _KanaEntry(character: 'ゼ', romaji: 'ze'),
-        _KanaEntry(character: 'ゾ', romaji: 'zo'),
+        KanaEntry(character: 'マ', romaji: 'ma'),
+        KanaEntry(character: 'ミ', romaji: 'mi'),
+        KanaEntry(character: 'ム', romaji: 'mu'),
+        KanaEntry(character: 'メ', romaji: 'me'),
+        KanaEntry(character: 'モ', romaji: 'mo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ダ', romaji: 'da'),
-        _KanaEntry(character: 'ヂ', romaji: 'ji'),
-        _KanaEntry(character: 'ヅ', romaji: 'zu'),
-        _KanaEntry(character: 'デ', romaji: 'de'),
-        _KanaEntry(character: 'ド', romaji: 'do'),
+        KanaEntry(character: 'ヤ', romaji: 'ya'),
+        null,
+        KanaEntry(character: 'ユ', romaji: 'yu'),
+        null,
+        KanaEntry(character: 'ヨ', romaji: 'yo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'バ', romaji: 'ba'),
-        _KanaEntry(character: 'ビ', romaji: 'bi'),
-        _KanaEntry(character: 'ブ', romaji: 'bu'),
-        _KanaEntry(character: 'ベ', romaji: 'be'),
-        _KanaEntry(character: 'ボ', romaji: 'bo'),
+        KanaEntry(character: 'ラ', romaji: 'ra'),
+        KanaEntry(character: 'リ', romaji: 'ri'),
+        KanaEntry(character: 'ル', romaji: 'ru'),
+        KanaEntry(character: 'レ', romaji: 're'),
+        KanaEntry(character: 'ロ', romaji: 'ro'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'パ', romaji: 'pa'),
-        _KanaEntry(character: 'ピ', romaji: 'pi'),
-        _KanaEntry(character: 'プ', romaji: 'pu'),
-        _KanaEntry(character: 'ペ', romaji: 'pe'),
-        _KanaEntry(character: 'ポ', romaji: 'po'),
+        KanaEntry(character: 'ワ', romaji: 'wa'),
+        null,
+        null,
+        null,
+        KanaEntry(character: 'ヲ', romaji: 'wo'),
       ],
     ),
-  ];
-
-  static const List<_KanaRow> hiraganaYoonRows = [
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'きゃ', romaji: 'kya'),
-        _KanaEntry(character: 'きゅ', romaji: 'kyu'),
-        _KanaEntry(character: 'きょ', romaji: 'kyo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ぎゃ', romaji: 'gya'),
-        _KanaEntry(character: 'ぎゅ', romaji: 'gyu'),
-        _KanaEntry(character: 'ぎょ', romaji: 'gyo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'しゃ', romaji: 'sha'),
-        _KanaEntry(character: 'しゅ', romaji: 'shu'),
-        _KanaEntry(character: 'しょ', romaji: 'sho'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'じゃ', romaji: 'ja'),
-        _KanaEntry(character: 'じゅ', romaji: 'ju'),
-        _KanaEntry(character: 'じょ', romaji: 'jo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ちゃ', romaji: 'cha'),
-        _KanaEntry(character: 'ちゅ', romaji: 'chu'),
-        _KanaEntry(character: 'ちょ', romaji: 'cho'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ぢゃ', romaji: 'ja'),
-        _KanaEntry(character: 'ぢゅ', romaji: 'ju'),
-        _KanaEntry(character: 'ぢょ', romaji: 'jo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'にゃ', romaji: 'nya'),
-        _KanaEntry(character: 'にゅ', romaji: 'nyu'),
-        _KanaEntry(character: 'にょ', romaji: 'nyo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ひゃ', romaji: 'hya'),
-        _KanaEntry(character: 'ひゅ', romaji: 'hyu'),
-        _KanaEntry(character: 'ひょ', romaji: 'hyo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'びゃ', romaji: 'bya'),
-        _KanaEntry(character: 'びゅ', romaji: 'byu'),
-        _KanaEntry(character: 'びょ', romaji: 'byo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'ぴゃ', romaji: 'pya'),
-        _KanaEntry(character: 'ぴゅ', romaji: 'pyu'),
-        _KanaEntry(character: 'ぴょ', romaji: 'pyo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'みゃ', romaji: 'mya'),
-        _KanaEntry(character: 'みゅ', romaji: 'myu'),
-        _KanaEntry(character: 'みょ', romaji: 'myo'),
-      ],
-    ),
-    _KanaRow(
-      kana: [
-        _KanaEntry(character: 'りゃ', romaji: 'rya'),
-        _KanaEntry(character: 'りゅ', romaji: 'ryu'),
-        _KanaEntry(character: 'りょ', romaji: 'ryo'),
+        null,
+        null,
+        KanaEntry(character: 'ン', romaji: 'n'),
+        null,
+        null,
       ],
     ),
   ];
 
-  static const List<_KanaRow> katakanaYoonRows = [
-    _KanaRow(
+  static const List<KanaRow> hiraganaDakuonRows = [
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'キャ', romaji: 'kya'),
-        _KanaEntry(character: 'キュ', romaji: 'kyu'),
-        _KanaEntry(character: 'キョ', romaji: 'kyo'),
+        KanaEntry(character: 'が', romaji: 'ga'),
+        KanaEntry(character: 'ぎ', romaji: 'gi'),
+        KanaEntry(character: 'ぐ', romaji: 'gu'),
+        KanaEntry(character: 'げ', romaji: 'ge'),
+        KanaEntry(character: 'ご', romaji: 'go'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ギャ', romaji: 'gya'),
-        _KanaEntry(character: 'ギュ', romaji: 'gyu'),
-        _KanaEntry(character: 'ギョ', romaji: 'gyo'),
+        KanaEntry(character: 'ざ', romaji: 'za'),
+        KanaEntry(character: 'じ', romaji: 'ji'),
+        KanaEntry(character: 'ず', romaji: 'zu'),
+        KanaEntry(character: 'ぜ', romaji: 'ze'),
+        KanaEntry(character: 'ぞ', romaji: 'zo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'シャ', romaji: 'sha'),
-        _KanaEntry(character: 'シュ', romaji: 'shu'),
-        _KanaEntry(character: 'ショ', romaji: 'sho'),
+        KanaEntry(character: 'だ', romaji: 'da'),
+        KanaEntry(character: 'ぢ', romaji: 'ji'),
+        KanaEntry(character: 'づ', romaji: 'zu'),
+        KanaEntry(character: 'で', romaji: 'de'),
+        KanaEntry(character: 'ど', romaji: 'do'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ジャ', romaji: 'ja'),
-        _KanaEntry(character: 'ジュ', romaji: 'ju'),
-        _KanaEntry(character: 'ジョ', romaji: 'jo'),
+        KanaEntry(character: 'ば', romaji: 'ba'),
+        KanaEntry(character: 'び', romaji: 'bi'),
+        KanaEntry(character: 'ぶ', romaji: 'bu'),
+        KanaEntry(character: 'べ', romaji: 'be'),
+        KanaEntry(character: 'ぼ', romaji: 'bo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'チャ', romaji: 'cha'),
-        _KanaEntry(character: 'チュ', romaji: 'chu'),
-        _KanaEntry(character: 'チョ', romaji: 'cho'),
+        KanaEntry(character: 'ぱ', romaji: 'pa'),
+        KanaEntry(character: 'ぴ', romaji: 'pi'),
+        KanaEntry(character: 'ぷ', romaji: 'pu'),
+        KanaEntry(character: 'ぺ', romaji: 'pe'),
+        KanaEntry(character: 'ぽ', romaji: 'po'),
       ],
     ),
-    _KanaRow(
+  ];
+
+  static const List<KanaRow> katakanaDakuonRows = [
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ヂャ', romaji: 'ja'),
-        _KanaEntry(character: 'ヂュ', romaji: 'ju'),
-        _KanaEntry(character: 'ヂョ', romaji: 'jo'),
+        KanaEntry(character: 'ガ', romaji: 'ga'),
+        KanaEntry(character: 'ギ', romaji: 'gi'),
+        KanaEntry(character: 'グ', romaji: 'gu'),
+        KanaEntry(character: 'ゲ', romaji: 'ge'),
+        KanaEntry(character: 'ゴ', romaji: 'go'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ニャ', romaji: 'nya'),
-        _KanaEntry(character: 'ニュ', romaji: 'nyu'),
-        _KanaEntry(character: 'ニョ', romaji: 'nyo'),
+        KanaEntry(character: 'ザ', romaji: 'za'),
+        KanaEntry(character: 'ジ', romaji: 'ji'),
+        KanaEntry(character: 'ズ', romaji: 'zu'),
+        KanaEntry(character: 'ゼ', romaji: 'ze'),
+        KanaEntry(character: 'ゾ', romaji: 'zo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ヒャ', romaji: 'hya'),
-        _KanaEntry(character: 'ヒュ', romaji: 'hyu'),
-        _KanaEntry(character: 'ヒョ', romaji: 'hyo'),
+        KanaEntry(character: 'ダ', romaji: 'da'),
+        KanaEntry(character: 'ヂ', romaji: 'ji'),
+        KanaEntry(character: 'ヅ', romaji: 'zu'),
+        KanaEntry(character: 'デ', romaji: 'de'),
+        KanaEntry(character: 'ド', romaji: 'do'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ビャ', romaji: 'bya'),
-        _KanaEntry(character: 'ビュ', romaji: 'byu'),
-        _KanaEntry(character: 'ビョ', romaji: 'byo'),
+        KanaEntry(character: 'バ', romaji: 'ba'),
+        KanaEntry(character: 'ビ', romaji: 'bi'),
+        KanaEntry(character: 'ブ', romaji: 'bu'),
+        KanaEntry(character: 'ベ', romaji: 'be'),
+        KanaEntry(character: 'ボ', romaji: 'bo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ピャ', romaji: 'pya'),
-        _KanaEntry(character: 'ピュ', romaji: 'pyu'),
-        _KanaEntry(character: 'ピョ', romaji: 'pyo'),
+        KanaEntry(character: 'パ', romaji: 'pa'),
+        KanaEntry(character: 'ピ', romaji: 'pi'),
+        KanaEntry(character: 'プ', romaji: 'pu'),
+        KanaEntry(character: 'ペ', romaji: 'pe'),
+        KanaEntry(character: 'ポ', romaji: 'po'),
       ],
     ),
-    _KanaRow(
+  ];
+
+  static const List<KanaRow> hiraganaYoonRows = [
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'ミャ', romaji: 'mya'),
-        _KanaEntry(character: 'ミュ', romaji: 'myu'),
-        _KanaEntry(character: 'ミョ', romaji: 'myo'),
+        KanaEntry(character: 'きゃ', romaji: 'kya'),
+        KanaEntry(character: 'きゅ', romaji: 'kyu'),
+        KanaEntry(character: 'きょ', romaji: 'kyo'),
       ],
     ),
-    _KanaRow(
+    KanaRow(
       kana: [
-        _KanaEntry(character: 'リャ', romaji: 'rya'),
-        _KanaEntry(character: 'リュ', romaji: 'ryu'),
-        _KanaEntry(character: 'リョ', romaji: 'ryo'),
+        KanaEntry(character: 'ぎゃ', romaji: 'gya'),
+        KanaEntry(character: 'ぎゅ', romaji: 'gyu'),
+        KanaEntry(character: 'ぎょ', romaji: 'gyo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'しゃ', romaji: 'sha'),
+        KanaEntry(character: 'しゅ', romaji: 'shu'),
+        KanaEntry(character: 'しょ', romaji: 'sho'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'じゃ', romaji: 'ja'),
+        KanaEntry(character: 'じゅ', romaji: 'ju'),
+        KanaEntry(character: 'じょ', romaji: 'jo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ちゃ', romaji: 'cha'),
+        KanaEntry(character: 'ちゅ', romaji: 'chu'),
+        KanaEntry(character: 'ちょ', romaji: 'cho'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ぢゃ', romaji: 'ja'),
+        KanaEntry(character: 'ぢゅ', romaji: 'ju'),
+        KanaEntry(character: 'ぢょ', romaji: 'jo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'にゃ', romaji: 'nya'),
+        KanaEntry(character: 'にゅ', romaji: 'nyu'),
+        KanaEntry(character: 'にょ', romaji: 'nyo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ひゃ', romaji: 'hya'),
+        KanaEntry(character: 'ひゅ', romaji: 'hyu'),
+        KanaEntry(character: 'ひょ', romaji: 'hyo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'びゃ', romaji: 'bya'),
+        KanaEntry(character: 'びゅ', romaji: 'byu'),
+        KanaEntry(character: 'びょ', romaji: 'byo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ぴゃ', romaji: 'pya'),
+        KanaEntry(character: 'ぴゅ', romaji: 'pyu'),
+        KanaEntry(character: 'ぴょ', romaji: 'pyo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'みゃ', romaji: 'mya'),
+        KanaEntry(character: 'みゅ', romaji: 'myu'),
+        KanaEntry(character: 'みょ', romaji: 'myo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'りゃ', romaji: 'rya'),
+        KanaEntry(character: 'りゅ', romaji: 'ryu'),
+        KanaEntry(character: 'りょ', romaji: 'ryo'),
+      ],
+    ),
+  ];
+
+  static const List<KanaRow> katakanaYoonRows = [
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'キャ', romaji: 'kya'),
+        KanaEntry(character: 'キュ', romaji: 'kyu'),
+        KanaEntry(character: 'キョ', romaji: 'kyo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ギャ', romaji: 'gya'),
+        KanaEntry(character: 'ギュ', romaji: 'gyu'),
+        KanaEntry(character: 'ギョ', romaji: 'gyo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'シャ', romaji: 'sha'),
+        KanaEntry(character: 'シュ', romaji: 'shu'),
+        KanaEntry(character: 'ショ', romaji: 'sho'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ジャ', romaji: 'ja'),
+        KanaEntry(character: 'ジュ', romaji: 'ju'),
+        KanaEntry(character: 'ジョ', romaji: 'jo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'チャ', romaji: 'cha'),
+        KanaEntry(character: 'チュ', romaji: 'chu'),
+        KanaEntry(character: 'チョ', romaji: 'cho'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ヂャ', romaji: 'ja'),
+        KanaEntry(character: 'ヂュ', romaji: 'ju'),
+        KanaEntry(character: 'ヂョ', romaji: 'jo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ニャ', romaji: 'nya'),
+        KanaEntry(character: 'ニュ', romaji: 'nyu'),
+        KanaEntry(character: 'ニョ', romaji: 'nyo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ヒャ', romaji: 'hya'),
+        KanaEntry(character: 'ヒュ', romaji: 'hyu'),
+        KanaEntry(character: 'ヒョ', romaji: 'hyo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ビャ', romaji: 'bya'),
+        KanaEntry(character: 'ビュ', romaji: 'byu'),
+        KanaEntry(character: 'ビョ', romaji: 'byo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ピャ', romaji: 'pya'),
+        KanaEntry(character: 'ピュ', romaji: 'pyu'),
+        KanaEntry(character: 'ピョ', romaji: 'pyo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'ミャ', romaji: 'mya'),
+        KanaEntry(character: 'ミュ', romaji: 'myu'),
+        KanaEntry(character: 'ミョ', romaji: 'myo'),
+      ],
+    ),
+    KanaRow(
+      kana: [
+        KanaEntry(character: 'リャ', romaji: 'rya'),
+        KanaEntry(character: 'リュ', romaji: 'ryu'),
+        KanaEntry(character: 'リョ', romaji: 'ryo'),
       ],
     ),
   ];
@@ -513,7 +513,7 @@ class _KanaPageState extends State<KanaPage> {
     });
   }
 
-  void _handleKanaTap(_KanaEntry kana) {
+  void _handleKanaTap(KanaEntry kana) {
     if (!isSelectingKana) {
       _openKanaDetail(kana);
       return;
@@ -617,14 +617,14 @@ class _KanaPageState extends State<KanaPage> {
     );
   }
 
-  List<_KanaEntry> _flattenKanaRows(List<_KanaRow> rows) {
+  List<KanaEntry> _flattenKanaRows(List<KanaRow> rows) {
     return rows
         .expand((row) => row.kana)
-        .whereType<_KanaEntry>()
+        .whereType<KanaEntry>()
         .toList(growable: false);
   }
 
-  List<_KanaEntry> _allKanaForScript({required bool katakana}) {
+  List<KanaEntry> _allKanaForScript({required bool katakana}) {
     final rows = katakana
         ? [
             ...KanaPage.katakanaRows,
@@ -640,7 +640,7 @@ class _KanaPageState extends State<KanaPage> {
     return _flattenKanaRows(rows);
   }
 
-  void _openKanaDetail(_KanaEntry selectedKana) {
+  void _openKanaDetail(KanaEntry selectedKana) {
     final kanaEntries = _allKanaForScript(katakana: showKatakana);
     final counterpartEntries = _allKanaForScript(katakana: !showKatakana);
 
@@ -1022,14 +1022,13 @@ class _KanaSectionHeader extends StatelessWidget {
 }
 
 class _KanaChart extends StatelessWidget {
-  final List<_KanaRow> rows;
+  final List<KanaRow> rows;
   final bool centerRows;
   final bool selectionMode;
   final Set<String> selectedCharacters;
-  final ValueChanged<_KanaEntry> onKanaTap;
+  final ValueChanged<KanaEntry> onKanaTap;
 
   const _KanaChart({
-    super.key,
     required this.rows,
     this.centerRows = false,
     required this.selectionMode,
@@ -1099,8 +1098,8 @@ class _KanaChart extends StatelessWidget {
 
 
 class _KanaDetailSheet extends StatefulWidget {
-  final List<_KanaEntry> kanaEntries;
-  final List<_KanaEntry> counterpartEntries;
+  final List<KanaEntry> kanaEntries;
+  final List<KanaEntry> counterpartEntries;
   final int initialIndex;
   final bool isKatakana;
 
@@ -1133,13 +1132,13 @@ class _KanaDetailSheetState extends State<_KanaDetailSheet> {
     showingKatakana = widget.isKatakana;
   }
 
-  List<_KanaEntry> get _currentEntries {
+  List<KanaEntry> get _currentEntries {
     return showingKatakana == widget.isKatakana
         ? widget.kanaEntries
         : widget.counterpartEntries;
   }
 
-  List<_KanaEntry> get _counterpartEntries {
+  List<KanaEntry> get _counterpartEntries {
     return showingKatakana == widget.isKatakana
         ? widget.counterpartEntries
         : widget.kanaEntries;
@@ -1352,7 +1351,7 @@ class _KanaDetailSheetState extends State<_KanaDetailSheet> {
 
   Widget _detailActionRow({
     required String counterpartLabel,
-    required _KanaEntry counterpart,
+    required KanaEntry counterpart,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -2263,7 +2262,7 @@ class _SvgPathParser {
           final hasPreviousCubic = previousCommand != null &&
               const {'C', 'c', 'S', 's'}.contains(previousCommand);
           final reflectedControl = hasPreviousCubic && lastCubicControl != null
-              ? (current * 2) - lastCubicControl!
+              ? (current * 2) - lastCubicControl
               : current;
           final control2 = point(nextNumber(), nextNumber(), relative);
           final next = point(nextNumber(), nextNumber(), relative);
@@ -2293,7 +2292,7 @@ class _SvgPathParser {
           final hasPreviousQuadratic = previousCommand != null &&
               const {'Q', 'q', 'T', 't'}.contains(previousCommand);
           final control = hasPreviousQuadratic && lastQuadraticControl != null
-              ? (current * 2) - lastQuadraticControl!
+              ? (current * 2) - lastQuadraticControl
               : current;
           final next = point(nextNumber(), nextNumber(), relative);
           path.quadraticBezierTo(control.dx, control.dy, next.dx, next.dy);
@@ -2333,19 +2332,19 @@ class _SvgPathParser {
   }
 }
 
-class _KanaRow {
-  final List<_KanaEntry?> kana;
+class KanaRow {
+  final List<KanaEntry?> kana;
 
-  const _KanaRow({
+  const KanaRow({
     required this.kana,
   });
 }
 
-class _KanaEntry {
+class KanaEntry {
   final String character;
   final String romaji;
 
-  const _KanaEntry({
+  const KanaEntry({
     required this.character,
     required this.romaji,
   });

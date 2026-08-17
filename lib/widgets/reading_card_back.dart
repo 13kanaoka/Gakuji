@@ -277,8 +277,8 @@ class ReadingCardBackContent extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
-        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
         child: child,
       ),
     );
@@ -351,7 +351,7 @@ class _ReadingCardDivider extends StatelessWidget {
       width: 54,
       height: 3,
       decoration: BoxDecoration(
-        color: GakujiColors.softBorder.withOpacity(0.75),
+        color: GakujiColors.softBorder.withValues(alpha: 0.75),
         borderRadius: BorderRadius.circular(GakujiRadius.pill),
       ),
     );
@@ -440,7 +440,7 @@ class _ReadingCardPhoto extends StatelessWidget {
             height: 132,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.72),
+              color: Colors.white.withValues(alpha: 0.72),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: GakujiColors.softBorder,

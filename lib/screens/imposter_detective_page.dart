@@ -63,7 +63,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   Timer? _rushTimer;
   DateTime? _rushDeadline;
   int _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
-  bool _rushTimedOut = false;
   bool _rushCheckReading = true;
   bool _rushCheckDefinition = true;
 
@@ -217,7 +216,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       mistakeCount = 0;
       streak = 0;
       bestStreak = 0;
-      _rushTimedOut = false;
       _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
       currentRound = _generateRoundForCurrentIndex();
     });
@@ -300,7 +298,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
 
     setState(() {
       _rushRemainingMilliseconds = 0;
-      _rushTimedOut = true;
       mistakeCount++;
       streak = 0;
       roundsPlayed++;
@@ -424,7 +421,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       setState(() {
         correctCount++;
         streak++;
-        _rushTimedOut = false;
 
         if (streak > bestStreak) {
           bestStreak = streak;
@@ -508,7 +504,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       mistakeCount = 0;
       streak = 0;
       bestStreak = 0;
-      _rushTimedOut = false;
       _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
     });
   }
@@ -622,8 +617,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: enabled ? () => startGame(mode) : null,
-            splashColor: Colors.white.withOpacity(0.12),
-            highlightColor: Colors.white.withOpacity(0.06),
+            splashColor: Colors.white.withValues(alpha: 0.12),
+            highlightColor: Colors.white.withValues(alpha: 0.06),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
               child: Column(
@@ -872,7 +867,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
                       decoration: BoxDecoration(
-                        color: GakujiColors.warmCard.withOpacity(0.42),
+                        color: GakujiColors.warmCard.withValues(alpha: 0.42),
                         borderRadius: BorderRadius.circular(20),
                         border: Border.all(
                           color: GakujiColors.softBorder,
@@ -971,8 +966,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         child: InkWell(
           borderRadius: BorderRadius.circular(GakujiRadius.pill),
           onTap: onTap,
-          splashColor: Colors.white.withOpacity(0.12),
-          highlightColor: Colors.white.withOpacity(0.06),
+          splashColor: Colors.white.withValues(alpha: 0.12),
+          highlightColor: Colors.white.withValues(alpha: 0.06),
           child: Center(
             child: Text(
               label,
@@ -1002,8 +997,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         child: InkWell(
           borderRadius: BorderRadius.circular(GakujiRadius.pill),
           onTap: onTap,
-          splashColor: deckPrimaryColor.withOpacity(0.08),
-          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
           child: Center(
             child: Text(
               label,
@@ -1099,8 +1094,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        splashColor: deckPrimaryColor.withOpacity(0.08),
-        highlightColor: deckPrimaryColor.withOpacity(0.04),
+        splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+        highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
         child: SizedBox(
           width: 44,
           height: 44,
@@ -1310,87 +1305,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     );
   }
 
-  List<_CrosscheckMismatch> _mismatchedFields({
-    required IdentityFile shown,
-    required IdentityFile correct,
-  }) {
-    final mismatches = <_CrosscheckMismatch>[];
-
-    if ((!isRushMode || _rushCheckReading) &&
-        _normalized(shown.reading) != _normalized(correct.reading)) {
-      mismatches.add(
-        _CrosscheckMismatch(
-          label: 'Reading',
-          correctValue: correct.reading,
-        ),
-      );
-    }
-
-    if ((!isRushMode || _rushCheckDefinition) &&
-        _normalized(shown.definition) != _normalized(correct.definition)) {
-      mismatches.add(
-        _CrosscheckMismatch(
-          label: 'Definition',
-          correctValue: correct.definition,
-        ),
-      );
-    }
-
-    if (!isRushMode &&
-        _normalized(shown.partOfSpeech) !=
-            _normalized(correct.partOfSpeech)) {
-      mismatches.add(
-        _CrosscheckMismatch(
-          label: 'Part of Speech',
-          correctValue: correct.partOfSpeech,
-        ),
-      );
-    }
-
-    if (mismatches.isEmpty) {
-      mismatches.add(
-        _CrosscheckMismatch(
-          label: 'Correct information',
-          correctValue: _correctInformationSummary(correct),
-        ),
-      );
-    }
-
-    return mismatches;
-  }
-
-  Widget _correctionLine({
-    required String label,
-    required String value,
-  }) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 112,
-          child: Text(
-            label,
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.small.copyWith(
-              color: GakujiColors.mediumGray,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            _safeValue(value),
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.small.copyWith(
-              color: GakujiColors.darkGray,
-              fontWeight: FontWeight.w700,
-              height: 1.3,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _verdictButton({
     required String label,
     required Color fillColor,
@@ -1413,8 +1327,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           ),
           child: InkWell(
             onTap: onTap,
-            splashColor: foregroundColor.withOpacity(0.12),
-            highlightColor: foregroundColor.withOpacity(0.06),
+            splashColor: foregroundColor.withValues(alpha: 0.12),
+            highlightColor: foregroundColor.withValues(alpha: 0.06),
             child: Center(
               child: Text(
                 label,
@@ -1440,14 +1354,14 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       height: 58,
       child: Material(
         color: onTap == null
-            ? deckPrimaryColor.withOpacity(0.35)
+            ? deckPrimaryColor.withValues(alpha: 0.35)
             : deckPrimaryColor,
         borderRadius: BorderRadius.circular(GakujiRadius.small),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: Colors.white.withOpacity(0.12),
-          highlightColor: Colors.white.withOpacity(0.06),
+          splashColor: Colors.white.withValues(alpha: 0.12),
+          highlightColor: Colors.white.withValues(alpha: 0.06),
           child: Center(
             child: Text(
               label,
@@ -1463,88 +1377,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     );
   }
 
-  Widget _secondaryButton({
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      height: 58,
-      child: Material(
-        color: GakujiColors.warmCard,
-        borderRadius: BorderRadius.circular(GakujiRadius.small),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          splashColor: deckPrimaryColor.withOpacity(0.08),
-          highlightColor: deckPrimaryColor.withOpacity(0.04),
-          child: Center(
-            child: Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.medium.copyWith(
-                color: deckPrimaryColor,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _resultRow(String label, String value) {
-    return Row(
-      children: [
-        Text(
-          label,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.small.copyWith(
-            color: GakujiColors.mediumGray,
-          ),
-        ),
-        const Spacer(),
-        Text(
-          value,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.medium.copyWith(
-            color: GakujiColors.darkGray,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _validRoundSummary(Term term) {
-    final word = _termDisplayText(term);
-
-    if (!isRushMode) {
-      return 'The reading, definition, and part of speech all match $word.';
-    }
-
-    if (_rushCheckReading && _rushCheckDefinition) {
-      return 'The reading and definition both match $word.';
-    }
-
-    if (_rushCheckReading) {
-      return 'The reading matches $word.';
-    }
-
-    return 'The definition matches $word.';
-  }
-
-  String _correctInformationSummary(IdentityFile correct) {
-    if (!isRushMode) {
-      return '${correct.reading} • ${correct.definition} • ${correct.partOfSpeech}';
-    }
-
-    final values = <String>[];
-    if (_rushCheckReading) values.add(correct.reading);
-    if (_rushCheckDefinition) values.add(correct.definition);
-    return values.join(' • ');
-  }
-
   Widget _rushToggleRow({
     required String label,
     required bool value,
@@ -1556,8 +1388,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        splashColor: deckPrimaryColor.withOpacity(0.08),
-        highlightColor: deckPrimaryColor.withOpacity(0.04),
+        splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+        highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           child: Row(
@@ -1628,7 +1460,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
                   currentRound = _generateRoundForCurrentIndex();
                   _rushRemainingMilliseconds =
                       _rushRoundDuration.inMilliseconds;
-                  _rushTimedOut = false;
                 }
               });
 
@@ -1744,8 +1575,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: deckPrimaryColor.withOpacity(0.08),
-          highlightColor: deckPrimaryColor.withOpacity(0.04),
+          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
+          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
           child: Row(
             children: [
               Icon(
@@ -1830,16 +1661,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
 
     return 52;
   }
-}
-
-class _CrosscheckMismatch {
-  final String label;
-  final String correctValue;
-
-  const _CrosscheckMismatch({
-    required this.label,
-    required this.correctValue,
-  });
 }
 
 class _RushMismatchOption {
