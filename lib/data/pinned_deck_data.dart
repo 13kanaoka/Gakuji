@@ -9,7 +9,15 @@ bool isDeckPinned(Deck deck) {
 }
 
 List<Deck> pinnedDecksFrom(List<Deck> decks) {
-  return decks.where(isDeckPinned).take(maxPinnedDecks).toList();
+  final decksById = <String, Deck>{
+    for (final deck in decks) deck.id: deck,
+  };
+
+  return pinnedDeckIds
+      .map((deckId) => decksById[deckId])
+      .whereType<Deck>()
+      .take(maxPinnedDecks)
+      .toList();
 }
 
 bool canPinMoreDecks() {

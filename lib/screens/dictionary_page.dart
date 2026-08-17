@@ -6,15 +6,12 @@ import '../data/recent_searches.dart';
 import '../models/term.dart';
 import '../models/writing_point.dart';
 import '../services/dictionary_service.dart';
-import '../services/gakuji_user_repository.dart';
 import '../services/writing_recognition_service.dart';
-import '../widgets/gakuji_faded_scroll.dart';
-import '../widgets/gakuji_search_bar.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_term_row.dart';
-import '../widgets/gakuji_top_bar.dart';
 import 'dictionary_detail_page.dart';
-import 'kanji_dictionary_detail_page.dart';
+import 'settings_page.dart';
+import '../widgets/gakuji_search_bar.dart';
 
 enum DictionaryInputMode {
   keyboard,
@@ -34,7 +31,8 @@ class DictionaryPage extends StatefulWidget {
 }
 
 class _DictionaryPageState extends State<DictionaryPage> {
-  static const Color accentGray = Color(0xFF727377);
+  static const Color accentBlue = Color(0xFF4D7EF7);
+  static const Color dividerGray = Color(0xFFC8C8C8);
   static const Color panelGray = Color(0xFFF0F2F5);
   static const Color panelBorderGray = Color(0xFFD6D8DC);
 
@@ -76,7 +74,6 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
     searchFocusNode.addListener(_handleSearchFocusChange);
 
-    loadRecentSearches();
     loadDictionary();
   }
 
@@ -100,22 +97,6 @@ class _DictionaryPageState extends State<DictionaryPage> {
     setState(() {
       isDictionaryLoading = false;
     });
-  }
-
-  Future<void> loadRecentSearches() async {
-    final loadedSearches = await GakujiUserRepository.loadRecentSearches();
-
-    if (!mounted) return;
-
-    setState(() {
-      recentSearches
-        ..clear()
-        ..addAll(loadedSearches);
-    });
-  }
-
-  Future<void> saveRecentSearches() async {
-    await GakujiUserRepository.saveRecentSearches(recentSearches);
   }
 
   double _writingPanelHeight(BuildContext context) {
@@ -264,11 +245,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
 
       recentSearches.insert(0, word);
     });
-
-    unawaited(saveRecentSearches());
   }
 
-  Future<void> openDictionaryEntry(Term entry) async {
+  Future<void> openDictionaryDetail(Term word) async {
     FocusScope.of(context).unfocus();
 
     setState(() {
@@ -277,52 +256,25 @@ class _DictionaryPageState extends State<DictionaryPage> {
     });
 
     _setInputActive(false);
+    addToRecentSearches(word);
 
-    var resolvedEntry = entry;
-
-    try {
-      resolvedEntry = await DictionaryService.getTermByIdAsync(entry.id);
-    } catch (error, stackTrace) {
-      debugPrint('Failed to refresh dictionary entry ${entry.id}: $error');
-      debugPrint('$stackTrace');
-    }
-
-    if (!mounted) return;
-
-    addToRecentSearches(resolvedEntry);
-
-    if (_isKanjiEntry(resolvedEntry)) {
-      await Navigator.push<void>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => KanjiDictionaryDetailPage(
-            kanjiEntry: resolvedEntry,
-          ),
-        ),
-      );
-    } else {
-      await Navigator.push<DictionaryDetailBackResult>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => DictionaryDetailPage(
-            word: resolvedEntry,
-          ),
-        ),
-      );
-    }
+    final result = await Navigator.push<DictionaryDetailBackResult>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DictionaryDetailPage(word: word),
+      ),
+    );
 
     if (!mounted) return;
 
-    setState(() {
-      inputMode = DictionaryInputMode.keyboard;
-      searchHasFocus = false;
-    });
+    if (result?.returnToResults ?? true) {
+      setState(() {
+        inputMode = DictionaryInputMode.keyboard;
+        searchHasFocus = false;
+      });
 
-    _setInputActive(false);
-  }
-
-  bool _isKanjiEntry(Term entry) {
-    return entry.partOfSpeech == 'kanji' || entry.id.startsWith('kanji_');
+      _setInputActive(false);
+    }
   }
 
   void switchInputMode(DictionaryInputMode mode) {
@@ -566,19 +518,73 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 
   Widget _dictionaryHeader() {
-    return SafeArea(
-      bottom: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+    final topInset = MediaQuery.of(context).padding.top;
+
+    return Container(
+      width: double.infinity,
+      height: topInset + 96,
+      color: GakujiColors.warmBackground,
+      padding: EdgeInsets.fromLTRB(28, topInset + 18, 28, 18),
+      child: Stack(
+        alignment: Alignment.center,
         children: [
-          GakujiTopBar(
-            title: 'Dictionary',
-            titleStyle: GakujiText.large.copyWith(
+          Text(
+            'Dictionary',
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.large.copyWith(
               color: GakujiColors.darkGray,
             ),
           ),
-          const SizedBox(height: 36),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _settingsButton(),
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _settingsButton() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _openSettingsPage,
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: Center(
+          child: Icon(
+            Icons.settings,
+            color: GakujiColors.darkGray,
+            size: 30,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openSettingsPage() {
+    FocusScope.of(context).unfocus();
+    _setInputActive(false);
+
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return const SettingsPage();
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final slideAnimation = Tween<Offset>(
+            begin: const Offset(-1.0, 0.0),
+            end: Offset.zero,
+          ).chain(
+            CurveTween(curve: Curves.easeOutCubic),
+          );
+
+          return SlideTransition(
+            position: animation.drive(slideAnimation),
+            child: child,
+          );
+        },
       ),
     );
   }
@@ -641,7 +647,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 82),
-           Text(
+          Text(
             'Recent Searches',
             textScaler: TextScaler.noScaling,
             style: TextStyle(
@@ -651,11 +657,11 @@ class _DictionaryPageState extends State<DictionaryPage> {
               color: GakujiColors.darkGray,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Expanded(
             child: _dictionaryResultList(
               wordsToShow: wordsToShow,
-              topPadding: 0,
+              topPadding: 8,
               bottomResultsPadding: bottomResultsPadding,
             ),
           ),
@@ -663,10 +669,13 @@ class _DictionaryPageState extends State<DictionaryPage> {
       );
     }
 
-    return _dictionaryResultList(
-      wordsToShow: wordsToShow,
-      topPadding: 82,
-      bottomResultsPadding: bottomResultsPadding,
+    return Padding(
+      padding: const EdgeInsets.only(top: 82),
+      child: _dictionaryResultList(
+        wordsToShow: wordsToShow,
+        topPadding: 14,
+        bottomResultsPadding: bottomResultsPadding,
+      ),
     );
   }
 
@@ -675,14 +684,33 @@ class _DictionaryPageState extends State<DictionaryPage> {
     required double topPadding,
     required double bottomResultsPadding,
   }) {
-    return GakujiFadedScroll.withBottomNavigation(
-      child: NotificationListener<ScrollStartNotification>(
-        onNotification: (notification) {
-          if (isInputActive) {
-            exitDictionaryInputMode();
-          }
+    return NotificationListener<ScrollStartNotification>(
+      onNotification: (notification) {
+        if (isInputActive) {
+          exitDictionaryInputMode();
+        }
 
-          return false;
+        return false;
+      },
+      child: ShaderMask(
+        blendMode: BlendMode.dstIn,
+        shaderCallback: (bounds) {
+          return const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0x00000000),
+              Colors.black,
+              Colors.black,
+              Color(0x00000000),
+            ],
+            stops: [
+              0.0,
+              0.035,
+              0.94,
+              1.0,
+            ],
+          ).createShader(bounds);
         },
         child: ListView.separated(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -695,7 +723,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
             return const Divider(
               height: 1,
               thickness: 1,
-              color: GakujiTermRow.dividerColor,
+              color: dividerGray,
             );
           },
           itemBuilder: (context, index) {
@@ -711,7 +739,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
               term: word,
               titleText: titleText,
               readingText: readingText,
-              onTap: () => openDictionaryEntry(word),
+              onTap: () => openDictionaryDetail(word),
             );
           },
         ),
@@ -808,7 +836,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
     final isSelected = inputMode == mode;
 
     return Material(
-      color: isSelected ? accentGray : const Color(0xFFF4F4F4),
+      color: isSelected ? accentBlue : const Color(0xFFF4F4F4),
       borderRadius: BorderRadius.circular(17),
       child: InkWell(
         borderRadius: BorderRadius.circular(17),
@@ -822,7 +850,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
               Icon(
                 icon,
                 size: 21,
-                color: isSelected ? Colors.white : accentGray,
+                color: isSelected ? Colors.white : accentBlue,
               ),
               const SizedBox(width: 6),
               Text(
@@ -832,7 +860,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                   fontSize: 15,
                   height: 1,
                   fontWeight: FontWeight.w700,
-                  color: isSelected ? Colors.white : accentGray,
+                  color: isSelected ? Colors.white : accentBlue,
                 ),
               ),
             ],
@@ -1001,7 +1029,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
               Text(
                 'Searching: $handwritingResult',
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   height: 1,
                   color: Colors.black38,
@@ -1030,7 +1058,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
           style: TextStyle(
             fontSize: 16,
             height: 1,
-            color: enabled ? accentGray : Colors.black26,
+            color: enabled ? accentBlue : Colors.black26,
             fontWeight: FontWeight.w700,
           ),
         ),

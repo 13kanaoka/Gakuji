@@ -51,7 +51,7 @@ class WritingSessionController {
   List<Term> activeTerms;
 
   final List<Term> answeredTerms = [];
-  final List<_WritingHistoryEntry> _history = [];
+  final List<_WritingHistoryEntry> history = [];
   final List<Term> incorrectReviewTerms = [];
 
   final String deckId;
@@ -198,7 +198,7 @@ class WritingSessionController {
       activeTerms = [];
       correctCount = 0;
       incorrectCount = 0;
-      _history.clear();
+      history.clear();
       incorrectReviewTerms.clear();
       _initSlots();
       return;
@@ -218,7 +218,7 @@ class WritingSessionController {
 
     correctCount = 0;
     incorrectCount = 0;
-    _history.clear();
+    history.clear();
     incorrectReviewTerms.clear();
 
     _initSlots();
@@ -238,7 +238,7 @@ class WritingSessionController {
     }
 
     answeredTerms.clear();
-    _history.clear();
+    history.clear();
 
     correctCount = 0;
     incorrectCount = 0;
@@ -342,7 +342,7 @@ class WritingSessionController {
 
     final answeredTerm = activeTerms.first;
 
-    _history.add(
+    history.add(
       _WritingHistoryEntry(
         term: answeredTerm,
         correct: correct,
@@ -371,7 +371,7 @@ class WritingSessionController {
 
     final skippedTerm = activeTerms.first;
 
-    _history.add(
+    history.add(
       _WritingHistoryEntry(
         term: skippedTerm,
         correct: false,
@@ -392,9 +392,9 @@ class WritingSessionController {
   void previousCard({
     bool saveProgress = true,
   }) {
-    if (_history.isEmpty) return;
+    if (history.isEmpty) return;
 
-    final last = _history.removeLast();
+    final last = history.removeLast();
 
     if (last.correct) {
       correctCount--;
@@ -461,6 +461,14 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
   void scheduleUserDataSave() {
     GakujiUserDataStore.scheduleSave();
+  }
+
+  void _toggleFavorite(Term term) {
+    setState(() {
+      term.marked = !term.marked;
+    });
+
+    scheduleUserDataSave();
   }
 
   @override
@@ -987,7 +995,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
-          backgroundColor: Colors.black.withValues(alpha: 0.86),
+          backgroundColor: Colors.black.withOpacity(0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -1191,7 +1199,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         else
           Transform(
             transform: Matrix4.identity()
-              ..translateByDouble(revealDragOffset.dx, revealDragOffset.dy, 0.0, 1.0)
+              ..translate(revealDragOffset.dx, revealDragOffset.dy)
               ..rotateZ(rotation),
             alignment: Alignment.center,
             child: GestureDetector(
@@ -1224,6 +1232,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     final activeStrokes = controller.slotStrokes.isNotEmpty
         ? controller.slotStrokes[controller.activeSlotIndex]
         : <List<WritingPoint>>[];
+    final term = controller.currentTerm;
 
     return WritingStudyCard(
       prompt: prompt,
@@ -1238,6 +1247,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       swipeColor: swipeColor,
       swipeOpacity: swipeOpacity,
       contentOpacity: contentOpacity,
+      isStarred: term.marked,
+      onStarTap: () => _toggleFavorite(term),
       onSelectSlot: (index) {
         if (isAnswerRevealed) return;
 
@@ -1477,8 +1488,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: Colors.white.withValues(alpha: 0.10),
-          highlightColor: Colors.white.withValues(alpha: 0.05),
+          splashColor: Colors.white.withOpacity(0.10),
+          highlightColor: Colors.white.withOpacity(0.05),
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1505,8 +1516,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       child: InkWell(
         onTap: goBack,
         borderRadius: BorderRadius.circular(20),
-        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
-        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
+        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
+        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: 20,

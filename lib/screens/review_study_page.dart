@@ -610,6 +610,14 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     GakujiUserDataStore.scheduleSave();
   }
 
+  void _toggleFavorite(Term term) {
+    setState(() {
+      term.marked = !term.marked;
+    });
+
+    scheduleUserDataSave();
+  }
+
   void handleExit() {
     scheduleUserDataSave();
 
@@ -719,7 +727,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
-          backgroundColor: Colors.black.withValues(alpha: 0.86),
+          backgroundColor: Colors.black.withOpacity(0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -835,8 +843,8 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: toggleWritingGrid,
-        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
-        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
+        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
+        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
         child: SizedBox(
           width: 44,
           height: 44,
@@ -861,8 +869,8 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: toggleFurigana,
-        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
-        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
+        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
+        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
         child: SizedBox(
           width: 44,
           height: 44,
@@ -1063,6 +1071,8 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
       isCheckingAnswer: isCheckingWritingAnswer,
       isCheckingFinalSlot: isCheckingFinalWritingSlot,
       showSwipeInstructions: false,
+      isStarred: term.marked,
+      onStarTap: () => _toggleFavorite(term),
       onSelectSlot: selectWritingSlot,
       onClear: clearActiveWritingSlot,
       onCheck: isCheckingWritingAnswer ? null : checkWritingAnswer,
@@ -1084,15 +1094,13 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     final showDefinition = answerShown;
 
     return ReadingCardFrame(
-      child: Stack(
-        children: [
-          Center(
-            child: _cardContent(
-              term,
-              showDefinition: showDefinition,
-            ),
-          ),
-        ],
+      isStarred: term.marked,
+      onStarTap: () => _toggleFavorite(term),
+      child: Center(
+        child: _cardContent(
+          term,
+          showDefinition: showDefinition,
+        ),
       ),
     );
   }
@@ -1260,8 +1268,8 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: showAnswer,
-          splashColor: Colors.white.withValues(alpha: 0.08),
-          highlightColor: Colors.white.withValues(alpha: 0.04),
+          splashColor: Colors.white.withOpacity(0.08),
+          highlightColor: Colors.white.withOpacity(0.04),
           child: Center(
             child: Text(
               'Show Answer',
@@ -1348,7 +1356,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
           style: GakujiText.xSmall.copyWith(
             fontSize: 11,
             height: 1,
-            color: GakujiColors.mediumGray.withValues(alpha: 0.65),
+            color: GakujiColors.mediumGray.withOpacity(0.65),
           ),
         ),
         const SizedBox(height: 3),
@@ -1360,8 +1368,8 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: isRating ? null : onTap,
-              splashColor: Colors.white.withValues(alpha: 0.10),
-              highlightColor: Colors.white.withValues(alpha: 0.05),
+              splashColor: Colors.white.withOpacity(0.10),
+              highlightColor: Colors.white.withOpacity(0.05),
               child: Center(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
@@ -1517,8 +1525,8 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: handleExit,
-          splashColor: Colors.white.withValues(alpha: 0.10),
-          highlightColor: Colors.white.withValues(alpha: 0.05),
+          splashColor: Colors.white.withOpacity(0.10),
+          highlightColor: Colors.white.withOpacity(0.05),
           child: Center(
             child: Text(
               'Done',

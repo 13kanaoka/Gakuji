@@ -463,10 +463,10 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
               child: GakujiFadedScroll(
                 topFadeEnd: 0.06,
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(28, 22, 28, 26),
+                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 26),
                   children: [
                     _destinationSection(),
-                    const SizedBox(height: 38),
+                    const SizedBox(height: 22),
                     if (isMatching)
                       _matchingProgress()
                     else if (matchingError != null)
@@ -527,97 +527,102 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _fieldLabel('Destination'),
+        _sectionHeading('Destination'),
         const SizedBox(height: 10),
-        _dropdownField<String>(
-          value: selectedDestination,
-          items: [
-            const DropdownMenuItem(
-              value: _newDeckValue,
-              child: Text(
-                'Create a new deck',
-                textScaler: TextScaler.noScaling,
-              ),
-            ),
-            ...decks.map((deck) {
-              return DropdownMenuItem(
-                value: deck.id,
-                child: Text(
-                  deck.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textScaler: TextScaler.noScaling,
-                ),
-              );
-            }),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-
-            setState(() {
-              selectedDestination = value;
-              importError = null;
-              _refreshDuplicates();
-            });
-          },
-        ),
-        if (existingDeck == null) ...[
-          const SizedBox(height: 28),
-          _fieldLabel('Deck Name'),
-          const SizedBox(height: 10),
-          _nameField(),
-          const SizedBox(height: 28),
-          _fieldLabel('Deck Type'),
-          const SizedBox(height: 10),
-          _dropdownField<DeckType>(
-            value: selectedDeckType,
-            items: DeckType.values.map((type) {
-              return DropdownMenuItem(
-                value: type,
-                child: Text(
-                  _deckTypeLabel(type),
-                  textScaler: TextScaler.noScaling,
-                ),
-              );
-            }).toList(),
-            onChanged: (value) {
-              if (value == null) return;
-
-              setState(() {
-                selectedDeckType = value;
-              });
-            },
-          ),
-        ] else ...[
-          const SizedBox(height: 12),
-          Row(
+        _sectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: destinationColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '${_deckTypeLabel(existingDeck.type)} deck • '
-                  '${existingDeck.terms.length} existing terms',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                    color: GakujiColors.mediumGray,
+              _fieldLabel('Import Into'),
+              const SizedBox(height: 8),
+              _dropdownField<String>(
+                value: selectedDestination,
+                items: [
+                  const DropdownMenuItem(
+                    value: _newDeckValue,
+                    child: Text(
+                      'Create a new deck',
+                      textScaler: TextScaler.noScaling,
+                    ),
                   ),
-                ),
+                  ...decks.map((deck) {
+                    return DropdownMenuItem(
+                      value: deck.id,
+                      child: Text(
+                        deck.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textScaler: TextScaler.noScaling,
+                      ),
+                    );
+                  }),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+
+                  setState(() {
+                    selectedDestination = value;
+                    importError = null;
+                    _refreshDuplicates();
+                  });
+                },
               ),
+              if (existingDeck == null) ...[
+                const SizedBox(height: 18),
+                _fieldLabel('Deck Name'),
+                const SizedBox(height: 8),
+                _nameField(),
+                const SizedBox(height: 18),
+                _fieldLabel('Deck Type'),
+                const SizedBox(height: 8),
+                _dropdownField<DeckType>(
+                  value: selectedDeckType,
+                  items: DeckType.values.map((type) {
+                    return DropdownMenuItem(
+                      value: type,
+                      child: Text(
+                        _deckTypeLabel(type),
+                        textScaler: TextScaler.noScaling,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+
+                    setState(() {
+                      selectedDeckType = value;
+                    });
+                  },
+                ),
+              ] else ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: destinationColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${_deckTypeLabel(existingDeck.type)} deck • '
+                      '${existingDeck.terms.length} existing terms',
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: GakujiColors.mediumGray,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
-        ],
+        ),
       ],
     );
   }
@@ -634,7 +639,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             width: 68,
             height: 68,
             decoration: BoxDecoration(
-              color: GakujiColors.reading.withValues(alpha: 0.12),
+              color: GakujiColors.reading.withOpacity(0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -913,7 +918,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
+              color: statusColor.withOpacity(0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -1030,16 +1035,15 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
 
   Widget _nameField() {
     return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: GakujiColors.warmCard,
-        borderRadius: BorderRadius.circular(16),
+        color: GakujiColors.warmBackground,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: GakujiColors.warmDivider,
-          width: 1.5,
+          width: 1.3,
         ),
-        boxShadow: [GakujiShadows.soft],
       ),
       child: TextField(
         controller: deckNameController,
@@ -1051,13 +1055,17 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             importError = null;
           });
         },
-        style: GakujiText.small.copyWith(
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
           color: GakujiColors.darkGray,
         ),
         decoration: InputDecoration(
           border: InputBorder.none,
           hintText: 'Enter deck name',
-          hintStyle: GakujiText.small.copyWith(
+          hintStyle: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
             color: GakujiColors.mediumGray,
           ),
         ),
@@ -1071,16 +1079,15 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
     required ValueChanged<T?> onChanged,
   }) {
     return Container(
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: GakujiColors.warmCard,
-        borderRadius: BorderRadius.circular(16),
+        color: GakujiColors.warmBackground,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: GakujiColors.warmDivider,
-          width: 1.5,
+          width: 1.3,
         ),
-        boxShadow: [GakujiShadows.soft],
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
@@ -1088,12 +1095,14 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
           items: items,
           isExpanded: true,
           dropdownColor: GakujiColors.warmCard,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           icon: Icon(
             Icons.keyboard_arrow_down_rounded,
-            color: GakujiColors.darkGray,
+            color: GakujiColors.mediumGray,
           ),
-          style: GakujiText.small.copyWith(
+          style: TextStyle(
+            fontSize: 15.5,
+            fontWeight: FontWeight.w600,
             color: GakujiColors.darkGray,
           ),
           onChanged: onChanged,
@@ -1135,10 +1144,10 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: GakujiColors.pinRed.withValues(alpha: 0.08),
+        color: GakujiColors.pinRed.withOpacity(0.08),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: GakujiColors.pinRed.withValues(alpha: 0.35),
+          color: GakujiColors.pinRed.withOpacity(0.35),
         ),
       ),
       child: Row(
@@ -1201,7 +1210,9 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
     return Text(
       label,
       textScaler: TextScaler.noScaling,
-      style: GakujiText.small.copyWith(
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
         color: GakujiColors.darkGray,
       ),
     );

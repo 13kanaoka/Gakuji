@@ -72,11 +72,11 @@ class _SenseExampleOption {
 }
 
 class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
-  static const Color accentBlue = Color(0xFF4D7EF7);
-  static const Color removeRed = Color(0xFFFF4B4B);
-  static const Color softTextGray = Color(0xFF8A8A8A);
-  static const Color softBlueFill = Color(0xFFF5F7FF);
-  static const Color softBlueBorder = Color(0xFFEAF0FF);
+  static const Color accentBlue = GakujiColors.reading;
+  static const Color removeRed = GakujiColors.pinRed;
+  static Color get softTextGray => GakujiColors.mediumGray;
+  static Color get softBlueFill => GakujiColors.whiteCard;
+  static Color get softBlueBorder => GakujiColors.softBorder;
 
   static const int maxGlosses = 3;
   static const int maxNoteCharacters = 35;
@@ -293,6 +293,24 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
     return left.japanese == right.japanese && left.english == right.english;
   }
 
+  int? _senseIndexForExample(DictionaryExample example) {
+    for (final sense in sourceTerm.senses) {
+      if (sense.examples.any((candidate) => _sameExample(candidate, example))) {
+        return sense.index;
+      }
+    }
+
+    return null;
+  }
+
+  String _senseLabel(int? senseIndex) {
+    if (senseIndex != null && senseIndex >= 0 && senseIndex < 26) {
+      return String.fromCharCode(65 + senseIndex);
+    }
+
+    return '•';
+  }
+
   String get termTitle {
     if (sourceTerm.kanjiBracketText.trim().isNotEmpty) {
       return sourceTerm.kanjiBracketText.trim();
@@ -460,28 +478,32 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          backgroundColor: Colors.white,
-          title: const Text(
+          backgroundColor: GakujiColors.warmCard,
+          title: Text(
             'Discard changes?',
             textScaler: TextScaler.noScaling,
+            style: TextStyle(color: GakujiColors.darkGray),
           ),
-          content: const Text(
+          content: Text(
             'Your card edits have not been saved yet.',
             textScaler: TextScaler.noScaling,
+            style: TextStyle(color: GakujiColors.mediumGray),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text(
+              child: Text(
                 'Cancel',
                 textScaler: TextScaler.noScaling,
+                style: TextStyle(color: GakujiColors.mediumGray),
               ),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text(
+              child: Text(
                 'Discard',
                 textScaler: TextScaler.noScaling,
+                style: TextStyle(color: GakujiColors.pinRed),
               ),
             ),
           ],
@@ -512,7 +534,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1300),
-          backgroundColor: Colors.black.withValues(alpha: 0.86),
+          backgroundColor: Colors.black.withOpacity(0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -587,7 +609,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                   cursorColor: accentBlue,
                   decoration: InputDecoration(
                     hintText: 'Write a note for this card',
-                    hintStyle: const TextStyle(
+                    hintStyle: TextStyle(
                       color: softTextGray,
                       fontWeight: FontWeight.w400,
                     ),
@@ -596,23 +618,23 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                     contentPadding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
+                      borderSide: BorderSide(
                         color: softBlueBorder,
                         width: 1.4,
                       ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(
+                      borderSide: BorderSide(
                         color: accentBlue,
                         width: 1.7,
                       ),
                     ),
                   ),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     height: 1.2,
-                    color: Colors.black,
+                    color: GakujiColors.darkGray,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
@@ -864,19 +886,10 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-
-        final shouldPop = await handleBack();
-
-        if (shouldPop && context.mounted) {
-          Navigator.of(context).pop();
-        }
-      },
+    return WillPopScope(
+      onWillPop: handleBack,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: GakujiColors.warmBackground,
         body: SafeArea(
           bottom: false,
           child: Column(
@@ -884,45 +897,46 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
               GakujiTopBar(
                 leftIcon: GakujiTopBar.backIcon,
                 leftIconSize: GakujiTopBar.backIconSize,
+                leftIconColor: GakujiColors.darkGray,
                 onLeftTap: handleBackTap,
-                title: '',
-                rightWidget: _topRightAction(),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-                child: Column(
+                titleWidget: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       termTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
                       textScaler: TextScaler.noScaling,
-                      style: const TextStyle(
-                        fontSize: 31,
+                      style: TextStyle(
+                        fontSize: 24,
                         height: 1,
-                        color: Colors.black,
+                        color: GakujiColors.darkGray,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text(
+                    const SizedBox(height: 3),
+                    Text(
                       'Card Edit',
                       textAlign: TextAlign.center,
                       textScaler: TextScaler.noScaling,
                       style: TextStyle(
-                        fontSize: 17,
+                        fontSize: 13.5,
                         height: 1,
-                        color: Colors.black,
+                        color: GakujiColors.darkGray,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
+                rightWidget: _topRightAction(),
               ),
               Expanded(
                 child: Center(
                   child: isLoadingEditData
                       ? const CircularProgressIndicator(
-                          color: accentBlue,
+                          color: GakujiColors.reading,
                         )
                       : GakujiFadedScroll(
                           child: SingleChildScrollView(
@@ -1105,8 +1119,8 @@ class _CardEditBottomSheet extends StatelessWidget {
           maxHeight: MediaQuery.of(context).size.height * 0.74,
         ),
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-        decoration: const BoxDecoration(
-          color: Colors.white,
+        decoration: BoxDecoration(
+          color: GakujiColors.warmBackground,
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(22),
           ),
@@ -1120,7 +1134,7 @@ class _CardEditBottomSheet extends StatelessWidget {
                 height: 5,
                 margin: const EdgeInsets.only(top: 9, bottom: 12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD8D8D8),
+                  color: GakujiColors.softGray,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),
@@ -1129,11 +1143,11 @@ class _CardEditBottomSheet extends StatelessWidget {
               title,
               textAlign: TextAlign.center,
               textScaler: TextScaler.noScaling,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 height: 1,
                 fontWeight: FontWeight.w800,
-                color: Colors.black,
+                color: GakujiColors.darkGray,
               ),
             ),
             const SizedBox(height: 16),
@@ -1161,9 +1175,9 @@ class _GlossPickerSheet extends StatefulWidget {
 }
 
 class _GlossPickerSheetState extends State<_GlossPickerSheet> {
-  static const Color accentBlue = Color(0xFF4D7EF7);
-  static const Color dividerGray = Color(0xFFE1E1E1);
-  static const Color softTextGray = Color(0xFF8A8A8A);
+  static const Color accentBlue = GakujiColors.reading;
+  static Color get dividerGray => GakujiColors.lightDivider;
+  static Color get softTextGray => GakujiColors.mediumGray;
   static const int maxGlosses = 3;
 
   late List<_SenseGlossOption> workingSelection;
@@ -1197,6 +1211,10 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
 
   void moveGloss(int oldIndex, int newIndex) {
     setState(() {
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+
       final gloss = workingSelection.removeAt(oldIndex);
       workingSelection.insert(newIndex, gloss);
     });
@@ -1217,7 +1235,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
             '${workingSelection.length}/$maxGlosses selected • examples follow the selected meanings',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13.5,
               height: 1.2,
               color: softTextGray,
@@ -1231,7 +1249,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
               child: ReorderableListView.builder(
                 padding: EdgeInsets.zero,
                 itemCount: workingSelection.length,
-                onReorderItem: moveGloss,
+                onReorder: moveGloss,
                 buildDefaultDragHandles: true,
                 itemBuilder: (context, index) {
                   final option = workingSelection[index];
@@ -1269,17 +1287,17 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                 },
               ),
             ),
-            const Divider(height: 1, color: dividerGray),
+            Divider(height: 1, color: dividerGray),
           ],
           Expanded(
             child: widget.glosses.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'No glosses available',
                       textScaler: TextScaler.noScaling,
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.grey,
+                        color: GakujiColors.mediumGray,
                       ),
                     ),
                   )
@@ -1287,7 +1305,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                     padding: EdgeInsets.zero,
                     itemCount: widget.glosses.length,
                     separatorBuilder: (context, index) {
-                      return const Divider(height: 1, color: dividerGray);
+                      return Divider(height: 1, color: dividerGray);
                     },
                     itemBuilder: (context, index) {
                       final option = widget.glosses[index];
@@ -1310,7 +1328,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                           child: Text(
                             option.senseLabel,
                             textScaler: TextScaler.noScaling,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11.5,
                               height: 1,
                               color: softTextGray,
@@ -1321,10 +1339,10 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                         title: Text(
                           option.gloss,
                           textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 15.5,
                             height: 1.17,
-                            color: Colors.black,
+                            color: GakujiColors.darkGray,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -1365,9 +1383,9 @@ class _ExamplePickerSheet extends StatefulWidget {
 }
 
 class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
-  static const Color accentBlue = Color(0xFF4D7EF7);
-  static const Color dividerGray = Color(0xFFE1E1E1);
-  static const Color softTextGray = Color(0xFF8A8A8A);
+  static const Color accentBlue = GakujiColors.reading;
+  static Color get dividerGray => GakujiColors.lightDivider;
+  static Color get softTextGray => GakujiColors.mediumGray;
   static const int maxExamples = 1;
 
   late List<DictionaryExample> workingSelection;
@@ -1432,7 +1450,7 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
             '${workingSelection.length}/$maxExamples selected • one example per card',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13.5,
               height: 1.2,
               color: softTextGray,
@@ -1442,14 +1460,14 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
           const SizedBox(height: 12),
           Expanded(
             child: widget.examples.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
                       'No examples for the selected glosses',
                       textAlign: TextAlign.center,
                       textScaler: TextScaler.noScaling,
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.grey,
+                        color: GakujiColors.mediumGray,
                       ),
                     ),
                   )
@@ -1477,7 +1495,7 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                                   child: Text(
                                     senseLabel(group.key),
                                     textScaler: TextScaler.noScaling,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 11.5,
                                       height: 1,
                                       color: softTextGray,
@@ -1486,7 +1504,7 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                                   ),
                                 ),
                                 const SizedBox(width: 9),
-                                const Text(
+                                Text(
                                   'Matching examples',
                                   textScaler: TextScaler.noScaling,
                                   style: TextStyle(
@@ -1511,10 +1529,10 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                                   title: Text(
                                     example.japanese,
                                     textScaler: TextScaler.noScaling,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 15.5,
                                       height: 1.18,
-                                      color: Colors.black,
+                                      color: GakujiColors.darkGray,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -1523,7 +1541,7 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                                     child: Text(
                                       example.english,
                                       textScaler: TextScaler.noScaling,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 13.5,
                                         height: 1.15,
                                         color: softTextGray,
@@ -1540,7 +1558,7 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                                         : softTextGray,
                                   ),
                                 ),
-                                const Divider(
+                                Divider(
                                   height: 1,
                                   color: dividerGray,
                                 ),
@@ -1564,7 +1582,7 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
 }
 
 class _SheetSaveButton extends StatelessWidget {
-  static const Color accentBlue = Color(0xFF4D7EF7);
+  static const Color accentBlue = GakujiColors.reading;
 
   final String label;
   final VoidCallback onTap;

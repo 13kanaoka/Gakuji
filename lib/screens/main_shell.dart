@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_styles.dart';
-import 'home_page.dart';
 import 'dictionary_page.dart';
 import 'library_page.dart';
+import 'learning_page.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -38,13 +38,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     pageController = PageController(initialPage: selectedIndex);
 
     pages = [
-      const HomePage(),
       DictionaryPage(
         onHandwritingInputActive: setDictionaryInputActive,
       ),
       LibraryPage(
         onDeleteModeChanged: setLibraryDeleteModeActive,
       ),
+      const LearningPage(),
     ];
   }
 
@@ -202,15 +202,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                           ),
                           Row(
                             children: [
-                              _navImageIcon(
-                                'assets/images/nav_home_bonsai.png',
-                                0,
-                              ),
-                              _navIcon(Icons.search_rounded, 1),
+                              _navIcon(Icons.search_rounded, 0),
                               _navImageIcon(
                                 'assets/images/nav_library_books.png',
-                                2,
+                                1,
                               ),
+                              _navIcon(Icons.school_rounded, 2),
                             ],
                           ),
                         ],

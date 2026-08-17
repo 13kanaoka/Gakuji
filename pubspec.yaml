@@ -58,6 +58,9 @@ flutter:
     - assets/images/nav_home_bonsai.png
     - assets/images/nav_library_books.png
     - assets/images/pin_icon.png
+    - assets/images/learning_kana_pattern.png
+    - assets/images/learning_clouds_pattern.png
+    - assets/images/learning_kanji_pattern.png
 
   fonts:
     - family: IBMPlexSansJP

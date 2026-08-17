@@ -5,8 +5,6 @@ import 'gakuji_styles.dart';
 
 class GakujiTermRow extends StatelessWidget {
   static const Color dividerColor = Color(0xFFC8C8C8);
-  static const Color _readingGray = Color(0xFF85868A);
-  static const Color _readingFrameGray = Color(0xFFB7B8BC);
   static const Color _chevronGray = Color(0xFF8A8A8A);
 
   final Term term;
@@ -29,10 +27,10 @@ class GakujiTermRow extends StatelessWidget {
     this.trailing,
     this.titleText,
     this.readingText,
-    this.showChevron = true,
+    this.showChevron = false,
     this.isSelected = false,
     this.meaningMaxLines = 1,
-    this.padding = const EdgeInsets.fromLTRB(0, 9, 0, 10),
+    this.padding = const EdgeInsets.fromLTRB(0, 4, 0, 5),
     this.backgroundColor,
   });
 
@@ -54,28 +52,11 @@ class GakujiTermRow extends StatelessWidget {
     return term.reading.trim();
   }
 
-  bool _containsKanji(String text) {
-    return text.runes.any((rune) {
-      return (rune >= 0x3400 && rune <= 0x4DBF) ||
-          (rune >= 0x4E00 && rune <= 0x9FFF) ||
-          (rune >= 0xF900 && rune <= 0xFAFF) ||
-          rune == 0x3005;
-    });
-  }
-
   String get _resolvedReadingText {
-    final resolvedTitle = _resolvedTitleText;
-
-    // Kana-only terms already display their pronunciation as the title,
-    // so repeating it would add no useful information.
-    if (!_containsKanji(resolvedTitle)) {
-      return '';
-    }
-
     final resolvedReading =
         readingText != null ? readingText!.trim() : term.reading.trim();
 
-    if (resolvedReading == resolvedTitle) {
+    if (resolvedReading.isEmpty || resolvedReading == _resolvedTitleText) {
       return '';
     }
 
@@ -97,9 +78,9 @@ class GakujiTermRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 25,
-                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  spacing: 10,
+                  runSpacing: 0,
                   children: [
                     Text(
                       _resolvedTitleText,
@@ -113,21 +94,19 @@ class GakujiTermRow extends StatelessWidget {
                       ),
                     ),
                     if (_resolvedReadingText.isNotEmpty)
-                      _CornerReadingFrame(
-                        child: Text(
-                          _resolvedReadingText,
-                          textScaler: TextScaler.noScaling,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            height: 1,
-                            fontWeight: FontWeight.w600,
-                            color: _readingGray,
-                          ),
+                      Text(
+                        '【$_resolvedReadingText】',
+                        textScaler: TextScaler.noScaling,
+                        style: const TextStyle(
+                          fontSize: 19,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                          color: GakujiColors.reading,
                         ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 2),
                 Text(
                   term.cardMeaning,
                   maxLines: meaningMaxLines,
@@ -135,7 +114,7 @@ class GakujiTermRow extends StatelessWidget {
                   textScaler: TextScaler.noScaling,
                   style: TextStyle(
                     fontSize: 14,
-                    height: 1.15,
+                    height: 1,
                     color: GakujiColors.darkGray,
                   ),
                 ),
@@ -166,72 +145,5 @@ class GakujiTermRow extends StatelessWidget {
               child: content,
             ),
     );
-  }
-}
-
-class _CornerReadingFrame extends StatelessWidget {
-  final Widget child;
-
-  const _CornerReadingFrame({
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      foregroundPainter: const _CornerFramePainter(
-        color: GakujiTermRow._readingFrameGray,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
-        child: child,
-      ),
-    );
-  }
-}
-
-class _CornerFramePainter extends CustomPainter {
-  final Color color;
-
-  const _CornerFramePainter({
-    required this.color,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const double cornerLength = 6;
-    const double inset = 0.75;
-
-    final left = inset;
-    final right = size.width - inset;
-    final top = inset;
-    final bottom = size.height - inset;
-
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final path = Path()
-      // Connected left side with short top and bottom caps.
-      ..moveTo(left + cornerLength, top)
-      ..lineTo(left, top)
-      ..lineTo(left, bottom)
-      ..lineTo(left + cornerLength, bottom)
-
-      // Connected right side with short top and bottom caps.
-      ..moveTo(right - cornerLength, top)
-      ..lineTo(right, top)
-      ..lineTo(right, bottom)
-      ..lineTo(right - cornerLength, bottom);
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _CornerFramePainter oldDelegate) {
-    return oldDelegate.color != color;
   }
 }
