@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
+import 'gakuji_styles.dart';
+
 class GakujiTopBar extends StatelessWidget {
-  static const double horizontalPadding = 22;
+  static const double horizontalPadding = 18;
   static const double topPadding = 16;
   static const double buttonSize = 44;
   static const double actionGap = 8;
   static const IconData backIcon = Icons.arrow_back_ios_new_rounded;
-  static const double backIconSize = 34;
+  static const double iconSize = 28;
+  static const double backIconSize = 30;
+  static const double backIconHorizontalOffset = -3;
 
   final IconData? leftIcon;
   final VoidCallback? onLeftTap;
@@ -86,12 +90,7 @@ class GakujiTopBar extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textScaler: TextScaler.noScaling,
-                      style: titleStyle ??
-                          const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w400,
-                            color: Colors.black,
-                          ),
+                      style: titleStyle ?? GakujiText.pageTitle,
                     ),
               ),
             ),
@@ -159,10 +158,18 @@ class _TopBarButton extends StatelessWidget {
         width: GakujiTopBar.buttonSize,
         height: GakujiTopBar.buttonSize,
         child: Center(
-          child: Icon(
-            icon,
-            size: iconSize ?? 28,
-            color: iconColor ?? Colors.black,
+          child: Transform.translate(
+            offset: Offset(
+              icon == GakujiTopBar.backIcon
+                  ? GakujiTopBar.backIconHorizontalOffset
+                  : 0,
+              0,
+            ),
+            child: Icon(
+              icon,
+              size: iconSize ?? GakujiTopBar.iconSize,
+              color: iconColor ?? Colors.black,
+            ),
           ),
         ),
       ),

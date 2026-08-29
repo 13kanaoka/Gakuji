@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -10,12 +9,13 @@ import '../data/reading_card_edit_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
 import '../services/dictionary_service.dart';
+import '../services/dictionary_note_service.dart';
 import '../services/reading_card_edit_storage.dart';
-import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import '../widgets/reading_card_back.dart';
 import '../services/gakuji_user_data_store.dart';
+import '../services/gakuji_local_preferences.dart';
 
 class ReadingCardEditPage extends StatefulWidget {
   final Deck deck;
@@ -72,14 +72,12 @@ class _SenseExampleOption {
 }
 
 class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
+  static const String _blueCardTextPreferenceKey = 'blue_card_text_enabled';
   static const Color accentBlue = GakujiColors.reading;
   static const Color removeRed = GakujiColors.pinRed;
   static Color get softTextGray => GakujiColors.mediumGray;
-  static Color get softBlueFill => GakujiColors.whiteCard;
-  static Color get softBlueBorder => GakujiColors.softBorder;
 
   static const int maxGlosses = 3;
-  static const int maxNoteCharacters = 35;
   static const int maxExamples = 1;
 
   final ImagePicker imagePicker = ImagePicker();
@@ -90,9 +88,13 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
   bool isPickingPhoto = false;
   bool hasUnsavedChanges = false;
   bool photoEnabled = false;
+  bool blueCardTextEnabled = false;
 
   String? photoPath;
   String? lastSavedPhotoPath;
+  double photoScale = 1.0;
+  double photoOffsetX = 0.0;
+  double photoOffsetY = 0.0;
 
   late Term sourceTerm;
   late List<_SenseGlossOption> selectedGlosses;
@@ -105,13 +107,15 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
     sourceTerm = widget.term;
     selectedGlosses = <_SenseGlossOption>[];
-    cardNote = _limitNote(widget.term.note ?? '');
+    cardNote = widget.term.note ?? '';
     selectedExamples = <DictionaryExample>[];
 
     unawaited(_initializeEditor());
   }
 
   Future<void> _initializeEditor() async {
+    final savedBlueCardText =
+        await GakujiLocalPreferences.loadBool(_blueCardTextPreferenceKey);
     var resolvedSourceTerm = widget.term;
     final dictionaryTermId = widget.term.sourceId ?? widget.term.id;
 
@@ -128,6 +132,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
     if (!mounted) return;
 
     sourceTerm = resolvedSourceTerm;
+    blueCardTextEnabled = savedBlueCardText ?? false;
     await loadSavedEditData();
   }
 
@@ -276,16 +281,6 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
         .toList();
   }
 
-  String _limitNote(String value) {
-    if (value.runes.length <= maxNoteCharacters) {
-      return value;
-    }
-
-    return String.fromCharCodes(
-      value.runes.take(maxNoteCharacters),
-    );
-  }
-
   bool _sameExample(
     DictionaryExample left,
     DictionaryExample right,
@@ -315,9 +310,12 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
       selectedExampleKeys: ReadingCardEditData.keysFromExamples(
         selectedExamples.take(maxExamples).toList(),
       ),
-      note: _limitNote(cardNote),
+      note: '',
       photoEnabled: photoEnabled,
       photoPath: photoPath,
+      photoScale: photoScale,
+      photoOffsetX: photoOffsetX,
+      photoOffsetY: photoOffsetY,
     );
   }
 
@@ -347,13 +345,14 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
       examples: eligibleExamples,
       selectedExampleKeys: savedData.selectedExampleKeys,
     );
+    final dictionaryNote = await DictionaryNoteService.loadForTerm(widget.term);
+
+    if (!mounted) return;
 
     setState(() {
       selectedGlosses = resolvedGlosses;
 
-      cardNote = _limitNote(
-        hasSavedEdit ? savedData.note : widget.term.note ?? '',
-      );
+      cardNote = dictionaryNote;
 
       selectedExamples = hasSavedEdit
           ? savedExamples.take(maxExamples).toList()
@@ -361,6 +360,9 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
       photoEnabled = hasSavedEdit ? savedData.photoEnabled : false;
       photoPath = hasSavedEdit ? savedData.photoPath : null;
+      photoScale = hasSavedEdit ? savedData.photoScale : 1.0;
+      photoOffsetX = hasSavedEdit ? savedData.photoOffsetX : 0.0;
+      photoOffsetY = hasSavedEdit ? savedData.photoOffsetY : 0.0;
       lastSavedPhotoPath = photoPath;
 
       photoPathsPendingDeletion.clear();
@@ -562,83 +564,6 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
     );
   }
 
-  void openNoteSheet() {
-    final controller = TextEditingController(text: cardNote);
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-
-        return Padding(
-          padding: EdgeInsets.only(bottom: bottomInset),
-          child: _CardEditBottomSheet(
-            title: 'Card Note',
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: controller,
-                  minLines: 2,
-                  maxLines: 3,
-                  maxLength: maxNoteCharacters,
-                  maxLengthEnforcement: MaxLengthEnforcement.enforced,
-                  inputFormatters: [
-                    LengthLimitingTextInputFormatter(maxNoteCharacters),
-                  ],
-                  cursorColor: accentBlue,
-                  decoration: InputDecoration(
-                    hintText: 'Write a note for this card',
-                    hintStyle: TextStyle(
-                      color: softTextGray,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    filled: true,
-                    fillColor: softBlueFill,
-                    contentPadding: const EdgeInsets.fromLTRB(13, 11, 13, 11),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: softBlueBorder,
-                        width: 1.4,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: BorderSide(
-                        color: accentBlue,
-                        width: 1.7,
-                      ),
-                    ),
-                  ),
-                  style: TextStyle(
-                    fontSize: 16,
-                    height: 1.2,
-                    color: GakujiColors.darkGray,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _SheetSaveButton(
-                  label: 'Save Note',
-                  onTap: () {
-                    setState(() {
-                      cardNote = _limitNote(controller.text.trimRight());
-                    });
-                    markChanged();
-                    Navigator.pop(context);
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   void openExamplesSheet() {
     showModalBottomSheet<void>(
       context: context,
@@ -667,6 +592,9 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
       if (!photoEnabled) {
         photoPath = null;
+        photoScale = 1.0;
+        photoOffsetX = 0.0;
+        photoOffsetY = 0.0;
       }
     });
 
@@ -689,6 +617,9 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
     setState(() {
       photoEnabled = false;
       photoPath = null;
+      photoScale = 1.0;
+      photoOffsetX = 0.0;
+      photoOffsetY = 0.0;
     });
 
     await _stagePhotoForDeletion(oldPhotoPath);
@@ -707,8 +638,9 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
     try {
       final pickedImage = await imagePicker.pickImage(
         source: ImageSource.gallery,
-        imageQuality: 86,
-        maxWidth: 1800,
+        imageQuality: 78,
+        maxWidth: 1400,
+        maxHeight: 1400,
       );
 
       if (pickedImage == null) {
@@ -731,6 +663,9 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
       setState(() {
         photoEnabled = true;
         photoPath = savedPhotoPath;
+        photoScale = 1.0;
+        photoOffsetX = 0.0;
+        photoOffsetY = 0.0;
         isPickingPhoto = false;
       });
 
@@ -745,6 +680,38 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
       _showTemporaryMessage('Could not open photos');
     }
+  }
+
+  Future<void> openPhotoAdjuster() async {
+    final path = photoPath?.trim();
+    if (!photoEnabled || path == null || path.isEmpty || !File(path).existsSync()) {
+      await openPhotoPicker();
+      return;
+    }
+
+    final result = await showModalBottomSheet<_PhotoTransformResult>(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return _PhotoAdjustSheet(
+          photoPath: path,
+          initialScale: photoScale,
+          initialOffsetX: photoOffsetX,
+          initialOffsetY: photoOffsetY,
+        );
+      },
+    );
+
+    if (!mounted || result == null) return;
+
+    setState(() {
+      photoScale = result.scale;
+      photoOffsetX = result.offsetX;
+      photoOffsetY = result.offsetY;
+    });
+    markChanged();
   }
 
   Future<String> _savePickedPhotoToAppStorage(XFile pickedImage) async {
@@ -870,14 +837,9 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
+      onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-
-        final shouldPop = await handleBack();
-
-        if (shouldPop && context.mounted) {
-          Navigator.of(context).pop();
-        }
+        handleBackTap();
       },
       child: Scaffold(
         backgroundColor: GakujiColors.warmBackground,
@@ -890,53 +852,40 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                 leftIconSize: GakujiTopBar.backIconSize,
                 leftIconColor: GakujiColors.darkGray,
                 onLeftTap: handleBackTap,
-                titleWidget: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      termTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 24,
-                        height: 1,
-                        color: GakujiColors.darkGray,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Card Edit',
-                      textAlign: TextAlign.center,
-                      textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        height: 1,
-                        color: GakujiColors.darkGray,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
+                title: termTitle,
+                titleStyle: TextStyle(
+                  fontSize: 24,
+                  height: 1,
+                  color: GakujiColors.darkGray,
+                  fontWeight: FontWeight.w800,
                 ),
                 rightWidget: _topRightAction(),
               ),
-              Expanded(
-                child: Center(
-                  child: isLoadingEditData
-                      ? const CircularProgressIndicator(
-                          color: GakujiColors.reading,
-                        )
-                      : GakujiFadedScroll(
-                          child: SingleChildScrollView(
-                            padding:
-                                const EdgeInsets.fromLTRB(24, 30, 24, 46),
-                            child: _cardPreview(),
-                          ),
-                        ),
+              Padding(
+                padding: const EdgeInsets.only(top: 2, bottom: 8),
+                child: Text(
+                  'Card Edit',
+                  textAlign: TextAlign.center,
+                  textScaler: TextScaler.noScaling,
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1,
+                    color: GakujiColors.mediumGray,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
+              ),
+              Expanded(
+                child: isLoadingEditData
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: GakujiColors.reading,
+                        ),
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+                        child: _cardPreview(),
+                      ),
               ),
             ],
           ),
@@ -946,14 +895,17 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
   }
 
   Widget _topRightAction() {
+    if (!hasUnsavedChanges && !isSaving && !isPickingPhoto) {
+      return const SizedBox(
+        width: 76,
+        height: GakujiTopBar.buttonSize,
+      );
+    }
+
     return TextButton(
-      onPressed: isSaving || isPickingPhoto
-          ? null
-          : hasUnsavedChanges
-              ? saveChanges
-              : handleBackTap,
+      onPressed: isSaving || isPickingPhoto ? null : saveChanges,
       style: TextButton.styleFrom(
-        foregroundColor: hasUnsavedChanges ? accentBlue : softTextGray,
+        foregroundColor: accentBlue,
         disabledForegroundColor: softTextGray,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         minimumSize: const Size(76, GakujiTopBar.buttonSize),
@@ -963,14 +915,12 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
             ? 'Saving'
             : isPickingPhoto
                 ? 'Loading'
-                : hasUnsavedChanges
-                    ? 'Save'
-                    : 'Cancel',
+                : 'Save',
         textScaler: TextScaler.noScaling,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 16,
           height: 1,
-          fontWeight: hasUnsavedChanges ? FontWeight.w800 : FontWeight.w700,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -983,42 +933,49 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
     final previewPhotoPath = photoEnabled ? photoPath : null;
 
     return Column(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        ReadingCardFrame(
-          maxWidth: 430,
-          child: ReadingCardBackContent(
-            glosses: glosses,
-            note: cardNote,
-            examples: selectedExamples.take(maxExamples).toList(),
-            photoPath: previewPhotoPath,
-            onGlossTap: openGlossSheet,
-            onNoteTap: openNoteSheet,
-            onExamplesTap: openExamplesSheet,
-            onPhotoTap: openPhotoPicker,
+        Expanded(
+          child: ReadingCardFrame(
+            minHeight: 0,
+            maxWidth: 430,
+            child: ReadingCardBackContent(
+              glosses: glosses,
+              note: cardNote,
+              examples: selectedExamples.take(maxExamples).toList(),
+              photoPath: previewPhotoPath,
+              photoScale: photoScale,
+              photoOffsetX: photoOffsetX,
+              photoOffsetY: photoOffsetY,
+              textColor:
+                  blueCardTextEnabled ? GakujiColors.reading : null,
+              onGlossTap: openGlossSheet,
+              onExamplesTap: openExamplesSheet,
+              onPhotoTap: previewPhotoPath == null
+                  ? openPhotoPicker
+                  : openPhotoAdjuster,
+            ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         _previewEditControls(),
       ],
     );
   }
 
   Widget _previewEditControls() {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: 10,
-      runSpacing: 10,
-      children: [
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 127),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 10,
+          runSpacing: 10,
+          children: [
         _previewEditButton(
           icon: Icons.translate_rounded,
           label: 'Glosses',
           onTap: openGlossSheet,
-        ),
-        _previewEditButton(
-          icon: Icons.notes_rounded,
-          label: cardNote.trim().isEmpty ? 'Add note' : 'Note',
-          onTap: openNoteSheet,
         ),
         _previewEditButton(
           icon: Icons.format_quote_rounded,
@@ -1030,6 +987,12 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
           label: photoEnabled ? 'Change photo' : 'Add photo',
           onTap: openPhotoPicker,
         ),
+        if (photoEnabled && photoFileExists)
+          _previewEditButton(
+            icon: Icons.crop_free_rounded,
+            label: 'Adjust photo',
+            onTap: openPhotoAdjuster,
+          ),
         if (photoEnabled)
           _previewEditButton(
             icon: Icons.delete_outline_rounded,
@@ -1037,7 +1000,9 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
             onTap: removePhoto,
             destructive: true,
           ),
-      ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -1092,6 +1057,195 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
 }
 
+class _PhotoTransformResult {
+  final double scale;
+  final double offsetX;
+  final double offsetY;
+
+  const _PhotoTransformResult({
+    required this.scale,
+    required this.offsetX,
+    required this.offsetY,
+  });
+}
+
+class _PhotoAdjustSheet extends StatefulWidget {
+  final String photoPath;
+  final double initialScale;
+  final double initialOffsetX;
+  final double initialOffsetY;
+
+  const _PhotoAdjustSheet({
+    required this.photoPath,
+    required this.initialScale,
+    required this.initialOffsetX,
+    required this.initialOffsetY,
+  });
+
+  @override
+  State<_PhotoAdjustSheet> createState() => _PhotoAdjustSheetState();
+}
+
+class _PhotoAdjustSheetState extends State<_PhotoAdjustSheet> {
+  late double workingScale;
+  late double workingOffsetX;
+  late double workingOffsetY;
+
+  @override
+  void initState() {
+    super.initState();
+    workingScale = widget.initialScale.clamp(0.75, 3.0).toDouble();
+    workingOffsetX = widget.initialOffsetX.clamp(-1.0, 1.0).toDouble();
+    workingOffsetY = widget.initialOffsetY.clamp(-1.0, 1.0).toDouble();
+  }
+
+  void _reset() {
+    setState(() {
+      workingScale = 1.0;
+      workingOffsetX = 0.0;
+      workingOffsetY = 0.0;
+    });
+  }
+
+  void _save() {
+    Navigator.pop(
+      context,
+      _PhotoTransformResult(
+        scale: workingScale,
+        offsetX: workingOffsetX,
+        offsetY: workingOffsetY,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomSafeInset = MediaQuery.viewPaddingOf(context).bottom;
+    final maxPreviewWidth = (MediaQuery.sizeOf(context).width - 40)
+        .clamp(220.0, 380.0)
+        .toDouble();
+    final previewHeight = maxPreviewWidth * (132 / 188);
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(20, 0, 20, 18 + bottomSafeInset),
+      decoration: BoxDecoration(
+        color: GakujiColors.warmBackground,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(22),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 42,
+                height: 5,
+                margin: const EdgeInsets.only(top: 9, bottom: 12),
+                decoration: BoxDecoration(
+                  color: GakujiColors.softGray,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            Text(
+              'Adjust Photo',
+              textAlign: TextAlign.center,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 18,
+                height: 1,
+                fontWeight: FontWeight.w800,
+                color: GakujiColors.darkGray,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Pinch to zoom • Drag to reposition',
+              textAlign: TextAlign.center,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.15,
+                fontWeight: FontWeight.w600,
+                color: GakujiColors.mediumGray,
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: maxPreviewWidth,
+              height: previewHeight,
+              child: ReadingCardPhotoView(
+                path: widget.photoPath,
+                width: maxPreviewWidth,
+                height: previewHeight,
+                scale: workingScale,
+                offsetX: workingOffsetX,
+                offsetY: workingOffsetY,
+                interactive: true,
+                onTransformChanged: (scale, offsetX, offsetY) {
+                  setState(() {
+                    workingScale = scale;
+                    workingOffsetX = offsetX;
+                    workingOffsetY = offsetY;
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _reset,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: GakujiColors.darkGray,
+                      side: BorderSide(
+                        color: GakujiColors.softBorder,
+                        width: 1.2,
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text(
+                      'Reset',
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _save,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: GakujiColors.reading,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text(
+                      'Done',
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CardEditBottomSheet extends StatelessWidget {
   final String title;
   final Widget child;
@@ -1103,19 +1257,19 @@ class _CardEditBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
+    final bottomSafeInset = MediaQuery.viewPaddingOf(context).bottom;
+
+    return Material(
+      color: GakujiColors.warmBackground,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(22),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Container(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.74,
         ),
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-        decoration: BoxDecoration(
-          color: GakujiColors.warmBackground,
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(22),
-          ),
-        ),
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 18 + bottomSafeInset),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1202,10 +1356,6 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
 
   void moveGloss(int oldIndex, int newIndex) {
     setState(() {
-      if (newIndex > oldIndex) {
-        newIndex -= 1;
-      }
-
       final gloss = workingSelection.removeAt(oldIndex);
       workingSelection.insert(newIndex, gloss);
     });
@@ -1251,7 +1401,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       radius: 13,
-                      backgroundColor: accentBlue,
+                      backgroundColor: GakujiColors.reading,
                       child: Text(
                         option.senseLabel,
                         textScaler: TextScaler.noScaling,
@@ -1286,8 +1436,7 @@ class _GlossPickerSheetState extends State<_GlossPickerSheet> {
                     child: Text(
                       'No glosses available',
                       textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: GakujiText.body.copyWith(
                         color: GakujiColors.mediumGray,
                       ),
                     ),
@@ -1456,8 +1605,7 @@ class _ExamplePickerSheetState extends State<_ExamplePickerSheet> {
                       'No examples for the selected glosses',
                       textAlign: TextAlign.center,
                       textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: GakujiText.body.copyWith(
                         color: GakujiColors.mediumGray,
                       ),
                     ),

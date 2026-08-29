@@ -2,12 +2,103 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Anonymous Firebase Auth is used only to give Guest Mode a stable UID.
+    // Guest study data must remain device-local, so anonymous users receive no
+    // Firestore access. Gakuji's current permanent providers (Google and
+    // Email/Password) both provide an email claim after account upgrade.
+    function isRegisteredUser() {
+      return isSignedIn() && request.auth.token.email is string;
+    }
+
+    function isOwner(userId) {
+      return isRegisteredUser() && request.auth.uid == userId;
+    }
+
+    // Registered Gakuji user data: each user can access only their own account
+    // document and its subcollections. Anonymous Guest Mode cannot read/write
+    // this tree at all.
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isOwner(userId);
 
       match /{document=**} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isOwner(userId);
       }
+    }
+
+    // Verification codes are created and checked only by Cloud Functions
+    // through the Admin SDK. Clients must never be able to read, forge, or
+    // overwrite these server-side records.
+    match /emailVerificationCodes/{userId} {
+      allow read, write: if false;
+    }
+
+    // Global username registry. The document ID is the normalized username
+    // (for example: "Manamoji" -> /usernames/manamoji).
+    match /usernames/{usernameId} {
+      // Availability checks use an exact document get. A registered user may
+      // also query only registry entries owned by their own UID so Gakuji can
+      // recover a still-reserved previous username from older account data.
+      allow get: if isRegisteredUser();
+      allow list: if isRegisteredUser()
+        && resource.data.uid == request.auth.uid;
+
+      // First-time username claim. A client may only claim a registry entry
+      // for its own registered Firebase UID.
+      allow create: if isRegisteredUser()
+        && usernameId.matches('^[a-z0-9_]{3,20}$')
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.username is string
+        && request.resource.data.status == 'active'
+        && request.resource.data.reservedUntil == null;
+
+      // Username updates are intentionally limited to the transitions the
+      // current Gakuji client needs:
+      //   1. the current owner marks their old active name as reserved;
+      //   2. the owner reactivates the exact previous name during cooldown;
+      //   3. an expired reserved name is claimed by a registered user.
+      allow update: if isRegisteredUser()
+        && usernameId.matches('^[a-z0-9_]{3,20}$')
+        && (
+          (
+            resource.data.uid == request.auth.uid
+            && request.resource.data.uid == request.auth.uid
+            && resource.data.status == 'active'
+            && request.resource.data.status == 'reserved'
+            && request.resource.data.reservedUntil is timestamp
+          )
+          ||
+          (
+            // During the cooldown, the owner may reactivate only the exact
+            // previous username recorded on their user document.
+            resource.data.uid == request.auth.uid
+            && request.resource.data.uid == request.auth.uid
+            && resource.data.status == 'reserved'
+            && resource.data.reservedUntil is timestamp
+            && resource.data.reservedUntil > request.time
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.previousUsernameNormalized == usernameId
+            && request.resource.data.username is string
+            && request.resource.data.status == 'active'
+            && request.resource.data.reservedUntil == null
+          )
+          ||
+          (
+            resource.data.status == 'reserved'
+            && resource.data.reservedUntil is timestamp
+            && resource.data.reservedUntil <= request.time
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.username is string
+            && request.resource.data.status == 'active'
+            && request.resource.data.reservedUntil == null
+          )
+        );
+
+      // The client does not need to delete registry entries. Expired reserved
+      // names are reused by overwriting them during a valid claim transaction.
+      allow delete: if false;
     }
   }
 }

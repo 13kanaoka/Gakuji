@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../data/review_card_data.dart';
 import '../models/deck.dart';
@@ -178,7 +179,7 @@ class _ReviewCalendarPageState extends State<ReviewCalendarPage> {
 
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (context) => ReviewCalendarTermListPage(
           deck: widget.deck,
           date: selectedDate,
@@ -256,7 +257,7 @@ class _ReviewCalendarPageState extends State<ReviewCalendarPage> {
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: () => Navigator.pop(context),
       title: widget.title,
-      titleStyle: GakujiText.large.copyWith(
+      titleStyle: GakujiText.dictionaryTopBarTitle.copyWith(
         color: GakujiColors.darkGray,
       ),
     );

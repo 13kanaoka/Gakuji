@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../models/deck_import_row.dart';
 import '../models/term.dart';
@@ -157,7 +158,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
 
     final imported = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (context) => ImportTermsPreviewPage(
           document: selectedDocument,
           mapping: mapping,
@@ -198,7 +199,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: () => Navigator.pop(context),
       title: document == null ? null : 'Import Terms',
-      titleStyle: GakujiText.small.copyWith(
+      titleStyle: GakujiText.pageTitle.copyWith(
         color: GakujiColors.darkGray,
       ),
     );
@@ -214,7 +215,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
           const SizedBox(height: 78),
           Icon(
             Icons.ios_share_rounded,
-            size: 88,
+            size: 76,
             color: GakujiColors.darkGray,
           ),
           const SizedBox(height: 34),
@@ -222,10 +223,8 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
             'Import Terms',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: GakujiText.large.copyWith(
+            style: GakujiText.pageTitle.copyWith(
               color: GakujiColors.darkGray,
-              fontSize: 28,
-              height: 1,
             ),
           ),
           const SizedBox(height: 22),

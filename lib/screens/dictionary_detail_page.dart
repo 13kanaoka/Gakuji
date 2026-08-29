@@ -1,21 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/deck_data.dart';
+import '../data/recent_deck_data.dart';
 import '../data/review_card_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
 import '../services/deck_storage.dart';
 import '../services/dictionary_service.dart';
+import '../services/dictionary_note_service.dart';
 import '../widgets/gakuji_faded_scroll.dart';
+import '../widgets/gakuji_furigana_sentence.dart';
 import '../widgets/gakuji_deck_save_sheet.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'kanji_dictionary_detail_page.dart';
 import 'sentence_detail_page.dart';
 import '../services/gakuji_user_data_store.dart';
+import '../services/japanese_conjugation_service.dart';
 
 class DictionaryDetailBackResult {
   final bool returnToResults;
@@ -37,6 +42,26 @@ class DictionaryDetailPage extends StatefulWidget {
   State<DictionaryDetailPage> createState() => _DictionaryDetailPageState();
 }
 
+class _ConjugationDisplayGroup {
+  final String title;
+  final List<_ConjugationDisplayRow> rows;
+
+  const _ConjugationDisplayGroup({
+    required this.title,
+    required this.rows,
+  });
+}
+
+class _ConjugationDisplayRow {
+  final String label;
+  final String value;
+
+  const _ConjugationDisplayRow({
+    required this.label,
+    required this.value,
+  });
+}
+
 class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   static Color get sectionColor => GakujiColors.warmCard;
   static const Color accentBlue = GakujiColors.reading;
@@ -45,8 +70,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   static Color get softBlueFill => GakujiColors.warmCard;
   static Color get darkText => GakujiColors.darkGray;
 
-  static const double topActionPillWidth = 92;
-  static const int maxNoteCharacters = 400;
+  static const int maxNoteCharacters = DictionaryNoteService.maxCharacters;
   static const int maxExamplesPerSense = 3;
   static const Duration topBarTitleFadeDuration =
       Duration(milliseconds: 180);
@@ -103,7 +127,6 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
 
   String get sourceId => widget.word.sourceId ?? widget.word.id;
 
-  String get notePreferenceKey => 'gakuji_dictionary_note_$sourceId';
 
   @override
   void initState() {
@@ -233,9 +256,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   }
 
   Future<void> _loadSavedNote() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedNote = prefs.getString(notePreferenceKey);
-    final initialNote = savedNote ?? widget.word.note ?? '';
+    final initialNote = await DictionaryNoteService.loadForTerm(widget.word);
 
     if (!mounted) return;
 
@@ -260,6 +281,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   Future<void> _setDirectSaveDeck(Deck deck) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(directSaveDeckPreferenceKey, deck.id);
+    await markDeckOpenedRecently(deck.id);
 
     if (!mounted) return;
 
@@ -343,14 +365,16 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     String value, {
     required bool closeEditor,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setString(notePreferenceKey, value);
+    final savedNote = await DictionaryNoteService.saveForTerm(
+      term: widget.word,
+      note: value,
+    );
 
     if (!mounted) return;
 
     setState(() {
-      noteText = value;
+      noteText = savedNote;
+      noteController.text = savedNote;
 
       if (closeEditor) {
         isEditingNote = false;
@@ -359,11 +383,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   }
 
   String _cleanNoteText(String value) {
-    if (value.length <= maxNoteCharacters) {
-      return value.trimRight();
-    }
-
-    return value.substring(0, maxNoteCharacters).trimRight();
+    return DictionaryNoteService.clean(value);
   }
 
   Future<void> _handleBackTap() async {
@@ -398,7 +418,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       widget.word,
       id: '${deck.id}_${sourceId}_${DateTime.now().microsecondsSinceEpoch}',
       marked: false,
-    );
+    ).copyWith(note: noteText);
   }
 
   bool get isSaved {
@@ -512,6 +532,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     }
 
     scheduleUserDataSave();
+    await markDeckOpenedRecently(deck.id);
     await _syncReviewCardsIfEnabled(deck);
   }
 
@@ -551,6 +572,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     }
 
     scheduleUserDataSave();
+    await markDeckOpenedRecently(deck.id);
     await _syncReviewCardsIfEnabled(deck);
   }
 
@@ -558,6 +580,10 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     if (isEditingNote) {
       await _saveNoteFromController(closeEditor: true);
     }
+
+    if (!mounted) return;
+
+    await loadRecentlyOpenedDeckIds();
 
     if (!mounted) return;
 
@@ -590,7 +616,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
 
     Navigator.push(
       context,
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (_) => KanjiDictionaryDetailPage(
           kanjiEntry: kanjiEntry,
         ),
@@ -608,7 +634,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     }
 
     Navigator.of(context).push(
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (_) => SentenceDetailPage(
           example: example,
           senseLabel: _definitionLabel(labelIndex),
@@ -632,7 +658,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       if (!pageContext.mounted) return;
 
       await Navigator.of(pageContext).push(
-        MaterialPageRoute(
+        GakujiPageRoute(
           builder: (_) => DictionaryDetailPage(word: term),
         ),
       );
@@ -700,7 +726,12 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                           children: [
                             _entryHeader(word),
                             _noteSection(word),
+                            _infoSection(word),
                             if (_shouldShowKanjiSection(word)) _kanjiSection(),
+                            if (JapaneseConjugationService.isInflectableTerm(
+                              word,
+                            ))
+                              _conjugationSection(word),
                             _examplesSection(word),
                           ],
                         ),
@@ -798,36 +829,18 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: _wordTitleLine(word)),
-              if (word.isCommon)
-                SizedBox(
-                  width: topActionPillWidth,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Center(child: _commonBadge()),
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: 18),
-          if (word.partOfSpeech.trim().isNotEmpty) ...[
-            Text(
-              word.partOfSpeech,
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.12,
-                color: softTextGray,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 7),
+          if (_partOfSpeechText(word).isNotEmpty) ...[
+            const SizedBox(height: 10),
+            _partOfSpeechLine(word),
           ],
+          const SizedBox(height: 15),
           if (senses.isEmpty)
-             Text(
+            Text(
               'No definitions yet',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 16,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 height: 1.2,
                 color: softTextGray,
               ),
@@ -847,6 +860,66 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     );
   }
 
+  Widget _infoSection(Term word) {
+    final items = <MapEntry<String, String>>[];
+
+    if ((word.jlptLevel ?? '').trim().isNotEmpty) {
+      items.add(MapEntry('JLPT', word.jlptLevel!.trim()));
+    }
+
+    if (word.isCommon) {
+      items.add(const MapEntry('Frequency', 'Common'));
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader('Info'),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 11, 22, 15),
+          child: Column(
+            children: items.map((item) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 7),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 104,
+                      child: Text(
+                        '${item.key}:',
+                        textScaler: TextScaler.noScaling,
+                        style: GakujiText.dictionaryDetailBody.copyWith(
+                          height: 1.15,
+                          color: accentBlue,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        item.value,
+                        textScaler: TextScaler.noScaling,
+                        style: GakujiText.dictionaryDetailBody.copyWith(
+                          height: 1.15,
+                          color: darkText,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(growable: false),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _wordTitleLine(Term word) {
     return Container(
       key: entryTitleKey,
@@ -858,10 +931,8 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           Text(
             word.reading,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 27,
-              height: 1,
-              fontWeight: FontWeight.w700,
+            style: GakujiText.dictionaryTerm.copyWith(
+              fontSize: (GakujiText.dictionaryTerm.fontSize ?? 22) + 2,
               color: darkText,
             ),
           ),
@@ -869,14 +940,24 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             Text(
               '【${word.kanjiBracketText}】',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 23,
-                height: 1,
-                fontWeight: FontWeight.w700,
+              style: GakujiText.dictionaryTerm.copyWith(
+                fontSize: (GakujiText.dictionaryTerm.fontSize ?? 22) + 2,
                 color: darkText,
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _partOfSpeechLine(Term word) {
+    return Text(
+      _partOfSpeechText(word),
+      textScaler: TextScaler.noScaling,
+      style: GakujiText.dictionaryDetailBody.copyWith(
+        height: 1.15,
+        color: softTextGray,
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -922,11 +1003,9 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             child: RichText(
               textScaler: TextScaler.noScaling,
               text: TextSpan(
-                style: TextStyle(
-                  fontSize: 17.5,
+                style: GakujiText.dictionaryDetailBody.copyWith(
                   height: 1.22,
                   color: darkText,
-                  fontWeight: FontWeight.w400,
                 ),
                 children: [
                   TextSpan(text: definition),
@@ -944,22 +1023,150 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     );
   }
 
-  Widget _commonBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: accentBlue,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: const Text(
-        'Common',
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 12.5,
-          height: 1.1,
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
+  Widget _conjugationSection(Term word) {
+    final forms = JapaneseConjugationService.formsForTerm(word);
+
+    if (forms.isEmpty) return const SizedBox.shrink();
+
+    final groups = _conjugationGroups(forms);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ...groups.map(_conjugationGroup),
+      ],
+    );
+  }
+
+  List<_ConjugationDisplayGroup> _conjugationGroups(
+    List<JapaneseConjugationForm> forms,
+  ) {
+    String? valueFor(String label) {
+      for (final form in forms) {
+        if (form.label == label && form.value.trim().isNotEmpty) {
+          return form.value.trim();
+        }
+      }
+
+      return null;
+    }
+
+    _ConjugationDisplayRow? row(String label, String sourceLabel) {
+      final value = valueFor(sourceLabel);
+      if (value == null) return null;
+
+      return _ConjugationDisplayRow(label: label, value: value);
+    }
+
+    _ConjugationDisplayGroup group(
+      String title,
+      List<_ConjugationDisplayRow?> rows,
+    ) {
+      return _ConjugationDisplayGroup(
+        title: title,
+        rows: rows.whereType<_ConjugationDisplayRow>().toList(),
+      );
+    }
+
+    final usesMasuLabels = valueFor('Polite conditional') != null ||
+        valueFor('Polite volitional') != null;
+
+    return [
+      group('Positive', [
+        row('Present:', 'Dictionary'),
+        row('Past:', 'Past'),
+        row('-te:', 'て-form'),
+        row('-eba conditional:', 'Conditional'),
+        row('-tara conditional:', 'Tara conditional'),
+        row('Potential:', 'Potential'),
+        row('Passive:', 'Passive'),
+        row('Causative:', 'Causative'),
+        row('Imperative:', 'Imperative'),
+        row('Volitional:', 'Volitional'),
+        row('Adverbial:', 'Adverbial'),
+      ]),
+      group('Negative', [
+        row('Present:', 'Negative'),
+        row('Past:', 'Negative past'),
+        row('-te:', 'Negative て-form'),
+        row('-eba conditional:', 'Negative conditional'),
+        row('-tara conditional:', 'Negative tara conditional'),
+        row('Potential:', 'Negative potential'),
+        row('Passive:', 'Negative passive'),
+        row('Causative:', 'Negative causative'),
+        row('Imperative:', 'Negative imperative'),
+      ]),
+      group(usesMasuLabels ? 'Masu' : 'Polite', [
+        row('Present:', 'Polite'),
+        row('Past:', 'Polite past'),
+        row('-eba conditional:', 'Polite conditional'),
+        row('-tara conditional:', 'Polite tara conditional'),
+        row('Potential:', 'Polite potential'),
+        row('Passive:', 'Polite passive'),
+        row('Causative:', 'Polite causative'),
+        row('Imperative:', 'Polite imperative'),
+        row('Volitional:', 'Polite volitional'),
+      ]),
+      group(usesMasuLabels ? 'Masu negative' : 'Polite negative', [
+        row('Present:', 'Polite negative'),
+        row('Past:', 'Polite negative past'),
+        row('Potential:', 'Polite negative potential'),
+        row('Passive:', 'Polite negative passive'),
+        row('Causative:', 'Polite negative causative'),
+        row('Imperative:', 'Polite negative imperative'),
+      ]),
+    ].where((group) => group.rows.isNotEmpty).toList(growable: false);
+  }
+
+  Widget _conjugationGroup(_ConjugationDisplayGroup group) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(group.title),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+          child: Column(
+            children: group.rows.map(_conjugationRow).toList(growable: false),
+          ),
         ),
+      ],
+    );
+  }
+
+  Widget _conjugationRow(_ConjugationDisplayRow row) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          SizedBox(
+            width: 134,
+            child: Text(
+              row.label,
+              textAlign: TextAlign.right,
+              textScaler: TextScaler.noScaling,
+              style: GakujiText.dictionaryDetailBody.copyWith(
+                height: 1.12,
+                color: GakujiColors.reading,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              row.value,
+              textScaler: TextScaler.noScaling,
+              style: GakujiText.dictionaryDetailBody.copyWith(
+                fontFamily: GakujiFonts.japanese,
+                height: 1.12,
+                color: darkText,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -981,11 +1188,9 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return Text(
       'Loading note...',
       textScaler: TextScaler.noScaling,
-      style: TextStyle(
-        fontSize: 16,
+      style: GakujiText.dictionaryDetailBody.copyWith(
         height: 1.15,
         color: softTextGray,
-        fontWeight: FontWeight.w400,
       ),
     );
   }
@@ -1007,11 +1212,9 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         child: Text(
           hasNote ? noteText : 'Write a note',
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 16,
+          style: GakujiText.dictionaryDetailBody.copyWith(
             height: 1.2,
             color: hasNote ? darkText : softTextGray,
-            fontWeight: FontWeight.w400,
           ),
         ),
       ),
@@ -1033,14 +1236,12 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
           cursorColor: accentBlue,
-          style: TextStyle(
-            fontSize: 16,
+          style: GakujiText.dictionaryDetailBody.copyWith(
             height: 1.2,
             color: darkText,
-            fontWeight: FontWeight.w400,
           ),
           decoration: InputDecoration(
-            hintText: 'Write a note',
+            hintText: 'Add a personal definition, example, or note',
             hintStyle:  TextStyle(
               color: softTextGray,
               fontWeight: FontWeight.w400,
@@ -1104,9 +1305,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         child: Text(
           label,
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 15,
-            height: 1,
+          style: GakujiText.dictionaryDetailBody.copyWith(
             color: color,
             fontWeight: FontWeight.w600,
           ),
@@ -1131,12 +1330,10 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           color: accentBlue,
           borderRadius: BorderRadius.circular(999),
         ),
-        child: const Text(
+        child: Text(
           'Done',
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 14.5,
-            height: 1,
+          style: GakujiText.dictionaryDetailBody.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w700,
           ),
@@ -1156,8 +1353,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             child: Text(
               'Loading kanji...',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 color: softTextGray,
               ),
             ),
@@ -1168,8 +1364,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             child: Text(
               'No kanji details found',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 color: softTextGray,
               ),
             ),
@@ -1225,8 +1420,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                         Text(
                           meaning,
                           textScaler: TextScaler.noScaling,
-                          style: TextStyle(
-                            fontSize: 16,
+                          style: GakujiText.dictionaryDetailBody.copyWith(
                             height: 1.14,
                             color: darkText,
                           ),
@@ -1237,8 +1431,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                           child: Text(
                             kanjiEntry.kunyomi.join(', '),
                             textScaler: TextScaler.noScaling,
-                            style: TextStyle(
-                              fontSize: 15,
+                            style: GakujiText.dictionaryDetailBody.copyWith(
                               height: 1.14,
                               color: softTextGray,
                             ),
@@ -1250,8 +1443,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                           child: Text(
                             kanjiEntry.onyomi.join(', '),
                             textScaler: TextScaler.noScaling,
-                            style: TextStyle(
-                              fontSize: 15,
+                            style: GakujiText.dictionaryDetailBody.copyWith(
                               height: 1.14,
                               color: softTextGray,
                             ),
@@ -1296,30 +1488,16 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('Examples'),
-        if (exampleSenseEntries.isEmpty)
-           Padding(
-            padding: EdgeInsets.fromLTRB(22, 15, 22, 17),
-            child: Text(
-              'No examples yet',
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
-                color: softTextGray,
-              ),
-            ),
-          )
-        else
-          ...exampleSenseEntries.asMap().entries.map((groupEntry) {
-            final indexedSense = groupEntry.value;
+        ...exampleSenseEntries.asMap().entries.map((groupEntry) {
+          final indexedSense = groupEntry.value;
 
-            return _exampleSenseGroup(
-              labelIndex: indexedSense.key,
-              sense: indexedSense.value,
-              showBottomDivider:
-                  groupEntry.key != exampleSenseEntries.length - 1,
-            );
-          }),
+          return _exampleSenseGroup(
+            labelIndex: indexedSense.key,
+            sense: indexedSense.value,
+            showBottomDivider:
+                groupEntry.key != exampleSenseEntries.length - 1,
+          );
+        }),
       ],
     );
   }
@@ -1335,66 +1513,46 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         : sense.examples.take(maxExamplesPerSense).toList();
     final hiddenCount = sense.examples.length - visibleExamples.length;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 13, 22, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _senseBadge(labelIndex),
-          const SizedBox(height: 4),
-          ...visibleExamples.asMap().entries.map((entry) {
-            return _exampleRow(
-              example: entry.value,
-              labelIndex: labelIndex,
-              showDivider: entry.key != visibleExamples.length - 1,
-            );
-          }),
-          if (sense.examples.length > maxExamplesPerSense)
-            _exampleExpansionButton(
-              senseIndex: sense.index,
-              isExpanded: isExpanded,
-              hiddenCount: hiddenCount,
-            ),
-          if (showBottomDivider)
-             Padding(
-              padding: EdgeInsets.only(top: 13),
-              child: Divider(
-                height: 1,
-                thickness: 1,
-                color: dividerColor,
-              ),
-            )
-          else
-            const SizedBox(height: 13),
-        ],
-      ),
-    );
-  }
-
-  Widget _senseBadge(int labelIndex) {
-    return Container(
-      width: 19,
-      height: 19,
-      margin: const EdgeInsets.only(top: 1),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: softTextGray,
-          width: 1.5,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(
+          'Examples',
+          badgeLabel: _definitionLabel(labelIndex),
         ),
-      ),
-      child: Center(
-        child: Text(
-          _definitionLabel(labelIndex),
-          textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 10.5,
-            height: 1,
-            color: softTextGray,
-            fontWeight: FontWeight.w800,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ...visibleExamples.asMap().entries.map((entry) {
+                return _exampleRow(
+                  example: entry.value,
+                  labelIndex: labelIndex,
+                  showDivider: entry.key != visibleExamples.length - 1,
+                );
+              }),
+              if (sense.examples.length > maxExamplesPerSense)
+                _exampleExpansionButton(
+                  senseIndex: sense.index,
+                  isExpanded: isExpanded,
+                  hiddenCount: hiddenCount,
+                ),
+              if (showBottomDivider)
+                Padding(
+                  padding: EdgeInsets.only(top: 13),
+                  child: Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: dividerColor,
+                  ),
+                )
+              else
+                const SizedBox(height: 13),
+            ],
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -1422,9 +1580,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
             Text(
               isExpanded ? 'Show fewer' : 'More examples ($hiddenCount)',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15,
-                height: 1,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 color: softTextGray,
                 fontWeight: FontWeight.w600,
               ),
@@ -1468,33 +1624,27 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (example.reading.trim().isNotEmpty) ...[
-                          Text(
-                            example.reading,
-                            textScaler: TextScaler.noScaling,
-                            style: TextStyle(
-                              fontSize: 12,
-                              height: 1.15,
-                              color: darkText,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                        ],
-                        Text(
-                          example.japanese,
-                          textScaler: TextScaler.noScaling,
-                          style: TextStyle(
-                            fontSize: 18,
+                        GakujiFuriganaSentence(
+                          example: example,
+                          runSpacing: 5,
+                          furiganaGap: 1.5,
+                          emptyLineSpacingFactor: 0.5,
+                          textStyle: GakujiText.dictionaryDetailBody.copyWith(
                             height: 1.24,
                             color: darkText,
                           ),
+                          furiganaStyle: TextStyle(
+                            fontSize: 10.5,
+                            height: 1,
+                            color: softTextGray,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 5),
                         Text(
                           example.english,
                           textScaler: TextScaler.noScaling,
-                          style: TextStyle(
-                            fontSize: 17,
+                          style: GakujiText.dictionaryDetailBody.copyWith(
                             height: 1.18,
                             color: darkText,
                           ),
@@ -1526,7 +1676,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     );
   }
 
-  Widget _sectionHeader(String title) {
+  Widget _sectionHeader(String title, {String? badgeLabel}) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
@@ -1543,15 +1693,43 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           ),
         ),
       ),
-      child: Text(
-        title,
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          height: 1,
-          color: darkText,
-        ),
+      child: Row(
+        children: [
+          Text(
+            title,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.dictionaryDetailBody.copyWith(
+              fontWeight: FontWeight.w600,
+              color: darkText,
+            ),
+          ),
+          if (badgeLabel != null) ...[
+            const SizedBox(width: 7),
+            Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: darkText,
+                  width: 1.8,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  badgeLabel,
+                  textScaler: TextScaler.noScaling,
+                  style: TextStyle(
+                    fontSize: 11,
+                    height: 1,
+                    color: darkText,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1599,7 +1777,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           onTap: onTap,
           child: Icon(
             icon,
-            size: 30,
+            size: GakujiTopBar.iconSize,
             color: iconColor,
           ),
         ),
@@ -1611,6 +1789,28 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return word.senses
         .where((sense) => sense.glosses.isNotEmpty)
         .toList(growable: false);
+  }
+
+  String _partOfSpeechText(Term word) {
+    final tags = <String>[];
+    final seen = <String>{};
+
+    for (final sense in _definitionSenses(word)) {
+      for (final tag in sense.partOfSpeechTags) {
+        final cleaned = tag.trim();
+        final key = cleaned.toLowerCase();
+
+        if (cleaned.isEmpty || !seen.add(key)) continue;
+        tags.add(cleaned);
+      }
+    }
+
+    if (tags.isEmpty) {
+      final fallback = word.partOfSpeech.trim();
+      if (fallback.isNotEmpty) tags.add(fallback);
+    }
+
+    return tags.join(', ');
   }
 
   String _definitionLabel(int index) {

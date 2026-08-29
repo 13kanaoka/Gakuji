@@ -116,7 +116,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      // Keep the app painted at full height behind iOS's rounded keyboard.
+      // Otherwise the keyboard's exposed corners reveal the black host window,
+      // and the nested Dictionary page changes height as the keyboard moves.
+      resizeToAvoidBottomInset: false,
+      backgroundColor: GakujiColors.warmBackground,
       extendBody: true,
       body: Stack(
         children: [
@@ -158,6 +162,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             curve: Curves.easeOutCubic,
             child: Center(
               child: Container(
+                width: 304,
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
                   color: GakujiColors.warmCard,
@@ -204,10 +209,13 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                             children: [
                               _navIcon(Icons.search_rounded, 0),
                               _navImageIcon(
-                                'assets/images/nav_library_books.png',
+                                'assets/images/flashcards.png',
                                 1,
                               ),
-                              _navIcon(Icons.school_rounded, 2),
+                              _navImageIcon(
+                                'assets/images/nav_learning_book.png',
+                                2,
+                              ),
                             ],
                           ),
                         ],
@@ -262,7 +270,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             curve: Curves.easeOutCubic,
             child: Icon(
               icon,
-              size: 28,
+              size: 30,
               color: selected
                   ? GakujiColors.darkGray
                   : GakujiColors.mediumGray,

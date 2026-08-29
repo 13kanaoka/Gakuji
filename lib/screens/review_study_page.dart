@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/reading_card_edit_data.dart';
 import '../data/review_card_data.dart';
@@ -10,12 +9,13 @@ import '../models/review_card.dart';
 import '../models/term.dart';
 import '../models/writing_point.dart';
 import '../models/writing_prompt.dart';
-import '../services/dictionary_service.dart';
+import '../services/gakuji_local_preferences.dart';
 import '../services/gakuji_user_data_store.dart';
 import '../services/reading_card_edit_storage.dart';
 import '../services/review_scheduler.dart';
 import '../services/review_settings.dart';
 import '../services/prompt_converter.dart';
+import '../services/term_favorite_service.dart';
 import '../services/writing_answer_checker.dart';
 import '../services/writing_recognition_service.dart';
 import '../widgets/gakuji_styles.dart';
@@ -26,11 +26,15 @@ import '../widgets/writing_study_card.dart';
 class ReviewStudyPage extends StatefulWidget {
   final Deck deck;
   final List<ReviewCard> reviewCards;
+  final bool initialShowFurigana;
+  final bool initialShowWritingGrid;
 
   const ReviewStudyPage({
     super.key,
     required this.deck,
     required this.reviewCards,
+    this.initialShowFurigana = true,
+    this.initialShowWritingGrid = true,
   });
 
   @override
@@ -38,22 +42,28 @@ class ReviewStudyPage extends StatefulWidget {
 }
 
 class _ReviewStudyPageState extends State<ReviewStudyPage> {
+  static const String _showFuriganaPreferenceKey = 'study_show_furigana';
+  static const String _showExampleFuriganaPreferenceKey =
+      'study_show_example_furigana';
+  static const String _writingGridPreferenceKey =
+      'study_writing_grid_visible';
+  static const String _blueCardTextPreferenceKey = 'blue_card_text_enabled';
+
   static const Duration _inSessionReviewThreshold = Duration(minutes: 10);
 
-  static const Color newBlue = Color(0xFFB8C7F2);
-  static const Color newBlueText = Color(0xFF6F82BF);
+  static const Color newBlue = Color(0xFFACBFF2);
+  static const Color newBlueText = Color(0xFF5F75B8);
 
-  static const Color learningOrange = Color(0xFFF3BE8B);
-  static const Color learningOrangeText = Color(0xFFC77A3E);
+  static const Color learningOrange = Color(0xFFF0B47B);
+  static const Color learningOrangeText = Color(0xFFB96A30);
 
-  static const Color reviewGreen = Color(0xFFC5E7A5);
-  static const Color reviewGreenText = Color(0xFF8DBB66);
+  static const Color reviewGreen = Color(0xFFB8DF91);
+  static const Color reviewGreenText = Color(0xFF78AA50);
 
   late List<_ReviewQueueEntry> reviewQueue;
   late final int initialSessionCount;
 
   final Map<String, ReadingCardEditData> readingCardEdits = {};
-  final Map<String, Term> readingSourceTerms = {};
   final Set<String> savedReadingCardEditTermIds = {};
 
   List<List<List<WritingPoint>>> writingSlotStrokes = [];
@@ -67,6 +77,10 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
   bool answerShown = false;
   bool isRating = false;
   bool showFurigana = true;
+  bool showExampleFurigana = true;
+  bool blueCardTextEnabled = false;
+
+  Future<void> _reviewPersistenceQueue = Future<void>.value();
 
   int againCount = 0;
   int hardCount = 0;
@@ -109,10 +123,6 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     if (term == null || !isCurrentCardWriting) return null;
 
     return PromptConverter.fromTerm(term);
-  }
-
-  String get writingGridPreferenceKey {
-    return 'writing_grid_visible_${widget.deck.id}';
   }
 
   bool get isCheckingFinalWritingSlot {
@@ -174,6 +184,8 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     super.initState();
 
     initialSessionCount = widget.reviewCards.length;
+    showFurigana = widget.initialShowFurigana;
+    showWritingGrid = widget.initialShowWritingGrid;
 
     reviewQueue = widget.reviewCards
         .map(
@@ -185,7 +197,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
         .toList();
 
     _resetWritingState();
-    _loadWritingGridPreference();
+    _loadStudyPreferences();
 
     if (widget.reviewCards.any(
       (card) => card.cardType == ReviewCardType.reading,
@@ -196,21 +208,9 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
 
   Future<void> _loadReadingCardEdits() async {
     final loadedEdits = <String, ReadingCardEditData>{};
-    final loadedSourceTerms = <String, Term>{};
     final loadedSavedIds = <String>{};
 
     for (final term in widget.deck.terms) {
-      var sourceTerm = term;
-      final dictionaryTermId = term.sourceId ?? term.id;
-
-      try {
-        sourceTerm = await DictionaryService.getTermByIdAsync(
-          dictionaryTermId,
-        );
-      } catch (_) {
-        // Keep the deck copy if the dictionary source cannot be loaded.
-      }
-
       final hasSavedEdit = await ReadingCardEditStorage.hasSavedEdit(
         deck: widget.deck,
         term: term,
@@ -221,7 +221,6 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
         term: term,
       );
 
-      loadedSourceTerms[term.id] = sourceTerm;
       loadedEdits[term.id] = editData;
 
       if (hasSavedEdit) {
@@ -232,9 +231,6 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     if (!mounted) return;
 
     setState(() {
-      readingSourceTerms
-        ..clear()
-        ..addAll(loadedSourceTerms);
       readingCardEdits
         ..clear()
         ..addAll(loadedEdits);
@@ -252,23 +248,8 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     return readingCardEdits[term.id];
   }
 
-  Term _reviewSourceTermFor(Term term) {
-    return readingSourceTerms[term.id] ?? term;
-  }
-
-  bool _reviewSourceIsReady(Term term) {
-    return term.sourceId == null || readingSourceTerms.containsKey(term.id);
-  }
-
-  String _limitReviewNote(String value) {
-    if (value.runes.length <= 35) return value;
-    return String.fromCharCodes(value.runes.take(35));
-  }
-
   List<String> _defaultReviewGlossesFor(Term term) {
-    if (!_reviewSourceIsReady(term)) return const [];
-
-    final sourceTerm = _reviewSourceTermFor(term);
+    final sourceTerm = term;
     final glossBySenseIndex = <int, String>{};
 
     for (final sense in sourceTerm.senses) {
@@ -307,7 +288,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
   ) {
     if (storedGlosses.isEmpty) return _defaultReviewGlossesFor(term);
 
-    final sourceTerm = _reviewSourceTermFor(term);
+    final sourceTerm = term;
     final resolved = <String>[];
     final usedSenseIndexes = <int>{};
 
@@ -343,7 +324,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     Term term,
     List<String> glosses,
   ) {
-    final sourceTerm = _reviewSourceTermFor(term);
+    final sourceTerm = term;
     final indexes = <int>{};
 
     for (final displayedGloss in glosses) {
@@ -369,7 +350,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     Term term,
     List<String> glosses,
   ) {
-    final sourceTerm = _reviewSourceTermFor(term);
+    final sourceTerm = term;
     final senseIndexes = _reviewSenseIndexesForGlosses(term, glosses);
     final examples = <DictionaryExample>[];
     final seen = <String>{};
@@ -395,10 +376,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
   }
 
   String _reviewNoteFor(Term term) {
-    final note = _hasSavedCardEdit(term)
-        ? _cardEditFor(term)?.note ?? ''
-        : term.note ?? '';
-    return _limitReviewNote(note.trim());
+    return (term.note ?? '').trim();
   }
 
   List<DictionaryExample> _reviewExamplesFor(Term term) {
@@ -425,26 +403,38 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
   }
 
 
-  Future<void> _loadWritingGridPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedGridVisible = prefs.getBool(writingGridPreferenceKey);
+  Future<void> _loadStudyPreferences() async {
+    final savedShowFurigana =
+        await GakujiLocalPreferences.loadBool(_showFuriganaPreferenceKey);
+    final savedShowExampleFurigana = await GakujiLocalPreferences.loadBool(
+      _showExampleFuriganaPreferenceKey,
+    );
+    final savedGridVisible =
+        await GakujiLocalPreferences.loadBool(_writingGridPreferenceKey);
+    final savedBlueCardText =
+        await GakujiLocalPreferences.loadBool(_blueCardTextPreferenceKey);
 
-    if (!mounted || savedGridVisible == null) return;
+    if (!mounted) return;
 
     setState(() {
-      showWritingGrid = savedGridVisible;
+      if (savedShowFurigana != null) {
+        showFurigana = savedShowFurigana;
+      }
+      if (savedShowExampleFurigana != null) {
+        showExampleFurigana = savedShowExampleFurigana;
+      }
+      if (savedGridVisible != null) {
+        showWritingGrid = savedGridVisible;
+      }
+      blueCardTextEnabled = savedBlueCardText ?? false;
     });
   }
 
   Future<void> _saveWritingGridPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setBool(
-      writingGridPreferenceKey,
+    await GakujiLocalPreferences.saveBool(
+      _writingGridPreferenceKey,
       showWritingGrid,
     );
-
-    scheduleUserDataSave();
   }
 
   void _resetWritingState() {
@@ -495,15 +485,13 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
       time: DateTime.now().millisecondsSinceEpoch,
     );
 
-    setState(() {
-      final slot = writingSlotStrokes[activeWritingSlotIndex];
+    final slot = writingSlotStrokes[activeWritingSlotIndex];
 
-      if (isStart || slot.isEmpty) {
-        slot.add(<WritingPoint>[writingPoint]);
-      } else {
-        slot.last.add(writingPoint);
-      }
-    });
+    if (isStart || slot.isEmpty) {
+      slot.add(<WritingPoint>[writingPoint]);
+    } else {
+      slot.last.add(writingPoint);
+    }
   }
 
   void clearActiveWritingSlot() {
@@ -612,7 +600,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
 
   void _toggleFavorite(Term term) {
     setState(() {
-      term.marked = !term.marked;
+      TermFavoriteService.toggle(term);
     });
 
     scheduleUserDataSave();
@@ -636,14 +624,42 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     });
   }
 
-  Future<void> rateCard(ReviewRating rating) async {
+  void _queueReviewPersistence({
+    required ReviewScheduleResult result,
+    required ReviewCardState originalState,
+    required DateTime reviewedAt,
+  }) {
+    _reviewPersistenceQueue = _reviewPersistenceQueue.then((_) async {
+      try {
+        await applyReviewResult(result);
+
+        if (originalState == ReviewCardState.newCard) {
+          await ReviewSettingsStore.recordStartedNewCard(
+            deckId: widget.deck.id,
+            now: reviewedAt,
+          );
+        }
+
+        if (originalState == ReviewCardState.review) {
+          await ReviewSettingsStore.recordCompletedReview(
+            deckId: widget.deck.id,
+            now: reviewedAt,
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          _showFloatingMessage('Could not save this review. Please try again.');
+        }
+      }
+    });
+  }
+
+  void rateCard(ReviewRating rating) {
     final entry = currentEntry;
 
     if (entry == null || isRating) return;
 
-    setState(() {
-      isRating = true;
-    });
+    isRating = true;
 
     try {
       final reviewedAt = DateTime.now().toUtc();
@@ -657,24 +673,6 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
           .difference(reviewedAt);
       final keepInCurrentSession =
           scheduledInterval < _inSessionReviewThreshold;
-
-      await applyReviewResult(result);
-
-      if (entry.originalState == ReviewCardState.newCard) {
-        await ReviewSettingsStore.recordStartedNewCard(
-          now: reviewedAt,
-        );
-      }
-
-      if (entry.originalState == ReviewCardState.review) {
-        await ReviewSettingsStore.recordCompletedReview(
-          now: reviewedAt,
-        );
-      }
-
-      scheduleUserDataSave();
-
-      if (!mounted) return;
 
       setState(() {
         switch (rating) {
@@ -709,14 +707,19 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
         isRating = false;
         _resetWritingState();
       });
+
+      _queueReviewPersistence(
+        result: result,
+        originalState: entry.originalState,
+        reviewedAt: reviewedAt,
+      );
+      scheduleUserDataSave();
     } catch (_) {
-      if (!mounted) return;
+      isRating = false;
 
-      setState(() {
-        isRating = false;
-      });
-
-      _showFloatingMessage('Could not save this review. Please try again.');
+      if (mounted) {
+        _showFloatingMessage('Could not schedule this review. Please try again.');
+      }
     }
   }
 
@@ -738,11 +741,16 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
   }
 
   void toggleFurigana() {
+    final nextShowFurigana = !showFurigana;
+
     setState(() {
-      showFurigana = !showFurigana;
+      showFurigana = nextShowFurigana;
     });
 
-    scheduleUserDataSave();
+    GakujiLocalPreferences.saveBool(
+      _showFuriganaPreferenceKey,
+      nextShowFurigana,
+    );
   }
 
   @override
@@ -799,7 +807,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
   }) {
     return GakujiTopBar(
       leftIcon: leftIcon,
-      leftIconSize: 34,
+      leftIconSize: GakujiTopBar.iconSize,
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: onLeftTap,
       title: 'Review',
@@ -852,7 +860,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
             showWritingGrid
                 ? Icons.visibility_rounded
                 : Icons.visibility_off_rounded,
-            size: 27,
+            size: GakujiTopBar.iconSize,
             color: showWritingGrid
                 ? GakujiColors.darkGray
                 : GakujiColors.mediumGray,
@@ -984,16 +992,16 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     final padding = centered
         ? EdgeInsets.zero
         : EdgeInsets.only(
-            left: alignLeft ? 24 : 0,
-            right: alignLeft ? 0 : 24,
+            left: alignLeft ? 20 : 0,
+            right: alignLeft ? 0 : 20,
           );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 78,
-          height: 34,
+          width: 70,
+          height: 30,
           padding: padding,
           alignment: alignment,
           decoration: BoxDecoration(
@@ -1001,25 +1009,22 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
             borderRadius: borderRadius,
             border: Border.all(
               color: textColor,
-              width: 3,
+              width: 2.5,
             ),
           ),
           child: Text(
             '$count',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 24,
-              height: 1,
-              fontWeight: FontWeight.w700,
+            style: GakujiText.studyCounter.copyWith(
               color: textColor,
             ),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         Text(
           label,
           textScaler: TextScaler.noScaling,
-          style: GakujiText.xSmall.copyWith(
+          style: GakujiText.studyCounterLabel.copyWith(
             color: GakujiColors.mediumGray,
           ),
         ),
@@ -1071,6 +1076,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
       isCheckingAnswer: isCheckingWritingAnswer,
       isCheckingFinalSlot: isCheckingFinalWritingSlot,
       showSwipeInstructions: false,
+      cardTextColor: blueCardTextEnabled ? GakujiColors.reading : null,
       isStarred: term.marked,
       onStarTap: () => _toggleFavorite(term),
       onSelectSlot: selectWritingSlot,
@@ -1094,6 +1100,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     final showDefinition = answerShown;
 
     return ReadingCardFrame(
+      minHeight: ReadingCardFrame.readingStudyMinHeight,
       isStarred: term.marked,
       onStarTap: () => _toggleFavorite(term),
       child: Center(
@@ -1107,6 +1114,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
 
   Widget _missingTermCard() {
     return ReadingCardFrame(
+      minHeight: ReadingCardFrame.readingStudyMinHeight,
       child: Center(
         child: Text(
           'This term could not be found.',
@@ -1141,7 +1149,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(26, 22, 26, 0),
+            padding: const EdgeInsets.fromLTRB(50, 22, 50, 0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1156,7 +1164,9 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
                       fontSize: 16,
                       height: 1,
                       fontWeight: FontWeight.w600,
-                      color: GakujiColors.mediumGray,
+                      color: blueCardTextEnabled
+                          ? GakujiColors.reading
+                          : GakujiColors.mediumGray,
                     ),
                   ),
                   const SizedBox(height: 5),
@@ -1173,7 +1183,9 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
                       height: 1,
                       fontWeight: FontWeight.w700,
                       letterSpacing: -0.4,
-                      color: GakujiColors.darkGray,
+                      color: blueCardTextEnabled
+                          ? GakujiColors.reading
+                          : GakujiColors.darkGray,
                     ),
                   ),
                 ),
@@ -1187,9 +1199,14 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
               note: _reviewNoteFor(term),
               examples: _reviewExamplesFor(term),
               photoPath: _reviewPhotoPathFor(term),
+              photoScale: _cardEditFor(term)?.photoScale ?? 1.0,
+              photoOffsetX: _cardEditFor(term)?.photoOffsetX ?? 0.0,
+              photoOffsetY: _cardEditFor(term)?.photoOffsetY ?? 0.0,
               readingText: readingText,
               showReadingOnBack:
                   !showFurigana && readingText.isNotEmpty,
+              showExampleFurigana: showExampleFurigana,
+              textColor: blueCardTextEnabled ? GakujiColors.reading : null,
             ),
           ),
         ],
@@ -1221,7 +1238,9 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
                     height: 1,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -0.8,
-                    color: GakujiColors.darkGray,
+                    color: blueCardTextEnabled
+                        ? GakujiColors.reading
+                        : GakujiColors.darkGray,
                   ),
                 ),
               ),
@@ -1239,7 +1258,9 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
                       fontSize: 20,
                       height: 1,
                       fontWeight: FontWeight.w600,
-                      color: GakujiColors.mediumGray,
+                      color: blueCardTextEnabled
+                          ? GakujiColors.reading
+                          : GakujiColors.mediumGray,
                     ),
                   ),
                 ),
@@ -1263,7 +1284,7 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
       height: 54,
       width: double.infinity,
       child: Material(
-        color: GakujiColors.deckBlue,
+        color: GakujiColors.reading,
         borderRadius: BorderRadius.circular(GakujiRadius.small),
         clipBehavior: Clip.antiAlias,
         child: InkWell(

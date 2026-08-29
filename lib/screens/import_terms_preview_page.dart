@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../data/deck_data.dart';
 import '../models/deck.dart';
 import '../models/deck_import_result.dart';
 import '../models/deck_import_row.dart';
 import '../models/term.dart';
+import '../services/account_username_service.dart';
 import '../services/term_import_service.dart';
 import '../services/dictionary_import_matcher.dart';
+import '../services/dictionary_service.dart';
 import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_styles.dart';
@@ -355,6 +358,14 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
       return;
     }
 
+    if (existingDeck == null &&
+        GakujiUsernameService.containsRestrictedLanguage(newDeckName)) {
+      setState(() {
+        importError = 'Deck name contains a restricted term.';
+      });
+      return;
+    }
+
     setState(() {
       isImporting = true;
       importError = null;
@@ -378,12 +389,23 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
       for (final row in rows) {
         if (!row.canImport) continue;
 
-        final dictionaryTerm = row.selectedTerm!;
+        var dictionaryTerm = row.selectedTerm!;
         final sourceId = dictionaryTerm.sourceId ?? dictionaryTerm.id;
+
+        // Import the canonical dictionary entry, just like saving a term from
+        // Dictionary Detail. Matcher results can be lightweight, so reloading by
+        // source ID guarantees the deck copy carries its normal senses/examples.
+        try {
+          dictionaryTerm = await DictionaryService.getTermByIdAsync(sourceId);
+        } catch (_) {
+          // Keep the matched term as a safe fallback if the dictionary reload
+          // is unavailable. Term.deckCopyFrom still preserves its card data.
+        }
+
         final deckTerm = Term.deckCopyFrom(
           dictionaryTerm,
           id: '${targetDeck.id}_${sourceId}_${timestamp}_$importedCount',
-          marked: true,
+          marked: false,
         );
 
         targetDeck.terms.add(deckTerm);
@@ -420,7 +442,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
 
       final finished = await Navigator.push<bool>(
         context,
-        MaterialPageRoute(
+        GakujiPageRoute(
           builder: (context) => ImportTermsResultsPage(
             result: result,
           ),
@@ -456,52 +478,61 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
       backgroundColor: GakujiColors.warmBackground,
       body: SafeArea(
         bottom: false,
-        child: Column(
+        child: Stack(
           children: [
-            _topBar(),
-            Expanded(
-              child: GakujiFadedScroll(
-                topFadeEnd: 0.06,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 22, 22, 26),
-                  children: [
-                    _destinationSection(),
-                    const SizedBox(height: 22),
-                    if (isMatching)
-                      _matchingProgress()
-                    else if (matchingError != null)
-                      _matchingErrorCard()
-                    else ...[
-                      _summarySection(),
-                      const SizedBox(height: 20),
-                      _rowFilter(),
-                      const SizedBox(height: 12),
-                      if (filteredRows.isEmpty)
-                        _emptyFilterState()
-                      else
-                        ...List.generate(filteredRows.length, (index) {
-                          return Column(
-                            children: [
-                              _rowCard(filteredRows[index]),
-                              if (index < filteredRows.length - 1)
-                                const Divider(
-                                  height: 1,
-                                  thickness: 1,
-                                  color: GakujiTermRow.dividerColor,
-                                ),
-                            ],
-                          );
-                        }),
-                    ],
-                    if (importError != null) ...[
-                      const SizedBox(height: 4),
-                      _errorCard(importError!),
-                    ],
-                  ],
+            Column(
+              children: [
+                _topBar(),
+                Expanded(
+                  child: GakujiFadedScroll(
+                    topFadeEnd: 0.06,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 112),
+                      children: [
+                        _destinationSection(),
+                        const SizedBox(height: 22),
+                        if (isMatching)
+                          _matchingProgress()
+                        else if (matchingError != null)
+                          _matchingErrorCard()
+                        else ...[
+                          _summarySection(),
+                          const SizedBox(height: 20),
+                          _rowFilter(),
+                          const SizedBox(height: 12),
+                          if (filteredRows.isEmpty)
+                            _emptyFilterState()
+                          else
+                            ...List.generate(filteredRows.length, (index) {
+                              return Column(
+                                children: [
+                                  _rowCard(filteredRows[index]),
+                                  if (index < filteredRows.length - 1)
+                                    Divider(
+                                      height: 1,
+                                      thickness: 1,
+                                      color: GakujiColors.softBorder,
+                                    ),
+                                ],
+                              );
+                            }),
+                        ],
+                        if (importError != null) ...[
+                          const SizedBox(height: 4),
+                          _errorCard(importError!),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-            _bottomAction(),
+            Positioned(
+              left: 22,
+              right: 22,
+              bottom: 0,
+              child: _bottomAction(),
+            ),
           ],
         ),
       ),
@@ -515,7 +546,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: () => Navigator.pop(context),
       title: 'Import Preview',
-      titleStyle: GakujiText.small.copyWith(
+      titleStyle: GakujiText.pageTitle.copyWith(
         color: GakujiColors.darkGray,
       ),
     );
@@ -635,20 +666,6 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
     return _sectionCard(
       child: Column(
         children: [
-          Container(
-            width: 68,
-            height: 68,
-            decoration: BoxDecoration(
-              color: GakujiColors.reading.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.auto_awesome_rounded,
-              size: 34,
-              color: GakujiColors.reading,
-            ),
-          ),
-          const SizedBox(height: 18),
           Text(
             'Matching dictionary entries',
             textScaler: TextScaler.noScaling,
@@ -912,7 +929,6 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
           showChevron: false,
           isSelected: row.included,
           meaningMaxLines: 2,
-          padding: const EdgeInsets.fromLTRB(0, 11, 0, 8),
           leading: Container(
             width: 30,
             height: 30,
@@ -930,25 +946,22 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
           trailing: trailing,
           onTap: canChoose ? () => _chooseCandidate(row) : null,
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(40, 0, 0, 9),
-          child: Text(
-            row.message == null
-                ? 'Row ${row.rowNumber}'
-                : 'Row ${row.rowNumber} • ${row.message!}',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 11.5,
-              height: 1.3,
-              fontWeight: FontWeight.w600,
-              color: row.message == null
-                  ? GakujiColors.softGray
-                  : statusColor,
+        if (row.message != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(40, 0, 0, 6),
+            child: Text(
+              'Row ${row.rowNumber} • ${row.message!}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 11.5,
+                height: 1.3,
+                fontWeight: FontWeight.w600,
+                color: statusColor,
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -983,49 +996,39 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
 
     return SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 14),
-        decoration: BoxDecoration(
-          color: GakujiColors.warmBackground,
-          border: Border(
-            top: BorderSide(
-              color: GakujiColors.warmDivider,
-            ),
-          ),
-        ),
-        child: SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: Material(
-            color: canImport
-                ? destinationColor
-                : GakujiColors.softBorder,
-            borderRadius: BorderRadius.circular(GakujiRadius.pill),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: canImport ? _importTerms : null,
-              child: Center(
-                child: isImporting
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.6,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        isMatching
-                            ? 'Matching Terms...'
-                            : 'Import $readyCount Terms',
-                        textScaler: TextScaler.noScaling,
-                        style: GakujiText.small.copyWith(
-                          color: canImport
-                              ? Colors.white
-                              : GakujiColors.mediumGray,
-                        ),
+      minimum: const EdgeInsets.only(bottom: 14),
+      child: SizedBox(
+        width: double.infinity,
+        height: 56,
+        child: Material(
+          color: canImport
+              ? destinationColor
+              : GakujiColors.softBorder,
+          borderRadius: BorderRadius.circular(GakujiRadius.pill),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: canImport ? _importTerms : null,
+            child: Center(
+              child: isImporting
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.6,
+                        color: Colors.white,
                       ),
-              ),
+                    )
+                  : Text(
+                      isMatching
+                          ? 'Matching Terms...'
+                          : 'Import $readyCount Terms',
+                      textScaler: TextScaler.noScaling,
+                      style: GakujiText.small.copyWith(
+                        color: canImport
+                            ? Colors.white
+                            : GakujiColors.mediumGray,
+                      ),
+                    ),
             ),
           ),
         ),

@@ -24,6 +24,14 @@ class ReadingCardEditData {
   final bool photoEnabled;
   final String? photoPath;
 
+  /// User-controlled crop/position settings for the reading-card photo.
+  /// Scale is relative to the default cover size; values below 1 can reveal more
+  /// of the original photo, while offsets are normalized to
+  /// the available pan range on each axis (-1 to 1).
+  final double photoScale;
+  final double photoOffsetX;
+  final double photoOffsetY;
+
   const ReadingCardEditData({
     required this.deckId,
     required this.termId,
@@ -33,6 +41,9 @@ class ReadingCardEditData {
     required this.note,
     required this.photoEnabled,
     required this.photoPath,
+    this.photoScale = 1.0,
+    this.photoOffsetX = 0.0,
+    this.photoOffsetY = 0.0,
   });
 
   factory ReadingCardEditData.empty({
@@ -49,6 +60,9 @@ class ReadingCardEditData {
       note: '',
       photoEnabled: false,
       photoPath: null,
+      photoScale: 1.0,
+      photoOffsetX: 0.0,
+      photoOffsetY: 0.0,
     );
   }
 
@@ -62,6 +76,15 @@ class ReadingCardEditData {
       note: json['note'] as String? ?? '',
       photoEnabled: json['photoEnabled'] as bool? ?? false,
       photoPath: json['photoPath'] as String?,
+      photoScale: _doubleFromJson(json['photoScale'], fallback: 1.0)
+          .clamp(0.75, 3.0)
+          .toDouble(),
+      photoOffsetX: _doubleFromJson(json['photoOffsetX'])
+          .clamp(-1.0, 1.0)
+          .toDouble(),
+      photoOffsetY: _doubleFromJson(json['photoOffsetY'])
+          .clamp(-1.0, 1.0)
+          .toDouble(),
     );
   }
 
@@ -74,6 +97,9 @@ class ReadingCardEditData {
     String? note,
     bool? photoEnabled,
     String? photoPath,
+    double? photoScale,
+    double? photoOffsetX,
+    double? photoOffsetY,
     bool clearPhotoPath = false,
   }) {
     return ReadingCardEditData(
@@ -85,6 +111,11 @@ class ReadingCardEditData {
       note: note ?? this.note,
       photoEnabled: photoEnabled ?? this.photoEnabled,
       photoPath: clearPhotoPath ? null : photoPath ?? this.photoPath,
+      photoScale: (photoScale ?? this.photoScale).clamp(0.75, 3.0).toDouble(),
+      photoOffsetX:
+          (photoOffsetX ?? this.photoOffsetX).clamp(-1.0, 1.0).toDouble(),
+      photoOffsetY:
+          (photoOffsetY ?? this.photoOffsetY).clamp(-1.0, 1.0).toDouble(),
     );
   }
 
@@ -98,6 +129,9 @@ class ReadingCardEditData {
       'note': note,
       'photoEnabled': photoEnabled,
       'photoPath': photoPath,
+      'photoScale': photoScale,
+      'photoOffsetX': photoOffsetX,
+      'photoOffsetY': photoOffsetY,
     };
   }
 
@@ -151,6 +185,15 @@ class ReadingCardEditData {
 
   static List<String> keysFromExamples(List<DictionaryExample> examples) {
     return examples.map(exampleKeyFor).toList();
+  }
+
+  static double _doubleFromJson(
+    dynamic value, {
+    double fallback = 0.0,
+  }) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? fallback;
+    return fallback;
   }
 
   static List<String> _stringListFromJson(dynamic value) {

@@ -1,15 +1,16 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/deck.dart';
 import '../models/term.dart';
 import '../models/writing_point.dart';
 import '../models/writing_prompt.dart';
 import '../services/deck_storage.dart';
+import '../services/gakuji_local_preferences.dart';
 import '../services/gakuji_user_data_store.dart';
 import '../services/prompt_converter.dart';
+import '../services/term_favorite_service.dart';
 import '../services/writing_answer_checker.dart';
 import '../services/writing_recognition_service.dart';
 import '../widgets/gakuji_styles.dart';
@@ -22,12 +23,14 @@ class WritingStudyPage extends StatefulWidget {
   final List<Term> terms;
   final Deck deck;
   final bool initialIsShuffled;
+  final bool initialShowGrid;
 
   const WritingStudyPage({
     super.key,
     required this.terms,
     required this.deck,
     this.initialIsShuffled = false,
+    this.initialShowGrid = true,
   });
 
   @override
@@ -63,8 +66,6 @@ class WritingSessionController {
   List<String?> slotAnswers = [];
 
   int activeSlotIndex = 0;
-
-  final Set<String> starred = {};
 
   bool showGrid = true;
   bool hasChecked = false;
@@ -327,13 +328,6 @@ class WritingSessionController {
     showGrid = !showGrid;
   }
 
-  void toggleStar() {
-    final id = current.id;
-    starred.contains(id) ? starred.remove(id) : starred.add(id);
-  }
-
-  bool isStarred() => starred.contains(current.id);
-
   void answer(
     bool correct, {
     bool saveProgress = true,
@@ -418,6 +412,13 @@ class WritingSessionController {
 
 class _WritingStudyPageState extends State<WritingStudyPage>
     with TickerProviderStateMixin {
+  static const String _writingGridPreferenceKey =
+      'study_writing_grid_visible';
+  static const String _blueCardTextPreferenceKey = 'blue_card_text_enabled';
+  static String _starredOnlyPreferenceKey(String deckId) {
+    return 'study_starred_only_$deckId';
+  }
+
   static const Duration _cardReturnDuration = Duration(milliseconds: 320);
   static const Duration _cardExitDuration = Duration(milliseconds: 140);
   static const Duration _cardContentFadeDuration = Duration(milliseconds: 120);
@@ -439,8 +440,11 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   bool isCheckingAnswer = false;
   bool isShuffled = false;
   bool isReviewingIncorrect = false;
+  bool showStarredOnly = false;
+  bool _sessionReady = false;
 
   bool isAnswerRevealed = false;
+  bool blueCardTextEnabled = false;
   WritingAnswerResult? answerResult;
 
   Offset revealDragOffset = Offset.zero;
@@ -455,20 +459,24 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     return (controller.currentIndex / total).clamp(0.0, 1.0).toDouble();
   }
 
-  String get writingGridPreferenceKey {
-    return 'writing_grid_visible_${widget.deck.id}';
-  }
-
   void scheduleUserDataSave() {
     GakujiUserDataStore.scheduleSave();
   }
 
   void _toggleFavorite(Term term) {
     setState(() {
-      term.marked = !term.marked;
+      TermFavoriteService.toggle(term);
     });
 
     scheduleUserDataSave();
+  }
+
+  List<Term> get filteredStudyTerms {
+    if (showStarredOnly) {
+      return widget.terms.where((term) => term.marked).toList();
+    }
+
+    return List<Term>.from(widget.terms);
   }
 
   @override
@@ -481,6 +489,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       terms: widget.terms,
       deckId: widget.deck.id,
     );
+    controller.showGrid = widget.initialShowGrid;
 
     if (isShuffled) {
       controller.updateShuffle(
@@ -529,35 +538,74 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   }
 
   Future<void> _loadProgress() async {
-    final saved = await DeckStorage.loadProgress(widget.deck.id);
-    final prefs = await SharedPreferences.getInstance();
-    final savedGridVisible = prefs.getBool(writingGridPreferenceKey);
+    // Start all local reads together so the session-critical state is ready as
+    // early as possible. Only progress + starred-only can change which card is
+    // on screen, so those are applied before handwriting is allowed.
+    final savedProgressFuture = DeckStorage.loadProgress(widget.deck.id);
+    final savedShowStarredOnlyFuture = GakujiLocalPreferences.loadBool(
+      _starredOnlyPreferenceKey(widget.deck.id),
+    );
+    final savedGridVisibleFuture =
+        GakujiLocalPreferences.loadBool(_writingGridPreferenceKey);
+    final savedBlueCardTextFuture =
+        GakujiLocalPreferences.loadBool(_blueCardTextPreferenceKey);
+
+    final saved = await savedProgressFuture;
+    final savedShowStarredOnly = await savedShowStarredOnlyFuture;
 
     if (!mounted || isReviewingIncorrect) return;
 
+    final nextShowStarredOnly = savedShowStarredOnly ?? showStarredOnly;
+    final nextTerms = nextShowStarredOnly
+        ? widget.terms.where((term) => term.marked).toList()
+        : List<Term>.from(widget.terms);
+    final effectiveTerms =
+        nextTerms.isEmpty ? List<Term>.from(widget.terms) : nextTerms;
+
     setState(() {
+      showStarredOnly = nextTerms.isNotEmpty && nextShowStarredOnly;
+      controller.replaceSessionTerms(
+        effectiveTerms,
+        shuffle: isShuffled,
+        saveProgress: false,
+      );
       controller.restoreProgress(
         saved,
         shuffle: isShuffled,
       );
+      resetRevealState();
+      _sessionReady = true;
+    });
 
+    // If a saved starred-only session no longer has any starred terms, repair
+    // that preference without keeping the writing surface blocked.
+    if (nextTerms.isEmpty && nextShowStarredOnly) {
+      GakujiLocalPreferences.saveBool(
+        _starredOnlyPreferenceKey(widget.deck.id),
+        false,
+      );
+    }
+
+    // These preferences do not change the active term or replace stroke lists,
+    // so they can finish after the session becomes writable.
+    final savedGridVisible = await savedGridVisibleFuture;
+    final savedBlueCardText = await savedBlueCardTextFuture;
+
+    if (!mounted || isReviewingIncorrect) return;
+
+    setState(() {
       if (savedGridVisible != null) {
         controller.showGrid = savedGridVisible;
       }
-
-      resetRevealState();
+      blueCardTextEnabled = savedBlueCardText ?? false;
     });
   }
 
   Future<void> _saveGridPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setBool(
-      writingGridPreferenceKey,
+    await GakujiLocalPreferences.saveBool(
+      _writingGridPreferenceKey,
       controller.showGrid,
     );
-
-    scheduleUserDataSave();
   }
 
   Future<void> exitDeck() async {
@@ -633,7 +681,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     setState(() {
       isReviewingIncorrect = false;
       controller.replaceSessionTerms(
-        widget.terms,
+        filteredStudyTerms,
         shuffle: isShuffled,
         saveProgress: true,
       );
@@ -680,6 +728,21 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       title: 'Study Options',
       sectionsBuilder: (context) => [
         GakujiOptionsSheetSection(
+          title: 'Study Set',
+          items: [
+            GakujiOptionsSheetItem(
+              icon: showStarredOnly
+                  ? Icons.star_rounded
+                  : Icons.star_border_rounded,
+              label: showStarredOnly ? 'Starred terms only' : 'All terms',
+              iconColor: showStarredOnly
+                  ? GakujiColors.darkGray
+                  : GakujiColors.mediumGray,
+              onTap: toggleStarredTermFilter,
+            ),
+          ],
+        ),
+        GakujiOptionsSheetSection(
           title: 'Writing',
           items: [
             GakujiOptionsSheetItem(
@@ -715,6 +778,42 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         ),
       ],
     );
+  }
+
+  void toggleStarredTermFilter() {
+    if (isRevealSwipingAway) return;
+
+    final nextShowStarredOnly = !showStarredOnly;
+    final nextTerms = nextShowStarredOnly
+        ? widget.terms.where((term) => term.marked).toList()
+        : List<Term>.from(widget.terms);
+
+    if (nextTerms.isEmpty) {
+      _showFloatingMessage('No starred terms to study');
+      return;
+    }
+
+    _swipeController.stop();
+    _cardContentController.stop();
+    _cardContentController.value = 1;
+
+    setState(() {
+      showStarredOnly = nextShowStarredOnly;
+      isReviewingIncorrect = false;
+      controller.replaceSessionTerms(
+        nextTerms,
+        shuffle: isShuffled,
+        saveProgress: true,
+      );
+      resetRevealState();
+    });
+
+    DeckStorage.saveProgress(widget.deck.id, 0);
+    GakujiLocalPreferences.saveBool(
+      _starredOnlyPreferenceKey(widget.deck.id),
+      showStarredOnly,
+    );
+    scheduleUserDataSave();
   }
 
   void toggleShuffle() {
@@ -761,7 +860,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     setState(() {
       isReviewingIncorrect = false;
       controller.replaceSessionTerms(
-        widget.terms,
+        filteredStudyTerms,
         shuffle: isShuffled,
         saveProgress: true,
       );
@@ -1099,7 +1198,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   }) {
     return GakujiTopBar(
       leftIcon: leftIcon,
-      leftIconSize: 34,
+      leftIconSize: GakujiTopBar.iconSize,
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: onLeftTap,
       title: title,
@@ -1111,7 +1210,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         color: GakujiColors.darkGray,
       ),
       rightIcon: rightIcon,
-      rightIconSize: 36,
+      rightIconSize: GakujiTopBar.iconSize,
       rightIconColor: GakujiColors.darkGray,
       onRightTap: onRightTap,
     );
@@ -1199,7 +1298,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         else
           Transform(
             transform: Matrix4.identity()
-              ..translateByDouble(revealDragOffset.dx, revealDragOffset.dy, 0.0, 1.0)
+              ..translateByDouble(revealDragOffset.dx, revealDragOffset.dy, 0, 1)
               ..rotateZ(rotation),
             alignment: Alignment.center,
             child: GestureDetector(
@@ -1232,49 +1331,46 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     final activeStrokes = controller.slotStrokes.isNotEmpty
         ? controller.slotStrokes[controller.activeSlotIndex]
         : <List<WritingPoint>>[];
-    final term = controller.currentTerm;
 
-    return WritingStudyCard(
-      prompt: prompt,
-      isAnswerRevealed: isAnswerRevealed,
-      answerResult: answerResult,
-      slotAnswers: controller.slotAnswers,
-      activeSlotIndex: controller.activeSlotIndex,
-      activeSlotStrokes: activeStrokes,
-      showGrid: controller.showGrid,
-      isCheckingAnswer: isCheckingAnswer,
-      isCheckingFinalSlot: isCheckingFinalSlot,
-      swipeColor: swipeColor,
-      swipeOpacity: swipeOpacity,
-      contentOpacity: contentOpacity,
-      isStarred: term.marked,
-      onStarTap: () => _toggleFavorite(term),
-      onSelectSlot: (index) {
-        if (isAnswerRevealed) return;
+    return AbsorbPointer(
+      absorbing: !_sessionReady,
+      child: WritingStudyCard(
+        prompt: prompt,
+        isAnswerRevealed: isAnswerRevealed,
+        answerResult: answerResult,
+        slotAnswers: controller.slotAnswers,
+        activeSlotIndex: controller.activeSlotIndex,
+        activeSlotStrokes: activeStrokes,
+        showGrid: controller.showGrid,
+        isCheckingAnswer: isCheckingAnswer,
+        isCheckingFinalSlot: isCheckingFinalSlot,
+        swipeColor: swipeColor,
+        swipeOpacity: swipeOpacity,
+        contentOpacity: contentOpacity,
+        cardTextColor: blueCardTextEnabled ? GakujiColors.reading : null,
+        isStarred: controller.currentTerm.marked,
+        onStarTap: () => _toggleFavorite(controller.currentTerm),
+        onSelectSlot: (index) {
+          if (isAnswerRevealed) return;
 
-        setState(() {
-          controller.selectSlot(index);
-        });
-      },
-      onClear: () {
-        setState(() {
-          controller.clearSlot();
-        });
-      },
-      onCheck: isCheckingAnswer ? null : checkAnswer,
-      onStrokeStart: (point) {
-        setState(() {
+          setState(() {
+            controller.selectSlot(index);
+          });
+        },
+        onClear: () {
+          setState(() {
+            controller.clearSlot();
+          });
+        },
+        onCheck: isCheckingAnswer ? null : checkAnswer,
+        onStrokeStart: (point) {
           controller.addStroke(
             point,
             isStart: true,
           );
-        });
-      },
-      onStrokeUpdate: (point) {
-        setState(() {
-          controller.addStroke(point);
-        });
-      },
+        },
+        onStrokeUpdate: controller.addStroke,
+      ),
     );
   }
 
@@ -1552,17 +1648,28 @@ class _WritingStudyPageState extends State<WritingStudyPage>
     required bool alignLeft,
   }) {
     final isIncorrect = color == incorrectRed;
+    final fillColor = isIncorrect
+        ? const Color(0xFFF28F8F)
+        : const Color(0xFFB8DF91);
+    final outlineColor = isIncorrect
+        ? const Color(0xFFD85F5F)
+        : const Color(0xFF78AA50);
+    final countText = '$count';
+    final fontSize = countText.length >= 5
+        ? 16.0
+        : countText.length >= 4
+            ? 17.0
+            : countText.length >= 3
+                ? 18.0
+                : 20.0;
 
     return Container(
-      width: 78,
-      height: 34,
-      padding: EdgeInsets.only(
-        left: alignLeft ? 24 : 0,
-        right: alignLeft ? 0 : 24,
-      ),
-      alignment: alignLeft ? Alignment.centerLeft : Alignment.centerRight,
+      width: 70,
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color,
+        color: fillColor,
         borderRadius: alignLeft
             ? const BorderRadius.horizontal(
                 right: Radius.circular(30),
@@ -1571,22 +1678,23 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                 left: Radius.circular(30),
               ),
         border: Border.all(
-          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
-          width: 3,
+          color: outlineColor,
+          width: 2.5,
         ),
       ),
-      child: Text(
-        '$count',
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 24,
-          height: 1,
-          fontWeight: FontWeight.w700,
-          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
-       ),
-     ),
-   );
- }
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          countText,
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.studyCounter.copyWith(
+            fontSize: fontSize,
+            color: outlineColor,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _circle(IconData icon, VoidCallback onTap) {
     return _Pushable(

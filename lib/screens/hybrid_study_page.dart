@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/reading_card_edit_data.dart';
 import '../models/deck.dart';
@@ -10,16 +9,19 @@ import '../models/term.dart';
 import '../models/writing_point.dart';
 import '../models/writing_prompt.dart';
 import '../services/deck_storage.dart';
-import '../services/dictionary_service.dart';
+import '../services/gakuji_local_preferences.dart';
 import '../services/gakuji_user_data_store.dart';
 import '../services/prompt_converter.dart';
 import '../services/reading_card_edit_storage.dart';
+import '../services/term_favorite_service.dart';
 import '../services/writing_answer_checker.dart';
 import '../services/writing_recognition_service.dart';
 import '../widgets/gakuji_options_sheet.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
+import '../widgets/low_latency_writing_canvas.dart';
 import '../widgets/reading_card_back.dart';
+import '../widgets/writing_study_card.dart';
 
 enum _HybridCardType {
   reading,
@@ -53,6 +55,7 @@ class HybridStudyPage extends StatefulWidget {
   final bool initialIsShuffled;
   final bool initialShowFurigana;
   final bool initialTermFirst;
+  final bool initialShowGrid;
 
   const HybridStudyPage({
     super.key,
@@ -60,6 +63,7 @@ class HybridStudyPage extends StatefulWidget {
     this.initialIsShuffled = false,
     this.initialShowFurigana = true,
     this.initialTermFirst = true,
+    this.initialShowGrid = true,
   });
 
   @override
@@ -68,6 +72,17 @@ class HybridStudyPage extends StatefulWidget {
 
 class _HybridStudyPageState extends State<HybridStudyPage>
     with TickerProviderStateMixin {
+  static const String _showFuriganaPreferenceKey = 'study_show_furigana';
+  static const String _showExampleFuriganaPreferenceKey =
+      'study_show_example_furigana';
+  static const String _termFirstPreferenceKey = 'study_term_first';
+  static const String _writingGridPreferenceKey =
+      'study_writing_grid_visible';
+  static const String _blueCardTextPreferenceKey = 'blue_card_text_enabled';
+  static String _starredOnlyPreferenceKey(String deckId) {
+    return 'study_starred_only_$deckId';
+  }
+
   static const Duration _cardReturnDuration = Duration(milliseconds: 320);
   static const Duration _cardExitDuration = Duration(milliseconds: 140);
   static const Duration _cardContentFadeDuration =
@@ -87,7 +102,6 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   final List<_HybridStudyItem> incorrectReviewItems = [];
 
   final Map<String, ReadingCardEditData> readingCardEdits = {};
-  final Map<String, Term> readingSourceTerms = {};
   final Set<String> savedReadingCardEditTermIds = {};
 
   int correctCount = 0;
@@ -95,7 +109,9 @@ class _HybridStudyPageState extends State<HybridStudyPage>
 
   bool isShuffled = false;
   bool showFurigana = true;
+  bool showExampleFurigana = true;
   bool termFirst = true;
+  bool blueCardTextEnabled = false;
   bool showStarredOnly = false;
   bool isReviewingIncorrect = false;
 
@@ -142,10 +158,6 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     if (total <= 0) return 0;
 
     return (answeredItems.length / total).clamp(0.0, 1.0).toDouble();
-  }
-
-  String get writingGridPreferenceKey {
-    return 'writing_grid_visible_${widget.deck.id}';
   }
 
   String? get swipeFeedbackText {
@@ -215,6 +227,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     isShuffled = widget.initialIsShuffled;
     showFurigana = widget.initialShowFurigana;
     termFirst = widget.initialTermFirst;
+    showGrid = widget.initialShowGrid;
 
     allItems = _buildItems(widget.deck.terms);
     activeItems = List<_HybridStudyItem>.from(allItems);
@@ -397,14 +410,43 @@ class _HybridStudyPageState extends State<HybridStudyPage>
 
   Future<void> _loadProgressAndPreferences() async {
     final savedProgress = await DeckStorage.loadProgress(widget.deck.id);
-    final prefs = await SharedPreferences.getInstance();
-    final savedGridVisible = prefs.getBool(writingGridPreferenceKey);
+    final savedShowFurigana =
+        await GakujiLocalPreferences.loadBool(_showFuriganaPreferenceKey);
+    final savedShowExampleFurigana = await GakujiLocalPreferences.loadBool(
+      _showExampleFuriganaPreferenceKey,
+    );
+    final savedTermFirst =
+        await GakujiLocalPreferences.loadBool(_termFirstPreferenceKey);
+    final savedGridVisible =
+        await GakujiLocalPreferences.loadBool(_writingGridPreferenceKey);
+    final savedBlueCardText =
+        await GakujiLocalPreferences.loadBool(_blueCardTextPreferenceKey);
+    final savedShowStarredOnly = await GakujiLocalPreferences.loadBool(
+      _starredOnlyPreferenceKey(widget.deck.id),
+    );
 
     if (!mounted || isReviewingIncorrect) return;
 
-    final savedCount = savedProgress.clamp(0, allItems.length).toInt();
+    final nextShowStarredOnly = savedShowStarredOnly ?? showStarredOnly;
+    final nextTerms = nextShowStarredOnly
+        ? widget.deck.terms.where((term) => term.marked).toList()
+        : List<Term>.from(widget.deck.terms);
+
+    if (nextTerms.isEmpty) {
+      await GakujiLocalPreferences.saveBool(
+        _starredOnlyPreferenceKey(widget.deck.id),
+        false,
+      );
+    }
+
+    final nextAllItems = _buildItems(
+      nextTerms.isEmpty ? List<Term>.from(widget.deck.terms) : nextTerms,
+    );
+    final savedCount = savedProgress.clamp(0, nextAllItems.length).toInt();
 
     setState(() {
+      showStarredOnly = nextTerms.isNotEmpty && nextShowStarredOnly;
+      allItems = nextAllItems;
       answeredItems
         ..clear()
         ..addAll(allItems.take(savedCount));
@@ -417,9 +459,19 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         _shuffleSeparatingVariants(activeItems);
       }
 
+      if (savedShowFurigana != null) {
+        showFurigana = savedShowFurigana;
+      }
+      if (savedShowExampleFurigana != null) {
+        showExampleFurigana = savedShowExampleFurigana;
+      }
+      if (savedTermFirst != null) {
+        termFirst = savedTermFirst;
+      }
       if (savedGridVisible != null) {
         showGrid = savedGridVisible;
       }
+      blueCardTextEnabled = savedBlueCardText ?? false;
 
       _resetCurrentCardState();
     });
@@ -427,22 +479,9 @@ class _HybridStudyPageState extends State<HybridStudyPage>
 
   Future<void> _loadReadingCardEdits() async {
     final loadedEdits = <String, ReadingCardEditData>{};
-    final loadedSourceTerms = <String, Term>{};
     final loadedSavedIds = <String>{};
 
     for (final term in widget.deck.terms) {
-      var sourceTerm = term;
-      final dictionaryTermId = term.sourceId ?? term.id;
-
-      try {
-        sourceTerm = await DictionaryService.getTermByIdAsync(
-          dictionaryTermId,
-        );
-      } catch (_) {
-        // Keep the deck copy as a fallback if the dictionary source cannot
-        // be loaded. Normal cards should resolve through sourceId.
-      }
-
       final hasSavedEdit = await ReadingCardEditStorage.hasSavedEdit(
         deck: widget.deck,
         term: term,
@@ -453,7 +492,6 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         term: term,
       );
 
-      loadedSourceTerms[term.id] = sourceTerm;
       loadedEdits[term.id] = editData;
 
       if (hasSavedEdit) {
@@ -464,10 +502,6 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     if (!mounted) return;
 
     setState(() {
-      readingSourceTerms
-        ..clear()
-        ..addAll(loadedSourceTerms);
-
       readingCardEdits
         ..clear()
         ..addAll(loadedEdits);
@@ -492,7 +526,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
 
   void _toggleFavorite(Term term) {
     setState(() {
-      term.marked = !term.marked;
+      TermFavoriteService.toggle(term);
     });
 
     _scheduleUserDataSave();
@@ -510,14 +544,10 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   }
 
   Future<void> _saveGridPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setBool(
-      writingGridPreferenceKey,
+    await GakujiLocalPreferences.saveBool(
+      _writingGridPreferenceKey,
       showGrid,
     );
-
-    _scheduleUserDataSave();
   }
 
   void _resetCurrentCardState({
@@ -706,6 +736,10 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     });
 
     DeckStorage.saveProgress(widget.deck.id, 0);
+    GakujiLocalPreferences.saveBool(
+      _starredOnlyPreferenceKey(widget.deck.id),
+      showStarredOnly,
+    );
     _scheduleUserDataSave();
   }
 
@@ -813,23 +847,49 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   void _toggleFurigana() {
     if (isSwipingAway) return;
 
+    final nextShowFurigana = !showFurigana;
+
     setState(() {
-      showFurigana = !showFurigana;
+      showFurigana = nextShowFurigana;
       _flipController.value = 0;
     });
 
-    _scheduleUserDataSave();
+    GakujiLocalPreferences.saveBool(
+      _showFuriganaPreferenceKey,
+      nextShowFurigana,
+    );
+  }
+
+  void _toggleExampleFurigana() {
+    if (isSwipingAway) return;
+
+    final nextShowExampleFurigana = !showExampleFurigana;
+
+    setState(() {
+      showExampleFurigana = nextShowExampleFurigana;
+      _flipController.value = 0;
+    });
+
+    GakujiLocalPreferences.saveBool(
+      _showExampleFuriganaPreferenceKey,
+      nextShowExampleFurigana,
+    );
   }
 
   void _toggleCardOrientation() {
     if (isSwipingAway) return;
 
+    final nextTermFirst = !termFirst;
+
     setState(() {
-      termFirst = !termFirst;
+      termFirst = nextTermFirst;
       _flipController.value = 0;
     });
 
-    _scheduleUserDataSave();
+    GakujiLocalPreferences.saveBool(
+      _termFirstPreferenceKey,
+      nextTermFirst,
+    );
   }
 
   void _toggleGrid() {
@@ -872,6 +932,16 @@ class _HybridStudyPageState extends State<HybridStudyPage>
                   ? GakujiColors.darkGray
                   : GakujiColors.mediumGray,
               onTap: _toggleFurigana,
+            ),
+            GakujiOptionsSheetItem(
+              textIcon: '例',
+              label: showExampleFurigana
+                  ? 'Hide Example Sentence Furigana'
+                  : 'Show Example Sentence Furigana',
+              iconColor: showExampleFurigana
+                  ? GakujiColors.darkGray
+                  : GakujiColors.mediumGray,
+              onTap: _toggleExampleFurigana,
             ),
             GakujiOptionsSheetItem(
               icon: Icons.swap_horiz_rounded,
@@ -1182,24 +1252,8 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     return readingCardEdits[term.id];
   }
 
-  Term _readingSourceTermFor(Term term) {
-    return readingSourceTerms[term.id] ?? term;
-  }
-
-  bool _readingSourceIsReady(Term term) {
-    return term.sourceId == null || readingSourceTerms.containsKey(term.id);
-  }
-
-  String _limitReadingNote(String value) {
-    if (value.runes.length <= 35) return value;
-
-    return String.fromCharCodes(value.runes.take(35));
-  }
-
   List<String> _defaultReadingGlossesFor(Term term) {
-    if (!_readingSourceIsReady(term)) return const [];
-
-    final sourceTerm = _readingSourceTermFor(term);
+    final sourceTerm = term;
     final glossBySenseIndex = <int, String>{};
 
     for (final sense in sourceTerm.senses) {
@@ -1252,7 +1306,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
       return _defaultReadingGlossesFor(term);
     }
 
-    final sourceTerm = _readingSourceTermFor(term);
+    final sourceTerm = term;
     final resolved = <String>[];
     final usedSenseIndexes = <int>{};
 
@@ -1301,7 +1355,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     Term term,
     List<String> glosses,
   ) {
-    final sourceTerm = _readingSourceTermFor(term);
+    final sourceTerm = term;
     final indexes = <int>{};
 
     for (final displayedGloss in glosses) {
@@ -1330,7 +1384,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     Term term,
     List<String> glosses,
   ) {
-    final sourceTerm = _readingSourceTermFor(term);
+    final sourceTerm = term;
     final senseIndexes = _readingSenseIndexesForGlosses(
       term,
       glosses,
@@ -1367,11 +1421,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   }
 
   String _readingNoteFor(Term term) {
-    final note = _hasSavedReadingCardEdit(term)
-        ? _readingCardEditFor(term)?.note ?? ''
-        : term.note ?? '';
-
-    return _limitReadingNote(note.trim());
+    return (term.note ?? '').trim();
   }
 
   List<DictionaryExample> _readingExamplesFor(Term term) {
@@ -1493,12 +1543,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _circle(Icons.undo_rounded, _goBack),
-                  currentIsWriting
-                      ? _circle(Icons.redo_rounded, _skipCurrent)
-                      : const SizedBox(
-                          width: 46,
-                          height: 46,
-                        ),
+                  _circle(Icons.redo_rounded, _skipCurrent),
                 ],
               ),
             ),
@@ -1526,7 +1571,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         if (activeItems.length > 1) _readingBlankCardBehind(),
         Transform(
           transform: Matrix4.identity()
-            ..translateByDouble(dragOffset.dx, dragOffset.dy, 0.0, 1.0)
+            ..translateByDouble(dragOffset.dx, dragOffset.dy, 0, 1)
             ..rotateZ(rotation),
           alignment: Alignment.center,
           child: GestureDetector(
@@ -1573,7 +1618,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         else
           Transform(
             transform: Matrix4.identity()
-              ..translateByDouble(dragOffset.dx, dragOffset.dy, 0.0, 1.0)
+              ..translateByDouble(dragOffset.dx, dragOffset.dy, 0, 1)
               ..rotateZ(rotation),
             alignment: Alignment.center,
             child: GestureDetector(
@@ -1600,6 +1645,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   Widget _readingBlankCardBehind() {
     return IgnorePointer(
       child: ReadingCardFrame(
+        minHeight: ReadingCardFrame.readingStudyMinHeight,
         margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
         boxShadow: [GakujiShadows.soft],
         child: const SizedBox.expand(),
@@ -1660,6 +1706,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     final term = currentItem.term;
 
     return ReadingCardFrame(
+      minHeight: ReadingCardFrame.readingStudyMinHeight,
       margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
       borderColor: hasSwipeFeedback
           ? swipeFeedbackColor!
@@ -1680,14 +1727,20 @@ class _HybridStudyPageState extends State<HybridStudyPage>
 
   Widget _readingDefinitionContent(Term term) {
     final readingText = term.reading.trim();
+    final editData = _readingCardEditFor(term);
 
     return ReadingCardBackContent(
       glosses: _readingGlossesFor(term),
       note: _readingNoteFor(term),
       examples: _readingExamplesFor(term),
       photoPath: _readingPhotoPathFor(term),
+      photoScale: editData?.photoScale ?? 1.0,
+      photoOffsetX: editData?.photoOffsetX ?? 0.0,
+      photoOffsetY: editData?.photoOffsetY ?? 0.0,
       readingText: readingText,
       showReadingOnBack: !showFurigana && readingText.isNotEmpty,
+      showExampleFurigana: showExampleFurigana,
+      textColor: blueCardTextEnabled ? GakujiColors.reading : null,
     );
   }
 
@@ -1715,7 +1768,9 @@ class _HybridStudyPageState extends State<HybridStudyPage>
                     height: 1,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -0.8,
-                    color: GakujiColors.darkGray,
+                    color: blueCardTextEnabled
+                        ? GakujiColors.reading
+                        : GakujiColors.darkGray,
                   ),
                 ),
               ),
@@ -1733,7 +1788,9 @@ class _HybridStudyPageState extends State<HybridStudyPage>
                       fontSize: 20,
                       height: 1,
                       fontWeight: FontWeight.w600,
-                      color: GakujiColors.mediumGray,
+                      color: blueCardTextEnabled
+                          ? GakujiColors.reading
+                          : GakujiColors.mediumGray,
                     ),
                   ),
                 ),
@@ -1760,14 +1817,12 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   }) {
     final hasSwipeFeedback = swipeColor != null && swipeOpacity > 0;
 
-    final term = currentItem.term;
-
     return ReadingCardFrame(
       margin: const EdgeInsets.fromLTRB(28, 0, 28, 0),
       borderColor: hasSwipeFeedback ? swipeColor : GakujiColors.softBorder,
       borderWidth: hasSwipeFeedback ? 5 : 1.2,
-      isStarred: term.marked,
-      onStarTap: () => _toggleFavorite(term),
+      isStarred: currentItem.term.marked,
+      onStarTap: () => _toggleFavorite(currentItem.term),
       child: Opacity(
         opacity: contentOpacity,
         child: isWritingAnswerRevealed
@@ -1777,285 +1832,368 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     );
   }
 
+  double _writingReadingFontSize(
+    String value, {
+    required int slotCount,
+  }) {
+    final length = value.runes.length;
+
+    if (slotCount >= 10 || length >= 18) return 15;
+    if (slotCount >= 8 || length >= 12) return 16;
+    if (slotCount > 6) return 17;
+
+    return 18;
+  }
+
+  double _writingMeaningFontSize(String value) {
+    final length = value.runes.length;
+
+    if (length >= 64) return 12;
+    if (length >= 46) return 13;
+    if (length >= 30) return 14;
+
+    return 15;
+  }
+
+  double _writingAnswerFontSize(String value) {
+    final length = value.runes.length;
+
+    if (length >= 10) return 30;
+    if (length >= 8) return 34;
+    if (length > 6) return 38;
+
+    return 48;
+  }
+
+  double _writingPadSizeFor(BoxConstraints constraints) {
+    final maxWidth =
+        constraints.maxWidth.isFinite ? constraints.maxWidth : 316.0;
+    final maxHeight =
+        constraints.maxHeight.isFinite ? constraints.maxHeight : 554.0;
+    const fixedContentHeight = 218.0;
+    final widthLimitedSize = math.min(280.0, maxWidth - 24);
+    final heightLimitedSize = maxHeight - fixedContentHeight;
+
+    return math
+        .min(widthLimitedSize, heightLimitedSize)
+        .clamp(190.0, 280.0)
+        .toDouble();
+  }
+
+  Widget _writingReadingText(
+    String reading, {
+    required int slotCount,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 50),
+      child: SizedBox(
+        height: 40,
+        child: Center(
+          child: Text(
+            reading,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.small.copyWith(
+              fontSize: _writingReadingFontSize(
+                reading,
+                slotCount: slotCount,
+              ),
+              height: 1.08,
+              color: blueCardTextEnabled
+                  ? GakujiColors.reading
+                  : GakujiColors.darkGray,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _writingMeaningText(String meaning) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: SizedBox(
+        height: 36,
+        child: Center(
+          child: Text(
+            meaning,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: GakujiText.xSmall.copyWith(
+              fontSize: _writingMeaningFontSize(meaning),
+              height: 1.08,
+              color: blueCardTextEnabled
+                  ? GakujiColors.reading
+                  : GakujiColors.darkGray,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _writingInputContent(WritingPrompt prompt) {
-    return Column(
-      children: [
-        const SizedBox(height: 12),
-        Text(
-          prompt.reading,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.small.copyWith(
-            color: GakujiColors.darkGray,
-          ),
-        ),
-        const SizedBox(height: 20),
-        _answerSlotRow(prompt),
-        const SizedBox(height: 18),
-        Text(
-          prompt.meaning,
-          textAlign: TextAlign.center,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.xSmall.copyWith(
-            color: GakujiColors.darkGray,
-          ),
-        ),
-        const Spacer(),
-        Center(
-          child: SizedBox(
-            width: 280,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _miniDeckButton(
-                  label: 'Clear',
-                  color: GakujiColors.whiteCard,
-                  textColor: const Color(0xFFB8B0A8),
-                  outlined: true,
-                  width: 70,
-                  onTap: _clearWritingSlot,
-                ),
-                _miniDeckButton(
-                  label: isCheckingAnswer
-                      ? 'Checking...'
-                      : isCheckingFinalSlot
-                          ? 'Submit'
-                          : 'Check',
-                  color: GakujiColors.deckBlue,
-                  textColor: Colors.white,
-                  width: isCheckingAnswer ? 96 : 78,
-                  onTap: isCheckingAnswer ? null : _checkWritingAnswer,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Center(
-          child: SizedBox(
-            width: 280,
-            height: 280,
-            child: Container(
-              decoration: BoxDecoration(
-                color: GakujiColors.whiteCard,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: GakujiColors.warmDivider,
-                  width: 1.5,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onPanStart: (details) {
-                        final box =
-                            context.findRenderObject() as RenderBox;
-                        final point = box.globalToLocal(
-                          details.globalPosition,
-                        );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final padSize = _writingPadSizeFor(constraints);
 
-                        setState(() {
-                          _addStroke(
-                            point,
-                            isStart: true,
-                          );
-                        });
-                      },
-                      onPanUpdate: (details) {
-                        final box =
-                            context.findRenderObject() as RenderBox;
-                        final point = box.globalToLocal(
-                          details.globalPosition,
-                        );
-
-                        setState(() {
-                          _addStroke(point);
-                        });
-                      },
-                      child: CustomPaint(
-                        painter: _HybridWritingPainter(
-                          slotStrokes.isNotEmpty
-                              ? slotStrokes[activeSlotIndex]
-                              : <List<WritingPoint>>[],
-                          showGrid,
-                        ),
-                        child: const SizedBox.expand(),
-                      ),
-                    );
-                  },
-                ),
-              ),
+        return Column(
+          children: [
+            const SizedBox(height: 10),
+            _writingReadingText(
+              prompt.reading,
+              slotCount: prompt.slotCount,
             ),
-          ),
-        ),
-      ],
+            const SizedBox(height: 16),
+            _answerSlotRow(prompt),
+            const SizedBox(height: 12),
+            _writingMeaningText(prompt.meaning),
+            const Spacer(),
+            _writingPad(padSize),
+            const SizedBox(height: 10),
+            WritingStudyActionRow(
+              width: padSize,
+              isCheckingAnswer: isCheckingAnswer,
+              isCheckingFinalSlot: isCheckingFinalSlot,
+              onClear: _clearWritingSlot,
+              onCheck: _checkWritingAnswer,
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _writingAnswerRevealContent(WritingPrompt prompt) {
-    return Column(
-      children: [
-        const SizedBox(height: 12),
-        Text(
-          prompt.reading,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.small.copyWith(
-            color: GakujiColors.darkGray,
-          ),
-        ),
-        const SizedBox(height: 22),
-        _answerSlotRow(prompt),
-        const SizedBox(height: 22),
-        Text(
-          prompt.meaning,
-          textAlign: TextAlign.center,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.xSmall.copyWith(
-            color: GakujiColors.darkGray,
-          ),
-        ),
-        const SizedBox(height: 72),
-        Container(
-          width: double.infinity,
-          height: 2,
+    final answerText = writingAnswerResult?.correctAnswer ?? prompt.answer;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final padSize = _writingPadSizeFor(constraints);
+
+        return Column(
+          children: [
+            const SizedBox(height: 10),
+            _writingReadingText(
+              prompt.reading,
+              slotCount: prompt.slotCount,
+            ),
+            const SizedBox(height: 16),
+            _answerSlotRow(prompt),
+            const SizedBox(height: 12),
+            _writingMeaningText(prompt.meaning),
+            const Spacer(),
+            SizedBox(
+              height: padSize + 44,
+              child: Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    height: 2,
+                    decoration: BoxDecoration(
+                      color: GakujiColors.darkGray,
+                      borderRadius: BorderRadius.circular(GakujiRadius.pill),
+                    ),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            answerText,
+                            maxLines: 1,
+                            softWrap: false,
+                            textScaler: TextScaler.noScaling,
+                            style: TextStyle(
+                              fontSize: _writingAnswerFontSize(answerText),
+                              height: 1,
+                              color: blueCardTextEnabled
+                                  ? GakujiColors.reading
+                                  : GakujiColors.deckBlue,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 34,
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Text(
+                        'Swipe left for incorrect · Swipe right for correct',
+                        textAlign: TextAlign.center,
+                        textScaler: TextScaler.noScaling,
+                        style: GakujiText.xSmall.copyWith(
+                          fontSize: 14,
+                          color: blueCardTextEnabled
+                              ? GakujiColors.reading
+                              : GakujiColors.softGray,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _writingPad(double padSize) {
+    return Center(
+      child: SizedBox(
+        width: padSize,
+        height: padSize,
+        child: Container(
           decoration: BoxDecoration(
-            color: GakujiColors.darkGray,
-            borderRadius: BorderRadius.circular(GakujiRadius.pill),
+            color: GakujiColors.whiteCard,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: GakujiColors.warmDivider,
+              width: 1.5,
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _writingPadCanvas(),
           ),
         ),
-        const SizedBox(height: 38),
-        Text(
-          writingAnswerResult?.correctAnswer ?? prompt.answer,
-          textScaler: TextScaler.noScaling,
-          style: const TextStyle(
-            fontSize: 48,
-            height: 1,
-            color: GakujiColors.deckBlue,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const Spacer(),
-        Text(
-          'Swipe left for incorrect · Swipe right for correct',
-          textAlign: TextAlign.center,
-          textScaler: TextScaler.noScaling,
-          style: GakujiText.xSmall.copyWith(
-            fontSize: 14,
-            color: GakujiColors.softGray,
-          ),
-        ),
-      ],
+      ),
+    );
+  }
+
+  Widget _writingPadCanvas() {
+    return GakujiLowLatencyWritingCanvas(
+      strokes: slotStrokes.isNotEmpty
+          ? slotStrokes[activeSlotIndex]
+          : <List<WritingPoint>>[],
+      showGrid: showGrid,
+      onStrokeStart: (point) {
+        _addStroke(
+          point,
+          isStart: true,
+        );
+      },
+      onStrokeUpdate: _addStroke,
     );
   }
 
   Widget _answerSlotRow(WritingPrompt prompt) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(prompt.slotCount, (index) {
-        final active = index == activeSlotIndex;
-        final slotAnswer = slotAnswers[index];
-        final slotColor = isWritingAnswerRevealed
-            ? GakujiColors.darkGray
-            : active
-                ? GakujiColors.darkGray
-                : GakujiColors.softGray;
-
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () => _selectWritingSlot(index),
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 3),
-            width: 42,
-            height: 52,
-            alignment: Alignment.center,
-            color: Colors.transparent,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                SizedBox(
-                  height: 36,
-                  child: Center(
-                    child: slotAnswer == null || slotAnswer.isEmpty
-                        ? const SizedBox.shrink()
-                        : Text(
-                            slotAnswer,
-                            textScaler: TextScaler.noScaling,
-                            style: TextStyle(
-                              fontSize: 30,
-                              height: 1,
-                              fontWeight: FontWeight.w600,
-                              color: slotColor,
-                            ),
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Container(
-                  width: 34,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: slotColor,
-                    borderRadius: BorderRadius.circular(99),
-                  ),
-                ),
-              ],
-            ),
-          ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final metrics = _slotMetricsFor(
+          slotCount: prompt.slotCount,
+          maxWidth: constraints.maxWidth,
         );
-      }),
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(prompt.slotCount, (index) {
+            final active = index == activeSlotIndex;
+            final slotAnswer = index < slotAnswers.length
+                ? slotAnswers[index]
+                : null;
+            final slotColor = isWritingAnswerRevealed
+                ? GakujiColors.darkGray
+                : active
+                    ? GakujiColors.darkGray
+                    : GakujiColors.softGray;
+
+            return GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () => _selectWritingSlot(index),
+              child: Container(
+                margin: EdgeInsets.symmetric(horizontal: metrics.margin),
+                width: metrics.width,
+                height: metrics.height,
+                alignment: Alignment.center,
+                color: Colors.transparent,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    SizedBox(
+                      height: metrics.characterHeight,
+                      child: Center(
+                        child: slotAnswer == null || slotAnswer.isEmpty
+                            ? const SizedBox.shrink()
+                            : Text(
+                                slotAnswer,
+                                textScaler: TextScaler.noScaling,
+                                style: TextStyle(
+                                  fontSize: metrics.characterFontSize,
+                                  height: 1,
+                                  fontWeight: FontWeight.w600,
+                                  color: blueCardTextEnabled
+                                      ? GakujiColors.reading
+                                      : slotColor,
+                                ),
+                              ),
+                      ),
+                    ),
+                    SizedBox(height: metrics.gap),
+                    Container(
+                      width: metrics.lineWidth,
+                      height: metrics.lineHeight,
+                      decoration: BoxDecoration(
+                        color: slotColor,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 
-  Widget _miniDeckButton({
-    required String label,
-    required Color color,
-    required Color textColor,
-    required VoidCallback? onTap,
-    double width = 70,
-    bool outlined = false,
+  _HybridAnswerSlotMetrics _slotMetricsFor({
+    required int slotCount,
+    required double maxWidth,
   }) {
-    final disabled = onTap == null;
+    if (slotCount <= 6) {
+      return const _HybridAnswerSlotMetrics(
+        margin: 3,
+        width: 42,
+        height: 52,
+        characterHeight: 36,
+        characterFontSize: 30,
+        gap: 5,
+        lineWidth: 34,
+        lineHeight: 3,
+      );
+    }
 
-    return Opacity(
-      opacity: disabled ? 0.55 : 1,
-      child: _HybridPushable(
-        onTap: onTap,
-        pressedOffset: 3,
-        builder: (pressed) {
-          return Container(
-            width: width,
-            height: 30,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: GakujiColors.warmDivider,
-                width: 1.5,
-              ),
-            ),
-            child: Center(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Text(
-                    label,
-                    textScaler: TextScaler.noScaling,
-                    style: TextStyle(
-                      fontSize: 16,
-                      height: 1,
-                      fontWeight: FontWeight.w800,
-                      color: textColor,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+    final availableWidth =
+        maxWidth.isFinite ? math.min(maxWidth, 320.0) : 320.0;
+    const margin = 2.0;
+    final slotWidth = ((availableWidth - (slotCount * margin * 2)) /
+            slotCount)
+        .clamp(24.0, 36.0)
+        .toDouble();
+    final scale = (slotWidth / 42).clamp(0.0, 1.0).toDouble();
+
+    return _HybridAnswerSlotMetrics(
+      margin: margin,
+      width: slotWidth,
+      height: (52 * scale).clamp(42.0, 48.0).toDouble(),
+      characterHeight: (36 * scale).clamp(28.0, 32.0).toDouble(),
+      characterFontSize: (30 * scale).clamp(22.0, 26.0).toDouble(),
+      gap: 4,
+      lineWidth: (34 * scale).clamp(20.0, 30.0).toDouble(),
+      lineHeight: 2.7,
     );
   }
 
@@ -2068,7 +2206,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   }) {
     return GakujiTopBar(
       leftIcon: leftIcon,
-      leftIconSize: 34,
+      leftIconSize: GakujiTopBar.iconSize,
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: onLeftTap,
       title: title,
@@ -2080,7 +2218,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         color: GakujiColors.darkGray,
       ),
       rightIcon: rightIcon,
-      rightIconSize: 36,
+      rightIconSize: GakujiTopBar.iconSize,
       rightIconColor: GakujiColors.darkGray,
       onRightTap: onRightTap,
     );
@@ -2410,17 +2548,28 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     required bool alignLeft,
   }) {
     final isIncorrect = color == incorrectRed;
+    final fillColor = isIncorrect
+        ? const Color(0xFFF28F8F)
+        : const Color(0xFFB8DF91);
+    final outlineColor = isIncorrect
+        ? const Color(0xFFD85F5F)
+        : const Color(0xFF78AA50);
+    final countText = '$count';
+    final fontSize = countText.length >= 5
+        ? 16.0
+        : countText.length >= 4
+            ? 17.0
+            : countText.length >= 3
+                ? 18.0
+                : 20.0;
 
     return Container(
-      width: 78,
-      height: 34,
-      padding: EdgeInsets.only(
-        left: alignLeft ? 24 : 0,
-        right: alignLeft ? 0 : 24,
-      ),
-      alignment: alignLeft ? Alignment.centerLeft : Alignment.centerRight,
+      width: 70,
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color,
+        color: fillColor,
         borderRadius: alignLeft
             ? const BorderRadius.horizontal(
                 right: Radius.circular(30),
@@ -2429,18 +2578,19 @@ class _HybridStudyPageState extends State<HybridStudyPage>
                 left: Radius.circular(30),
               ),
         border: Border.all(
-          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
-          width: 3,
+          color: outlineColor,
+          width: 2.5,
         ),
       ),
-      child: Text(
-        '$count',
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 24,
-          height: 1,
-          fontWeight: FontWeight.w700,
-          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          countText,
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.studyCounter.copyWith(
+            fontSize: fontSize,
+            color: outlineColor,
+          ),
         ),
       ),
     );
@@ -2548,54 +2698,26 @@ class _HybridPushableState extends State<_HybridPushable> {
   }
 }
 
-class _HybridWritingPainter extends CustomPainter {
-  final List<List<WritingPoint>> strokes;
-  final bool showGrid;
+class _HybridAnswerSlotMetrics {
+  final double margin;
+  final double width;
+  final double height;
+  final double characterHeight;
+  final double characterFontSize;
+  final double gap;
+  final double lineWidth;
+  final double lineHeight;
 
-  _HybridWritingPainter(
-    this.strokes,
-    this.showGrid,
-  );
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final pen = Paint()
-      ..color = GakujiColors.darkGray
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final grid = Paint()
-      ..color = GakujiColors.warmDivider
-      ..strokeWidth = 1;
-
-    if (showGrid) {
-      canvas.drawLine(
-        Offset(size.width / 2, 0),
-        Offset(size.width / 2, size.height),
-        grid,
-      );
-
-      canvas.drawLine(
-        Offset(0, size.height / 2),
-        Offset(size.width, size.height / 2),
-        grid,
-      );
-    }
-
-    for (final stroke in strokes) {
-      for (var index = 0; index < stroke.length - 1; index++) {
-        canvas.drawLine(
-          Offset(stroke[index].x, stroke[index].y),
-          Offset(stroke[index + 1].x, stroke[index + 1].y),
-          pen,
-        );
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  const _HybridAnswerSlotMetrics({
+    required this.margin,
+    required this.width,
+    required this.height,
+    required this.characterHeight,
+    required this.characterFontSize,
+    required this.gap,
+    required this.lineWidth,
+    required this.lineHeight,
+  });
 }
 
 class _HybridCompletionGaugePainter extends CustomPainter {

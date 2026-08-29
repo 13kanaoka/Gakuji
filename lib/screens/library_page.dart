@@ -1,17 +1,25 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../data/deck_data.dart';
 import '../data/folder_data.dart';
 import '../data/pinned_deck_data.dart';
 import '../data/recent_deck_data.dart';
+import '../data/review_card_data.dart';
 import '../models/deck.dart';
 import '../models/folder.dart';
+import '../models/review_card.dart';
+import '../services/account_username_service.dart';
 import '../services/gakuji_user_data_store.dart';
+import '../services/review_settings.dart';
 import '../widgets/gakuji_deck_card.dart';
+import '../widgets/gakuji_deck_transition.dart';
 import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_folder_card.dart';
 import '../widgets/gakuji_search_bar.dart';
 import '../widgets/gakuji_styles.dart';
+import '../widgets/gakuji_todo_deck_card.dart';
+import '../widgets/gakuji_top_bar.dart';
 import 'create_deck_page.dart';
 import 'deck_page.dart';
 import 'folder_page.dart';
@@ -50,6 +58,8 @@ class _LibraryPageState extends State<LibraryPage> {
   final TextEditingController folderNameController = TextEditingController();
 
   String searchQuery = '';
+  Map<String, int> remainingNewCardsTodayByDeck = <String, int>{};
+  Map<String, int> remainingReviewCardsTodayByDeck = <String, int>{};
 
   int get selectedItemCount {
     return selectedDeckIds.length + selectedFolderIds.length;
@@ -67,9 +77,108 @@ class _LibraryPageState extends State<LibraryPage> {
 
   Future<void> _loadRecentDeckOrder() async {
     await loadRecentlyOpenedDeckIds();
+    await loadReviewCards();
+    await _loadReviewAvailability();
 
     if (!mounted) return;
     setState(() {});
+  }
+
+  Future<void> _loadReviewAvailability() async {
+    final settings = await ReviewSettingsStore.load();
+    final nextRemainingNew = <String, int>{};
+    final nextRemainingReview = <String, int>{};
+
+    for (final deck in decks) {
+      final newCardsStartedToday =
+          await ReviewSettingsStore.newCardsStartedToday(deckId: deck.id);
+      final reviewsCompletedToday =
+          await ReviewSettingsStore.reviewsCompletedToday(deckId: deck.id);
+
+      nextRemainingNew[deck.id] =
+          (settings.newLimit - newCardsStartedToday).clamp(0, 9999).toInt();
+      nextRemainingReview[deck.id] =
+          (settings.reviewLimit - reviewsCompletedToday).clamp(0, 9999).toInt();
+    }
+
+    remainingNewCardsTodayByDeck = nextRemainingNew;
+    remainingReviewCardsTodayByDeck = nextRemainingReview;
+  }
+
+  Future<void> _refreshLibraryData() async {
+    if (isDeletingItems) return;
+
+    FocusScope.of(context).unfocus();
+
+    if (showMenu) {
+      setState(() {
+        showMenu = false;
+      });
+    }
+
+    try {
+      await GakujiUserDataStore.refreshFromCloud();
+      await loadReviewCards();
+      await _loadReviewAvailability();
+
+      if (!mounted) return;
+
+      setState(() {});
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(milliseconds: 1600),
+            backgroundColor: Colors.black.withValues(alpha: 0.86),
+            content: Text(
+              'Couldn\'t refresh Library',
+              textScaler: TextScaler.noScaling,
+              style: GakujiText.snackBar,
+            ),
+          ),
+        );
+    }
+  }
+
+  Widget _libraryRefreshIndicator({required Widget child}) {
+    return RefreshIndicator(
+      onRefresh: _refreshLibraryData,
+      color: GakujiColors.reading,
+      backgroundColor: GakujiColors.warmCard,
+      edgeOffset: 68,
+      displacement: 30,
+      child: child,
+    );
+  }
+
+  Widget _refreshableEmptyContent(String message) {
+    return _libraryRefreshIndicator(
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(18, 74, 18, 190),
+            sliver: SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(
+                child: Text(
+                  message,
+                  textAlign: TextAlign.center,
+                  textScaler: TextScaler.noScaling,
+                  style: GakujiText.small.copyWith(
+                    color: GakujiColors.mediumGray,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -113,6 +222,14 @@ class _LibraryPageState extends State<LibraryPage> {
               if (name.isEmpty) {
                 setDialogState(() {
                   deckNameError = 'Deck name required';
+                });
+
+                return;
+              }
+
+              if (GakujiUsernameService.containsRestrictedLanguage(name)) {
+                setDialogState(() {
+                  deckNameError = 'Deck name contains a restricted term';
                 });
 
                 return;
@@ -483,7 +600,7 @@ class _LibraryPageState extends State<LibraryPage> {
                           ? _deckContent(visibleDecks)
                           : _folderContent(visibleFolders),
                       Positioned(
-                        top: 18,
+                        top: 10,
                         left: 18,
                         right: 18,
                         child: GakujiSearchBar(
@@ -521,178 +638,198 @@ class _LibraryPageState extends State<LibraryPage> {
     final topInset = MediaQuery.of(context).padding.top;
 
     return Container(
-      height: topInset + 96,
       color: GakujiColors.warmBackground,
-      padding: EdgeInsets.fromLTRB(28, topInset + 18, 28, 18),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: SizedBox(
-              width: 44,
-              height: 44,
-            ),
-          ),
-          Text(
-            'Library',
-            textAlign: TextAlign.center,
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.large.copyWith(
-              color: GakujiColors.darkGray,
-            ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _headerAddDeckButton(),
-          ),
-        ],
+      padding: EdgeInsets.only(
+        top: topInset + 10,
+        bottom: 10,
+      ),
+      child: GakujiTopBar(
+        title: 'Decks',
+        titleStyle: GakujiText.pageTitle.copyWith(
+          color: GakujiColors.darkGray,
+        ),
+        rightIcon: isDeletingItems ? null : Icons.add_rounded,
+        rightIconColor: GakujiColors.darkGray,
+        onRightTap: isDeletingItems ? null : _openCreateDeckPage,
       ),
     );
   }
 
-  Widget _headerAddDeckButton() {
-    return Opacity(
-      opacity: isDeletingItems ? 0 : 1,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: isDeletingItems
-            ? null
-            : () async {
-                final created = await Navigator.push<bool>(
-                  context,
-                  PageRouteBuilder(
-                    transitionDuration: const Duration(milliseconds: 320),
-                    reverseTransitionDuration:
-                        const Duration(milliseconds: 260),
-                    pageBuilder: (context, animation, secondaryAnimation) {
-                      return const CreateDeckPage();
-                    },
-                    transitionsBuilder: (
-                      context,
-                      animation,
-                      secondaryAnimation,
-                      child,
-                    ) {
-                      final curvedAnimation = CurvedAnimation(
-                        parent: animation,
-                        curve: Curves.easeOutCubic,
-                        reverseCurve: Curves.easeInCubic,
-                      );
+  Future<void> _openCreateDeckPage() async {
+    final created = await Navigator.push<bool>(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 320),
+        reverseTransitionDuration: const Duration(milliseconds: 260),
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return const GakujiSwipeBackScope(
+            side: GakujiPageSide.right,
+            child: CreateDeckPage(),
+          );
+        },
+        transitionsBuilder: (
+          context,
+          animation,
+          secondaryAnimation,
+          child,
+        ) {
+          final curvedAnimation = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
 
-                      return SlideTransition(
-                        position: Tween<Offset>(
-                          begin: const Offset(0, 1),
-                          end: Offset.zero,
-                        ).animate(curvedAnimation),
-                        child: child,
-                      );
-                    },
-                  ),
-                );
-
-                if (!mounted) return;
-
-                if (created == true) {
-                  setState(() {
-                    showDecks = true;
-                  });
-
-                  scheduleUserDataSave();
-                }
-              },
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Center(
-            child: Icon(
-              Icons.add_rounded,
-              color: GakujiColors.darkGray,
-              size: 36,
-            ),
-          ),
-        ),
+          return SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, 1),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: child,
+          );
+        },
       ),
     );
+
+    if (!mounted) return;
+
+    if (created == true) {
+      setState(() {
+        showDecks = true;
+      });
+
+      scheduleUserDataSave();
+    }
   }
 
   Widget _deckContent(List<Deck> visibleDecks) {
     if (visibleDecks.isEmpty) {
-      return Center(
-        child: Text(
-          isDeletingItems
-              ? 'No decks to delete'
-              : searchQuery.trim().isEmpty
-                  ? 'No decks yet'
-                  : 'No decks found',
-          style: GakujiText.small.copyWith(
-            color: GakujiColors.mediumGray,
-          ),
-        ),
+      return _refreshableEmptyContent(
+        isDeletingItems
+            ? 'No decks to delete'
+            : searchQuery.trim().isEmpty
+                ? 'No decks yet'
+                : 'No decks found',
       );
     }
 
     return GakujiFadedScroll.withBottomNavigation(
-      child: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(18, 82, 18, 190),
-        itemCount: visibleDecks.length,
-        separatorBuilder: (context, index) {
-          return const SizedBox(height: 18);
-        },
-        itemBuilder: (context, index) {
-          final deck = visibleDecks[index];
+      child: _libraryRefreshIndicator(
+        child: ListView.separated(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(18, 74, 18, 190),
+          itemCount: visibleDecks.length,
+          separatorBuilder: (context, index) {
+            return const SizedBox(height: 18);
+          },
+          itemBuilder: (context, index) {
+            final deck = visibleDecks[index];
 
-          return _deckListItem(deck);
-        },
+            return _deckListItem(deck);
+          },
+        ),
       ),
     );
   }
 
   Widget _deckListItem(Deck deck) {
     final isSelected = selectedDeckIds.contains(deck.id);
+    final dueCards = getDueReviewCardsForDeck(deck.id);
+    final rawNewCount = dueCards
+        .where((card) => card.state == ReviewCardState.newCard)
+        .length;
+    final remainingNewCardsToday =
+        remainingNewCardsTodayByDeck[deck.id] ?? 0;
+    final newCount = rawNewCount < remainingNewCardsToday
+        ? rawNewCount
+        : remainingNewCardsToday;
+    final learningCount = dueCards
+        .where(
+          (card) =>
+              card.state == ReviewCardState.learning ||
+              card.state == ReviewCardState.relearning,
+        )
+        .length;
+    final rawReviewCount = dueCards
+        .where((card) => card.state == ReviewCardState.review)
+        .length;
+    final remainingReviewCardsToday =
+        remainingReviewCardsTodayByDeck[deck.id] ?? 0;
+    final reviewCount = rawReviewCount < remainingReviewCardsToday
+        ? rawReviewCount
+        : remainingReviewCardsToday;
+    final hasReviewDue =
+        newCount > 0 || learningCount > 0 || reviewCount > 0;
 
-    return GakujiDeckCard(
-      title: deck.name,
-      subtitle: _deckTypeLabel(deck.type),
-      watermark: _watermarkForDeckType(deck.type),
-      watermarkAssetPath: _watermarkAssetForDeckType(deck.type),
-      patternAssetPath: _patternAssetForDeckType(deck.type),
-      shellColor: isSelected ? deleteRed : null,
-      isPinned: isDeckPinned(deck),
-      onTap: () async {
-        if (isDeletingItems) {
-          toggleDeckSelection(deck);
-          return;
-        }
+    Future<void> openDeck() async {
+      if (isDeletingItems) {
+        toggleDeckSelection(deck);
+        return;
+      }
 
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => DeckPage(deck: deck),
+      await Navigator.of(context).push(
+        gakujiDeckRoute<void>(
+          page: DeckPage(deck: deck),
+        ),
+      );
+
+      await loadReviewCards();
+      await _loadReviewAvailability();
+
+      if (!mounted) return;
+
+      setState(() {});
+      scheduleUserDataSave();
+    }
+
+    if (hasReviewDue && !isDeletingItems) {
+      return Hero(
+        tag: gakujiDeckHeroTag(deck.id),
+        createRectTween: gakujiDeckRectTween,
+        flightShuttleBuilder: gakujiDeckFlightShuttleBuilder,
+        child: Material(
+          type: MaterialType.transparency,
+          child: GakujiTodoDeckCard(
+            deck: deck,
+            newCount: newCount,
+            learningCount: learningCount,
+            reviewCount: reviewCount,
+            isPinned: isDeckPinned(deck),
+            compact: true,
+            onTap: openDeck,
           ),
-        );
+        ),
+      );
+    }
 
-        if (!mounted) return;
-
-        setState(() {});
-        scheduleUserDataSave();
-      },
+    return Hero(
+      tag: gakujiDeckHeroTag(deck.id),
+      createRectTween: gakujiDeckRectTween,
+      flightShuttleBuilder: gakujiDeckFlightShuttleBuilder,
+      child: Material(
+        type: MaterialType.transparency,
+        child: GakujiDeckCard(
+          title: deck.name,
+          subtitle: _deckTypeLabel(deck.type),
+          watermark: _watermarkForDeckType(deck.type),
+          watermarkAssetPath: _watermarkAssetForDeckType(deck.type),
+          accentColor: GakujiColors.deckColorFor(deck),
+          patternAssetPath: _patternAssetForDeckType(deck.type),
+          shellColor: isSelected ? deleteRed : null,
+          isPinned: isDeckPinned(deck),
+          onTap: openDeck,
+        ),
+      ),
     );
   }
 
   Widget _folderContent(List<Folder> visibleFolders) {
     if (visibleFolders.isEmpty) {
-      return Center(
-        child: Text(
-          isDeletingItems
-              ? 'No folders to delete'
-              : searchQuery.trim().isEmpty
-                  ? 'No folders yet'
-                  : 'No folders found',
-          style: GakujiText.small.copyWith(
-            color: GakujiColors.mediumGray,
-          ),
-        ),
+      return _refreshableEmptyContent(
+        isDeletingItems
+            ? 'No folders to delete'
+            : searchQuery.trim().isEmpty
+                ? 'No folders yet'
+                : 'No folders found',
       );
     }
 
@@ -701,20 +838,23 @@ class _LibraryPageState extends State<LibraryPage> {
         final crossAxisCount = constraints.maxWidth < 330 ? 2 : 3;
 
         return GakujiFadedScroll.withBottomNavigation(
-          child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(18, 82, 18, 190),
-            itemCount: visibleFolders.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: crossAxisCount,
-              crossAxisSpacing: 18,
-              mainAxisSpacing: 30,
-              childAspectRatio: 1.38,
-            ),
-            itemBuilder: (context, index) {
-              final folder = visibleFolders[index];
+          child: _libraryRefreshIndicator(
+            child: GridView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(18, 74, 18, 190),
+              itemCount: visibleFolders.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: 18,
+                mainAxisSpacing: 30,
+                childAspectRatio: 1.38,
+              ),
+              itemBuilder: (context, index) {
+                final folder = visibleFolders[index];
 
-              return _folderGridItem(folder);
-            },
+                return _folderGridItem(folder);
+              },
+            ),
           ),
         );
       },
@@ -733,7 +873,7 @@ class _LibraryPageState extends State<LibraryPage> {
 
         await Navigator.push(
           context,
-          MaterialPageRoute(
+          GakujiPageRoute(
             builder: (context) => FolderPage(folder: folder),
           ),
         );

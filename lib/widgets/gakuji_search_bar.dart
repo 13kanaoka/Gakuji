@@ -29,6 +29,9 @@ class GakujiSearchBar extends StatefulWidget {
 }
 
 class _GakujiSearchBarState extends State<GakujiSearchBar> {
+  static const double _barHeight = 44;
+  static const double _borderWidth = 1.5;
+
   late final FocusNode _internalFocusNode;
 
   FocusNode get _activeFocusNode {
@@ -65,73 +68,83 @@ class _GakujiSearchBarState extends State<GakujiSearchBar> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: _focusSearchBar,
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 15),
-        decoration: BoxDecoration(
+    return SizedBox(
+      height: _barHeight,
+      child: DecoratedBox(
+        decoration: ShapeDecoration(
           color: GakujiColors.warmCard,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: GakujiColors.warmDivider,
-            width: 1.5,
+          shape: StadiumBorder(
+            side: BorderSide(
+              color: GakujiColors.warmDivider,
+              width: _borderWidth,
+            ),
           ),
-          boxShadow: [GakujiShadows.soft],
+          shadows: [GakujiShadows.soft],
         ),
-        child: Row(
-          children: [
-             Icon(
-              Icons.search,
-              size: 22,
-              color: GakujiColors.darkGray,
+        child: TextField(
+          focusNode: _activeFocusNode,
+          controller: widget.controller,
+          enabled: widget.enabled,
+          onTap: widget.onTap,
+          onChanged: widget.onChanged,
+          enableInteractiveSelection: true,
+          textAlignVertical: TextAlignVertical.center,
+          style: TextStyle(
+            fontSize: 16,
+            height: 1,
+            fontWeight: FontWeight.w400,
+            color: GakujiColors.darkGray,
+          ),
+          cursorColor: GakujiColors.darkGray,
+          decoration: InputDecoration(
+            hintText: widget.hintText,
+            hintStyle: TextStyle(
+              fontSize: 16,
+              height: 1,
+              fontWeight: FontWeight.w400,
+              color: GakujiColors.mediumGray,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: TextField(
-                focusNode: _activeFocusNode,
-                controller: widget.controller,
-                enabled: widget.enabled,
-                onTap: widget.onTap,
-                onChanged: widget.onChanged,
-                style: TextStyle(
-                  fontSize: 16,
-                  height: 1,
-                  fontWeight: FontWeight.w400,
-                  color: GakujiColors.darkGray,
-                ),
-                cursorColor: GakujiColors.darkGray,
-                decoration: InputDecoration(
-                  hintText: widget.hintText,
-                  hintStyle:  TextStyle(
-                    fontSize: 16,
-                    height: 1,
-                    fontWeight: FontWeight.w400,
-                    color: GakujiColors.mediumGray,
-                  ),
-                  border: InputBorder.none,
-                  isCollapsed: true,
-                ),
+            prefixIcon: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _focusSearchBar,
+              child: Icon(
+                Icons.search,
+                size: 22,
+                color: GakujiColors.darkGray,
               ),
             ),
-            if (widget.showClearButton)
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _clearSearchBar,
-                child: SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: Center(
-                    child: Icon(
-                      Icons.close,
-                      size: 18,
-                      color: GakujiColors.darkGray,
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 47,
+              minHeight: 44,
+            ),
+            suffixIcon: widget.showClearButton
+                ? GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _clearSearchBar,
+                    child: SizedBox(
+                      width: 40,
+                      height: _barHeight,
+                      child: Center(
+                        child: Icon(
+                          Icons.close,
+                          size: 18,
+                          color: GakujiColors.darkGray,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              ),
-          ],
+                  )
+                : null,
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 40,
+              minHeight: 44,
+            ),
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            isDense: true,
+            contentPadding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
+          ),
         ),
       ),
     );

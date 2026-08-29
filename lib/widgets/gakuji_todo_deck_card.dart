@@ -11,6 +11,7 @@ class GakujiTodoDeckCard extends StatelessWidget {
   final int reviewCount;
 
   final bool isPinned;
+  final bool compact;
   final VoidCallback onTap;
 
   const GakujiTodoDeckCard({
@@ -20,24 +21,42 @@ class GakujiTodoDeckCard extends StatelessWidget {
     required this.learningCount,
     required this.reviewCount,
     required this.isPinned,
+    this.compact = false,
     required this.onTap,
   });
 
-  static const double cardHeight = 148;
-  static const double reviewBarHeight = 48;
+  double get cardHeight => compact ? 104 : 148;
+  double get reviewBarHeight => compact ? 30 : 48;
+
+  bool get isHybrid => deck.type == DeckType.hybrid;
+
+  double get compactPatternSize => isHybrid ? 450 : 340;
+  double get compactPatternRightOffset => isHybrid ? -210 : -122;
+  double get compactPatternTopOffset => isHybrid ? -165 : -127;
 
   static Color get cardSurface => GakujiColors.warmCard;
   static Color get deckCircle => cardSurface.withValues(alpha: 0.10);
 
   Color get deckPrimaryColor {
-    switch (deck.type) {
-      case DeckType.reading:
-        return GakujiColors.reading;
-      case DeckType.writing:
-        return GakujiColors.writing;
-      case DeckType.hybrid:
-        return GakujiColors.hybrid;
-    }
+    return GakujiColors.deckColorFor(deck);
+  }
+
+  Color get deckForegroundColor {
+    return ThemeData.estimateBrightnessForColor(deckPrimaryColor) ==
+            Brightness.dark
+        ? Colors.white
+        : const Color(0xFF3F3F3F);
+  }
+
+  Color get reviewBarColor {
+    return Color.alphaBlend(
+      deckPrimaryColor.withValues(alpha: 0.92),
+      cardSurface,
+    );
+  }
+
+  double get reviewBarStart {
+    return (cardHeight - reviewBarHeight) / cardHeight;
   }
 
   @override
@@ -46,7 +65,22 @@ class GakujiTodoDeckCard extends StatelessWidget {
       height: cardHeight,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: cardSurface,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            cardSurface,
+            cardSurface,
+            reviewBarColor,
+            reviewBarColor,
+          ],
+          stops: [
+            0,
+            reviewBarStart,
+            reviewBarStart,
+            1,
+          ],
+        ),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: GakujiColors.softBorder,
@@ -64,13 +98,20 @@ class GakujiTodoDeckCard extends StatelessWidget {
           highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
           child: Stack(
             children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 0,
-                bottom: reviewBarHeight,
-                child: _pattern(),
-              ),
+              if (compact)
+                Positioned(
+                  right: compactPatternRightOffset,
+                  top: compactPatternTopOffset,
+                  child: _pattern(),
+                )
+              else
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: reviewBarHeight,
+                  child: _pattern(),
+                ),
               Positioned(
                 left: 0,
                 right: 0,
@@ -78,19 +119,7 @@ class GakujiTodoDeckCard extends StatelessWidget {
                 bottom: reviewBarHeight,
                 child: _deckWidgetContent(),
               ),
-              if (isPinned)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Transform.rotate(
-                    angle: 0.72,
-                    child: Icon(
-                      Icons.push_pin,
-                      size: 22,
-                      color: GakujiColors.darkGray,
-                    ),
-                  ),
-                ),
+              if (isPinned) _pinIcon(),
               Positioned(
                 left: 0,
                 right: 0,
@@ -129,9 +158,11 @@ class GakujiTodoDeckCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textScaler: TextScaler.noScaling,
-          style: GakujiText.small.copyWith(
-            color: GakujiColors.darkGray,
-          ),
+          style: compact
+              ? GakujiText.deckTitle
+              : GakujiText.small.copyWith(
+                  color: GakujiColors.darkGray,
+                ),
         ),
         const SizedBox(height: 6),
         Text(
@@ -139,9 +170,11 @@ class GakujiTodoDeckCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textScaler: TextScaler.noScaling,
-          style: GakujiText.xSmall.copyWith(
-            color: GakujiColors.darkGray,
-          ),
+          style: compact
+              ? GakujiText.deckMeta
+              : GakujiText.xSmall.copyWith(
+                  color: GakujiColors.darkGray,
+                ),
         ),
       ],
     );
@@ -151,7 +184,7 @@ class GakujiTodoDeckCard extends StatelessWidget {
     return Container(
       height: reviewBarHeight,
       decoration: BoxDecoration(
-        color: deckPrimaryColor.withValues(alpha: 0.92),
+        color: reviewBarColor,
         borderRadius: BorderRadius.zero,
       ),
       child: Row(
@@ -182,12 +215,51 @@ class GakujiTodoDeckCard extends StatelessWidget {
       '$label $count',
       textScaler: TextScaler.noScaling,
       style: GakujiText.xSmall.copyWith(
-        color: Colors.white,
+        color: deckForegroundColor,
       ),
     );
   }
 
   Widget _pattern() {
+    if (compact) {
+      return IgnorePointer(
+        child: Opacity(
+          opacity: 0.32,
+          child: ShaderMask(
+            shaderCallback: (bounds) {
+              return const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Colors.transparent,
+                  Colors.black,
+                ],
+                stops: [
+                  0.22,
+                  0.55,
+                ],
+              ).createShader(bounds);
+            },
+            blendMode: BlendMode.dstIn,
+            child: SizedBox(
+              width: compactPatternSize,
+              height: compactPatternSize,
+              child: Image.asset(
+                _patternAssetForDeckType(deck.type),
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
+                color: deckPrimaryColor,
+                colorBlendMode: BlendMode.srcIn,
+                errorBuilder: (context, error, stackTrace) {
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return IgnorePointer(
       child: Opacity(
         opacity: 0.24,
@@ -195,9 +267,50 @@ class GakujiTodoDeckCard extends StatelessWidget {
           _patternAssetForDeckType(deck.type),
           fit: BoxFit.cover,
           alignment: Alignment.center,
+          color: deckPrimaryColor,
+          colorBlendMode: BlendMode.srcIn,
           errorBuilder: (context, error, stackTrace) {
             return const SizedBox.shrink();
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _pinIcon() {
+    if (compact) {
+      return Positioned(
+        top: 8,
+        right: 8,
+        child: IgnorePointer(
+          child: Image.asset(
+            'assets/images/pin_icon.png',
+            width: 20,
+            height: 20,
+            fit: BoxFit.contain,
+            color: GakujiColors.darkGray,
+            colorBlendMode: BlendMode.srcIn,
+            errorBuilder: (context, error, stackTrace) {
+              return Icon(
+                Icons.push_pin_rounded,
+                size: 20,
+                color: GakujiColors.darkGray,
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+    return Positioned(
+      top: 8,
+      right: 8,
+      child: Transform.rotate(
+        angle: 0.72,
+        child: Icon(
+          Icons.push_pin,
+          size: 22,
+          color: GakujiColors.darkGray,
         ),
       ),
     );

@@ -3,7 +3,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/reading_card_edit_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
+import 'gakuji_cloud_sync_service.dart';
+import 'gakuji_user_repository.dart';
 
+/// Reading-card customization stored in the local SQLite user database.
+///
+/// SharedPreferences is only consulted as a one-time migration path for cards
+/// created by older Gakuji builds.
 class ReadingCardEditStorage {
   const ReadingCardEditStorage._();
 
@@ -21,79 +27,84 @@ class ReadingCardEditStorage {
     required Deck deck,
     required Term term,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = preferenceKeyFor(
-      deck: deck,
-      term: term,
+    final local = await GakujiUserRepository.loadReadingCardEdit(
+      deckId: deck.id,
+      termId: term.id,
     );
-
-    final savedValue = prefs.getString(key);
-
-    if (savedValue == null || savedValue.trim().isEmpty) {
-      return ReadingCardEditData.empty(
+    if (local != null) {
+      return local.copyWith(
         deckId: deck.id,
         termId: term.id,
         sourceId: ReadingCardEditData.sourceIdFor(term),
       );
     }
 
-    try {
-      final savedData = ReadingCardEditData.fromJsonString(savedValue);
+    final migrated = await _migrateLegacyEdit(deck: deck, term: term);
+    if (migrated != null) return migrated;
 
-      return savedData.copyWith(
-        deckId: deck.id,
-        termId: term.id,
-        sourceId: ReadingCardEditData.sourceIdFor(term),
-      );
-    } catch (_) {
-      await prefs.remove(key);
-
-      return ReadingCardEditData.empty(
-        deckId: deck.id,
-        termId: term.id,
-        sourceId: ReadingCardEditData.sourceIdFor(term),
-      );
-    }
+    return ReadingCardEditData.empty(
+      deckId: deck.id,
+      termId: term.id,
+      sourceId: ReadingCardEditData.sourceIdFor(term),
+    );
   }
 
   static Future<void> save(ReadingCardEditData data) async {
-    final prefs = await SharedPreferences.getInstance();
-    final key = ReadingCardEditData.preferenceKeyFor(
-      deckId: data.deckId,
-      termId: data.termId,
-    );
-
-    await prefs.setString(
-      key,
-      data.toJsonString(),
-    );
+    await GakujiUserRepository.saveReadingCardEdit(data);
+    GakujiCloudSyncService.schedulePush();
   }
 
   static Future<void> delete({
     required Deck deck,
     required Term term,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.remove(
-      preferenceKeyFor(
-        deck: deck,
-        term: term,
-      ),
+    await GakujiUserRepository.deleteReadingCardEdit(
+      deckId: deck.id,
+      termId: term.id,
     );
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(preferenceKeyFor(deck: deck, term: term));
+    GakujiCloudSyncService.schedulePush();
   }
 
   static Future<bool> hasSavedEdit({
     required Deck deck,
     required Term term,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
+    if (await GakujiUserRepository.hasReadingCardEdit(
+      deckId: deck.id,
+      termId: term.id,
+    )) {
+      return true;
+    }
 
-    return prefs.containsKey(
-      preferenceKeyFor(
-        deck: deck,
-        term: term,
-      ),
-    );
+    final migrated = await _migrateLegacyEdit(deck: deck, term: term);
+    return migrated != null;
+  }
+
+  static Future<ReadingCardEditData?> _migrateLegacyEdit({
+    required Deck deck,
+    required Term term,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = preferenceKeyFor(deck: deck, term: term);
+    final savedValue = prefs.getString(key);
+    if (savedValue == null || savedValue.trim().isEmpty) return null;
+
+    try {
+      final savedData = ReadingCardEditData.fromJsonString(savedValue).copyWith(
+        deckId: deck.id,
+        termId: term.id,
+        sourceId: ReadingCardEditData.sourceIdFor(term),
+      );
+      await GakujiUserRepository.saveReadingCardEdit(savedData);
+      await prefs.remove(key);
+      GakujiCloudSyncService.schedulePush();
+      return savedData;
+    } catch (_) {
+      await prefs.remove(key);
+      return null;
+    }
   }
 }

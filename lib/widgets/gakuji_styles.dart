@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/deck.dart';
 import '../services/app_theme_controller.dart';
 
 class GakujiFonts {
@@ -8,8 +9,9 @@ class GakujiFonts {
 
 /// App-wide colors.
 ///
-/// Brand and deck-type colors remain fixed. Neutral surface, text, border,
-/// divider, and shadow colors switch automatically with the saved theme.
+/// Brand colors and legacy deck-type colors remain available as defaults.
+/// User-selected deck colors override those defaults per deck. Neutral surface,
+/// text, border, divider, and shadow colors switch with the saved theme.
 class GakujiColors {
   static bool get isDarkMode {
     return appThemeController.themeMode == ThemeMode.dark;
@@ -26,6 +28,27 @@ class GakujiColors {
 
   static const Color pinRed = Color(0xFFFF4B4B);
   static const Color watermarkBlue = Color(0x1A4D7EF7);
+
+  static Color defaultDeckColorForType(DeckType type) {
+    switch (type) {
+      case DeckType.reading:
+        return reading;
+      case DeckType.writing:
+        return writing;
+      case DeckType.hybrid:
+        return hybrid;
+    }
+  }
+
+  static Color deckColorFor(Deck deck) {
+    final colorValue = deck.colorValue;
+
+    if (colorValue != null) {
+      return Color(colorValue);
+    }
+
+    return defaultDeckColorForType(deck.type);
+  }
 
   static Color get deckCircle => isDarkMode
       ? const Color(0xFF303136)
@@ -215,7 +238,29 @@ class GakujiRadius {
 }
 
 /// Shared typography follows the active Light/Dark palette.
+///
+/// General interface roles respond to the user's Small / Medium / Large text
+/// preference. Purpose-built study-card, game, and counter typography stays
+/// fixed so those layouts keep their tuned proportions.
 class GakujiText {
+  static double _scaledSize({
+    required double small,
+    required double medium,
+    required double large,
+  }) {
+    switch (appThemeController.textSize) {
+      case GakujiTextSize.small:
+        return small;
+      case GakujiTextSize.medium:
+        return medium;
+      case GakujiTextSize.large:
+        return large;
+    }
+  }
+
+  // Legacy broad roles stay fixed because they are still used by some
+  // purpose-built activity layouts. New/general UI should prefer the explicit
+  // scalable roles below.
   static TextStyle get xLarge => TextStyle(
         fontSize: 38,
         height: 0.92,
@@ -229,6 +274,30 @@ class GakujiText {
         height: 1,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.45,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get pageTitle => TextStyle(
+        fontSize: _scaledSize(small: 24, medium: 26, large: 28),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.3,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get sectionTitle => TextStyle(
+        fontSize: _scaledSize(small: 20, medium: 22, large: 24),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get actionLabel => TextStyle(
+        fontSize: _scaledSize(small: 16, medium: 18, large: 20),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.1,
         color: GakujiColors.darkGray,
       );
 
@@ -248,6 +317,209 @@ class GakujiText {
         color: GakujiColors.mediumGray,
       );
 
+  static TextStyle get body => TextStyle(
+        fontSize: _scaledSize(small: 14, medium: 16, large: 18),
+        height: 1,
+        fontWeight: FontWeight.w400,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get dictionaryTopBarTitle => TextStyle(
+        fontSize: _scaledSize(small: 23, medium: 25, large: 27),
+        height: 1,
+        fontWeight: FontWeight.w500,
+        letterSpacing: -0.1,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get dictionaryTerm => TextStyle(
+        fontSize: _scaledSize(small: 22, medium: 24, large: 26),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.1,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get dictionaryKanjiDisplay => TextStyle(
+        fontSize: 68,
+        height: 1,
+        fontWeight: FontWeight.w400,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get dictionaryDetailBody => TextStyle(
+        fontSize: _scaledSize(small: 16, medium: 18, large: 20),
+        height: 1,
+        fontWeight: FontWeight.w500,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get termTitle => TextStyle(
+        fontSize: _scaledSize(small: 20, medium: 22, large: 24),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.15,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get termReading => TextStyle(
+        fontSize: _scaledSize(small: 18, medium: 20, large: 22),
+        height: 1,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.1,
+        color: GakujiColors.reading,
+      );
+
+  static TextStyle get termRowTitle => TextStyle(
+        fontSize: _scaledSize(small: 22, medium: 24, large: 26),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get termRowReading => TextStyle(
+        fontSize: _scaledSize(small: 19, medium: 21, large: 23),
+        height: 1,
+        fontWeight: FontWeight.w600,
+        color: GakujiColors.reading,
+      );
+
+  static TextStyle get termRowMeaning => TextStyle(
+        fontSize: _scaledSize(small: 14, medium: 16, large: 18),
+        height: 1.15,
+        fontWeight: FontWeight.w400,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get deckTitle => TextStyle(
+        fontSize: _scaledSize(small: 16, medium: 18, large: 20),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.1,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get deckMeta => TextStyle(
+        fontSize: _scaledSize(small: 14, medium: 16, large: 18),
+        height: 1,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.05,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get learningCardTitle => TextStyle(
+        fontSize: _scaledSize(small: 26, medium: 28, large: 30),
+        height: 0.96,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.3,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get learningCardSubtitle => TextStyle(
+        fontSize: _scaledSize(small: 14, medium: 16, large: 18),
+        height: 1.08,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.05,
+        color: GakujiColors.mediumGray,
+      );
+
+  static TextStyle get kanaScriptHeader => TextStyle(
+        fontSize: _scaledSize(small: 22, medium: 24, large: 26),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get kanaSectionTitle => TextStyle(
+        fontSize: _scaledSize(small: 16, medium: 18, large: 20),
+        height: 1,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.05,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get kanaReading => TextStyle(
+        fontSize: _scaledSize(small: 11.5, medium: 12.5, large: 13.5),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.1,
+        color: GakujiColors.mediumGray,
+      );
+
+  static TextStyle get calendarDate => TextStyle(
+        fontSize: _scaledSize(small: 36, medium: 38, large: 40),
+        height: 0.9,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.7,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get calendarMeta => TextStyle(
+        fontSize: _scaledSize(small: 14, medium: 15, large: 16),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.05,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get calendarSmall => TextStyle(
+        fontSize: _scaledSize(small: 13, medium: 14, large: 15),
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.05,
+        color: GakujiColors.mediumGray,
+      );
+
+  // Fixed activity typography. These deliberately ignore the app text-size
+  // preference so games and study-session UI do not reflow.
+  static TextStyle get studyCounter => TextStyle(
+        fontSize: 20,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.1,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get gameReading => TextStyle(
+        fontFamily: GakujiFonts.japanese,
+        fontSize: 27,
+        height: 1.05,
+        fontWeight: FontWeight.w700,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get gameDefinition => TextStyle(
+        fontSize: 16,
+        height: 1.15,
+        fontWeight: FontWeight.w700,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get gameScore => TextStyle(
+        fontSize: 16,
+        height: 1,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.1,
+        color: GakujiColors.mediumGray,
+      );
+
+  static TextStyle get gameTarget => TextStyle(
+        fontFamily: GakujiFonts.japanese,
+        fontSize: 48,
+        height: 1,
+        fontWeight: FontWeight.w600,
+        color: GakujiColors.darkGray,
+      );
+
+  static TextStyle get studyCounterLabel => TextStyle(
+        fontSize: 14,
+        height: 1,
+        fontWeight: FontWeight.w600,
+        letterSpacing: -0.05,
+        color: GakujiColors.mediumGray,
+      );
+
   static const TextStyle xSmall = TextStyle(
     fontSize: 15.5,
     height: 1,
@@ -264,7 +536,7 @@ class GakujiText {
   );
 
   static TextStyle get menuItem => TextStyle(
-        fontSize: 15,
+        fontSize: _scaledSize(small: 15, medium: 17, large: 19),
         height: 1,
         fontWeight: FontWeight.w600,
         color: GakujiColors.darkGray,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../data/recent_deck_data.dart';
 import '../models/deck.dart';
+import '../services/account_username_service.dart';
 import '../services/gakuji_user_data_store.dart';
 import 'gakuji_styles.dart';
 
@@ -123,6 +125,14 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
       return;
     }
 
+    if (GakujiUsernameService.containsRestrictedLanguage(deckName)) {
+      setState(() {
+        deckNameError = 'Deck name contains a restricted term';
+      });
+
+      return;
+    }
+
     final newDeck = Deck(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: deckName,
@@ -186,6 +196,8 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
   }
 
   Widget _saveToPanel(BuildContext context) {
+    final orderedDecks = orderDecksByRecentInteraction(widget.decks);
+
     return Column(
       children: [
         _sheetHandle(),
@@ -199,7 +211,7 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
         Expanded(
           child: _deckList(
             itemBuilder: (context, index) {
-              final deck = widget.decks[index];
+              final deck = orderedDecks[index];
               final isSaved = widget.deckContainsTerm(deck);
               final isDirectSaveDeck = deck.id == widget.directSaveDeckId;
 
@@ -351,6 +363,8 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
   }
 
   Widget _directSavePanel(BuildContext context) {
+    final orderedDecks = orderDecksByRecentInteraction(widget.decks);
+
     return Column(
       children: [
         _sheetHandle(),
@@ -379,7 +393,7 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
         Expanded(
           child: _deckList(
             itemBuilder: (context, index) {
-              final deck = widget.decks[index];
+              final deck = orderedDecks[index];
               final isSelected = deck.id == widget.directSaveDeckId;
 
               return _deckRow(

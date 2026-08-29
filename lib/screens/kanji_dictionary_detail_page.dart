@@ -1,15 +1,18 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/deck_data.dart';
+import '../data/recent_deck_data.dart';
 import '../data/review_card_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
 import '../services/deck_storage.dart';
 import '../services/dictionary_service.dart';
+import '../services/dictionary_note_service.dart';
 import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_deck_save_sheet.dart';
@@ -39,7 +42,7 @@ class _KanjiDictionaryDetailPageState
   static Color get darkText => GakujiColors.darkGray;
   static Color get inputFill => GakujiColors.warmCard;
 
-  static const int maxNoteCharacters = 400;
+  static const int maxNoteCharacters = DictionaryNoteService.maxCharacters;
   static const Duration topBarTitleFadeDuration =
       Duration(milliseconds: 180);
   static const String directSaveDeckPreferenceKey =
@@ -74,7 +77,6 @@ class _KanjiDictionaryDetailPageState
 
   String get sourceId => entry.sourceId ?? entry.id;
 
-  String get notePreferenceKey => 'gakuji_dictionary_note_$sourceId';
 
   Deck get fallbackDirectSaveDeck {
     for (final deck in decks) {
@@ -208,9 +210,7 @@ class _KanjiDictionaryDetailPageState
   }
 
   Future<void> _loadSavedNote() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedNote = prefs.getString(notePreferenceKey);
-    final initialNote = savedNote ?? entry.note ?? '';
+    final initialNote = await DictionaryNoteService.loadForTerm(entry);
 
     if (!mounted) return;
 
@@ -321,15 +321,16 @@ class _KanjiDictionaryDetailPageState
   Future<void> _saveNoteFromController({
     required bool closeEditor,
   }) async {
-    final cleanedNote = _cleanNoteText(noteController.text);
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.setString(notePreferenceKey, cleanedNote);
+    final savedNote = await DictionaryNoteService.saveForTerm(
+      term: entry,
+      note: noteController.text,
+    );
 
     if (!mounted) return;
 
     setState(() {
-      noteText = cleanedNote;
+      noteText = savedNote;
+      noteController.text = savedNote;
 
       if (closeEditor) {
         isEditingNote = false;
@@ -340,25 +341,19 @@ class _KanjiDictionaryDetailPageState
   Future<void> _clearNote() async {
     noteController.clear();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(notePreferenceKey, '');
+    final savedNote = await DictionaryNoteService.saveForTerm(
+      term: entry,
+      note: '',
+    );
 
     if (!mounted) return;
 
     setState(() {
-      noteText = '';
+      noteText = savedNote;
       isEditingNote = false;
     });
 
     FocusScope.of(context).unfocus();
-  }
-
-  String _cleanNoteText(String value) {
-    if (value.length <= maxNoteCharacters) {
-      return value.trimRight();
-    }
-
-    return value.substring(0, maxNoteCharacters).trimRight();
   }
 
   bool deckContainsEntry(Deck deck) {
@@ -370,7 +365,7 @@ class _KanjiDictionaryDetailPageState
       entry,
       id: '${deck.id}_${sourceId}_${DateTime.now().microsecondsSinceEpoch}',
       marked: false,
-    );
+    ).copyWith(note: noteText);
   }
 
   Future<void> _syncReviewCardsIfEnabled(Deck deck) async {
@@ -403,6 +398,7 @@ class _KanjiDictionaryDetailPageState
     }
 
     GakujiUserDataStore.scheduleSave();
+    await markDeckOpenedRecently(deck.id);
     await _syncReviewCardsIfEnabled(deck);
   }
 
@@ -427,12 +423,14 @@ class _KanjiDictionaryDetailPageState
     }
 
     GakujiUserDataStore.scheduleSave();
+    await markDeckOpenedRecently(deck.id);
     await _syncReviewCardsIfEnabled(deck);
   }
 
   Future<void> _setDirectSaveDeck(Deck deck) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(directSaveDeckPreferenceKey, deck.id);
+    await markDeckOpenedRecently(deck.id);
 
     if (!mounted) return;
 
@@ -447,6 +445,10 @@ class _KanjiDictionaryDetailPageState
     if (isEditingNote) {
       await _saveNoteFromController(closeEditor: true);
     }
+
+    if (!mounted) return;
+
+    await loadRecentlyOpenedDeckIds();
 
     if (!mounted) return;
 
@@ -507,7 +509,7 @@ class _KanjiDictionaryDetailPageState
   void openCompound(Term compound) {
     Navigator.push(
       context,
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (_) => DictionaryDetailPage(word: compound),
       ),
     );
@@ -551,9 +553,7 @@ class _KanjiDictionaryDetailPageState
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,
                         textScaler: TextScaler.noScaling,
-                        style: TextStyle(
-                          fontSize: 25,
-                          fontWeight: FontWeight.w500,
+                        style: GakujiText.dictionaryTopBarTitle.copyWith(
                           color: darkText,
                         ),
                       ),
@@ -603,34 +603,29 @@ class _KanjiDictionaryDetailPageState
             children: [
               SizedBox(
                 key: kanjiTitleKey,
-                width: 112,
+                width: 90,
                 child: Text(
                   _displayCharacter,
                   textAlign: TextAlign.center,
                   textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 86,
-                    height: 1,
-                    fontWeight: FontWeight.w400,
+                  style: GakujiText.dictionaryKanjiDisplay.copyWith(
                     color: darkText,
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: _strokeOrderPanel(),
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           if (meaning.isNotEmpty)
             Text(
               meaning,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 19,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 height: 1.24,
-                fontWeight: FontWeight.w600,
                 color: darkText,
               ),
             ),
@@ -672,8 +667,7 @@ class _KanjiDictionaryDetailPageState
         child: Text(
           'No stroke data',
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 13,
+          style: GakujiText.dictionaryDetailBody.copyWith(
             color: softTextGray,
             fontWeight: FontWeight.w500,
           ),
@@ -683,7 +677,7 @@ class _KanjiDictionaryDetailPageState
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        const columns = 4;
+        const columns = 5;
         const spacing = 4.0;
         final boxWidth =
             (constraints.maxWidth - (spacing * (columns - 1))) / columns;
@@ -800,8 +794,7 @@ class _KanjiDictionaryDetailPageState
             child: Text(
               'No readings listed',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 color: softTextGray,
               ),
             ),
@@ -835,8 +828,7 @@ class _KanjiDictionaryDetailPageState
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 height: 1.22,
                 color: softTextGray,
                 fontWeight: FontWeight.w600,
@@ -847,11 +839,9 @@ class _KanjiDictionaryDetailPageState
             child: Text(
               value,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 17,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 height: 1.22,
                 color: darkText,
-                fontWeight: FontWeight.w400,
               ),
             ),
           ),
@@ -877,8 +867,7 @@ class _KanjiDictionaryDetailPageState
     return Text(
       'Loading note...',
       textScaler: TextScaler.noScaling,
-      style: TextStyle(
-        fontSize: 16,
+      style: GakujiText.dictionaryDetailBody.copyWith(
         height: 1.15,
         color: softTextGray,
       ),
@@ -902,8 +891,7 @@ class _KanjiDictionaryDetailPageState
         child: Text(
           hasNote ? noteText : 'Write a note',
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 16,
+          style: GakujiText.dictionaryDetailBody.copyWith(
             height: 1.2,
             color: hasNote ? darkText : softTextGray,
           ),
@@ -927,13 +915,12 @@ class _KanjiDictionaryDetailPageState
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
           cursorColor: accentBlue,
-          style: TextStyle(
-            fontSize: 16,
+          style: GakujiText.dictionaryDetailBody.copyWith(
             height: 1.2,
             color: darkText,
           ),
           decoration: InputDecoration(
-            hintText: 'Write a note',
+            hintText: 'Add a personal definition, example, or note',
             hintStyle:  TextStyle(color: softTextGray),
             filled: true,
             fillColor: inputFill,
@@ -976,9 +963,7 @@ class _KanjiDictionaryDetailPageState
                   child: Text(
                     'Clear',
                     textScaler: TextScaler.noScaling,
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1,
+                    style: GakujiText.dictionaryDetailBody.copyWith(
                       color: softTextGray,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1000,12 +985,10 @@ class _KanjiDictionaryDetailPageState
                   color: accentBlue,
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text(
+                child: Text(
                   'Done',
                   textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    height: 1,
+                  style: GakujiText.dictionaryDetailBody.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1050,8 +1033,7 @@ class _KanjiDictionaryDetailPageState
             child: Text(
               'No additional information',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 color: softTextGray,
               ),
             ),
@@ -1080,12 +1062,11 @@ class _KanjiDictionaryDetailPageState
           SizedBox(
             width: 92,
             child: Text(
-              label,
+              '$label:',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 height: 1.2,
-                color: softTextGray,
+                color: accentBlue,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -1094,8 +1075,7 @@ class _KanjiDictionaryDetailPageState
             child: Text(
               value,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 16.5,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 height: 1.2,
                 color: darkText,
               ),
@@ -1117,8 +1097,7 @@ class _KanjiDictionaryDetailPageState
             child: Text(
               'Loading words...',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 color: softTextGray,
               ),
             ),
@@ -1129,8 +1108,7 @@ class _KanjiDictionaryDetailPageState
             child: Text(
               'No words found',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
+              style: GakujiText.dictionaryDetailBody.copyWith(
                 color: softTextGray,
               ),
             ),
@@ -1172,11 +1150,8 @@ class _KanjiDictionaryDetailPageState
                             Text(
                               compound.kanji,
                               textScaler: TextScaler.noScaling,
-                              style: TextStyle(
-                                fontSize: 20,
-                                height: 1,
+                              style: GakujiText.dictionaryTerm.copyWith(
                                 color: darkText,
-                                fontWeight: FontWeight.w700,
                               ),
                             ),
                             if (compound.reading.trim().isNotEmpty &&
@@ -1184,9 +1159,7 @@ class _KanjiDictionaryDetailPageState
                               Text(
                                 compound.reading,
                                 textScaler: TextScaler.noScaling,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  height: 1,
+                                style: GakujiText.dictionaryDetailBody.copyWith(
                                   color: softTextGray,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -1199,8 +1172,7 @@ class _KanjiDictionaryDetailPageState
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           textScaler: TextScaler.noScaling,
-                          style: TextStyle(
-                            fontSize: 15,
+                          style: GakujiText.dictionaryDetailBody.copyWith(
                             height: 1.18,
                             color: darkText,
                           ),
@@ -1254,10 +1226,8 @@ class _KanjiDictionaryDetailPageState
       child: Text(
         title,
         textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 18,
+        style: GakujiText.dictionaryDetailBody.copyWith(
           fontWeight: FontWeight.w600,
-          height: 1,
           color: darkText,
         ),
       ),
@@ -1307,7 +1277,7 @@ class _KanjiDictionaryDetailPageState
           onTap: onTap,
           child: Icon(
             icon,
-            size: 30,
+            size: GakujiTopBar.iconSize,
             color: iconColor,
           ),
         ),

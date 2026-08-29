@@ -41,8 +41,16 @@ class ReviewCalendarService {
     final checkTime = now ?? DateTime.now();
     final today = _dateOnly(checkTime);
     final settings = await ReviewSettingsStore.load();
+    final newCardsStartedToday =
+        await ReviewSettingsStore.newCardsStartedToday(
+          deckId: deck.id,
+          now: checkTime,
+        );
     final reviewsCompletedToday =
-        await ReviewSettingsStore.reviewsCompletedToday(now: checkTime);
+        await ReviewSettingsStore.reviewsCompletedToday(
+          deckId: deck.id,
+          now: checkTime,
+        );
 
     final builders = <DateTime, _ReviewCalendarDayBuilder>{};
 
@@ -58,6 +66,7 @@ class ReviewCalendarService {
       allReviewCards: allReviewCards,
       today: today,
       newLimit: settings.newLimit,
+      newCardsStartedToday: newCardsStartedToday,
       builders: builders,
     );
 
@@ -119,6 +128,7 @@ class ReviewCalendarService {
     required List<ReviewCard> allReviewCards,
     required DateTime today,
     required int newLimit,
+    required int newCardsStartedToday,
     required Map<DateTime, _ReviewCalendarDayBuilder> builders,
   }) {
     if (newLimit <= 0) return;
@@ -135,13 +145,8 @@ class ReviewCalendarService {
       newCards: deckNewCards,
     );
 
-    final globalLearningCount = allReviewCards.where((card) {
-      return card.state == ReviewCardState.learning ||
-          card.state == ReviewCardState.relearning;
-    }).length;
-
     final todayCapacity =
-        (newLimit - globalLearningCount).clamp(0, newLimit).toInt();
+        (newLimit - newCardsStartedToday).clamp(0, newLimit).toInt();
 
     final todayEndIndex =
         todayCapacity.clamp(0, orderedNewCards.length).toInt();

@@ -2,14 +2,16 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../data/reading_card_edit_data.dart';
 import '../models/deck.dart';
 import '../models/term.dart';
 import '../services/deck_storage.dart';
-import '../services/dictionary_service.dart';
+import '../services/gakuji_local_preferences.dart';
 import '../services/gakuji_user_data_store.dart';
 import '../services/reading_card_edit_storage.dart';
+import '../services/term_favorite_service.dart';
 import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'deck_edit_page.dart';
@@ -37,6 +39,15 @@ class StudyPage extends StatefulWidget {
 }
 
 class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
+  static const String _showFuriganaPreferenceKey = 'study_show_furigana';
+  static const String _showExampleFuriganaPreferenceKey =
+      'study_show_example_furigana';
+  static const String _termFirstPreferenceKey = 'study_term_first';
+  static const String _blueCardTextPreferenceKey = 'blue_card_text_enabled';
+  static String _starredOnlyPreferenceKey(String deckId) {
+    return 'study_starred_only_$deckId';
+  }
+
   static const Duration _cardReturnDuration = Duration(milliseconds: 320);
   static const Duration _cardExitDuration = Duration(milliseconds: 140);
   static const Duration _cardContentFadeDuration = Duration(milliseconds: 120);
@@ -57,7 +68,6 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   final List<Term> incorrectReviewTerms = [];
 
   final Map<String, ReadingCardEditData> readingCardEdits = {};
-  final Map<String, Term> readingSourceTerms = {};
   final Set<String> savedReadingCardEditTermIds = {};
 
   int correctCount = 0;
@@ -90,7 +100,9 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   bool showMenu = false;
   bool isShuffled = false;
   bool showFurigana = true;
+  bool showExampleFurigana = true;
   bool termFirst = true;
+  bool blueCardTextEnabled = false;
   bool showStarredOnly = false;
 
   int get totalSessionCount => answeredTerms.length + activeTerms.length;
@@ -230,12 +242,40 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
   Future<void> _loadProgress() async {
     final saved = await DeckStorage.loadProgress(widget.deck.id);
+    final savedShowFurigana =
+        await GakujiLocalPreferences.loadBool(_showFuriganaPreferenceKey);
+    final savedShowExampleFurigana = await GakujiLocalPreferences.loadBool(
+      _showExampleFuriganaPreferenceKey,
+    );
+    final savedTermFirst =
+        await GakujiLocalPreferences.loadBool(_termFirstPreferenceKey);
+    final savedBlueCardText =
+        await GakujiLocalPreferences.loadBool(_blueCardTextPreferenceKey);
+    final savedShowStarredOnly = await GakujiLocalPreferences.loadBool(
+      _starredOnlyPreferenceKey(widget.deck.id),
+    );
 
     if (!mounted || isReviewingIncorrect) return;
 
-    final savedCount = saved.clamp(0, allTerms.length).toInt();
+    final nextShowStarredOnly = savedShowStarredOnly ?? showStarredOnly;
+    final nextAllTerms = nextShowStarredOnly
+        ? widget.terms.where((term) => term.marked).toList()
+        : List<Term>.from(widget.terms);
+
+    if (nextAllTerms.isEmpty) {
+      await GakujiLocalPreferences.saveBool(
+        _starredOnlyPreferenceKey(widget.deck.id),
+        false,
+      );
+    }
+
+    final effectiveAllTerms =
+        nextAllTerms.isEmpty ? List<Term>.from(widget.terms) : nextAllTerms;
+    final savedCount = saved.clamp(0, effectiveAllTerms.length).toInt();
 
     setState(() {
+      showStarredOnly = nextAllTerms.isNotEmpty && nextShowStarredOnly;
+      allTerms = List<Term>.from(effectiveAllTerms);
       answeredTerms
         ..clear()
         ..addAll(allTerms.take(savedCount));
@@ -246,6 +286,16 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
         activeTerms.shuffle();
       }
 
+      if (savedShowFurigana != null) {
+        showFurigana = savedShowFurigana;
+      }
+      if (savedShowExampleFurigana != null) {
+        showExampleFurigana = savedShowExampleFurigana;
+      }
+      if (savedTermFirst != null) {
+        termFirst = savedTermFirst;
+      }
+      blueCardTextEnabled = savedBlueCardText ?? false;
       hasCompletedDeck = activeTerms.isEmpty && allTerms.isNotEmpty;
       _cardContentController.value = 1;
     });
@@ -253,24 +303,11 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
   Future<void> _loadReadingCardEdits() async {
     final loadedEdits = <String, ReadingCardEditData>{};
-    final loadedSourceTerms = <String, Term>{};
     final loadedSavedIds = <String>{};
 
     final termsToLoad = List<Term>.from(widget.deck.terms);
 
     for (final term in termsToLoad) {
-      var sourceTerm = term;
-      final dictionaryTermId = term.sourceId ?? term.id;
-
-      try {
-        sourceTerm = await DictionaryService.getTermByIdAsync(
-          dictionaryTermId,
-        );
-      } catch (_) {
-        // Keep the deck copy as a fallback if the dictionary source cannot
-        // be loaded. Normal cards should resolve through sourceId.
-      }
-
       final hasSavedEdit = await ReadingCardEditStorage.hasSavedEdit(
         deck: widget.deck,
         term: term,
@@ -281,7 +318,6 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
         term: term,
       );
 
-      loadedSourceTerms[term.id] = sourceTerm;
       loadedEdits[term.id] = editData;
 
       if (hasSavedEdit) {
@@ -292,10 +328,6 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     if (!mounted) return;
 
     setState(() {
-      readingSourceTerms
-        ..clear()
-        ..addAll(loadedSourceTerms);
-
       readingCardEdits
         ..clear()
         ..addAll(loadedEdits);
@@ -312,7 +344,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
   void _toggleFavorite(Term term) {
     setState(() {
-      term.marked = !term.marked;
+      TermFavoriteService.toggle(term);
     });
 
     scheduleUserDataSave();
@@ -392,24 +424,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     return readingCardEdits[term.id];
   }
 
-  Term _studySourceTermFor(Term term) {
-    return readingSourceTerms[term.id] ?? term;
-  }
-
-  bool _studySourceIsReady(Term term) {
-    return term.sourceId == null || readingSourceTerms.containsKey(term.id);
-  }
-
-  String _limitStudyNote(String value) {
-    if (value.runes.length <= 35) return value;
-
-    return String.fromCharCodes(value.runes.take(35));
-  }
-
   List<String> _defaultStudyGlossesFor(Term term) {
-    if (!_studySourceIsReady(term)) return const [];
-
-    final sourceTerm = _studySourceTermFor(term);
+    final sourceTerm = term;
     final glossBySenseIndex = <int, String>{};
 
     for (final sense in sourceTerm.senses) {
@@ -462,7 +478,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       return _defaultStudyGlossesFor(term);
     }
 
-    final sourceTerm = _studySourceTermFor(term);
+    final sourceTerm = term;
     final resolved = <String>[];
     final usedSenseIndexes = <int>{};
 
@@ -511,7 +527,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     Term term,
     List<String> glosses,
   ) {
-    final sourceTerm = _studySourceTermFor(term);
+    final sourceTerm = term;
     final indexes = <int>{};
 
     for (final displayedGloss in glosses) {
@@ -540,7 +556,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     Term term,
     List<String> glosses,
   ) {
-    final sourceTerm = _studySourceTermFor(term);
+    final sourceTerm = term;
     final senseIndexes = _studySenseIndexesForGlosses(
       term,
       glosses,
@@ -577,11 +593,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }
 
   String _studyNoteFor(Term term) {
-    final note = _hasSavedCardEdit(term)
-        ? _cardEditFor(term)?.note ?? ''
-        : term.note ?? '';
-
-    return _limitStudyNote(note.trim());
+    return (term.note ?? '').trim();
   }
 
   List<DictionaryExample> _studyExamplesFor(Term term) {
@@ -998,6 +1010,10 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     });
 
     DeckStorage.saveProgress(widget.deck.id, 0);
+    GakujiLocalPreferences.saveBool(
+      _starredOnlyPreferenceKey(widget.deck.id),
+      showStarredOnly,
+    );
     scheduleUserDataSave();
   }
 
@@ -1036,24 +1052,50 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   void toggleFurigana() {
     if (isSwipingAway || isReturningPreviousCard) return;
 
+    final nextShowFurigana = !showFurigana;
+
     setState(() {
-      showFurigana = !showFurigana;
+      showFurigana = nextShowFurigana;
       showMenu = false;
     });
 
-    scheduleUserDataSave();
+    GakujiLocalPreferences.saveBool(
+      _showFuriganaPreferenceKey,
+      nextShowFurigana,
+    );
+  }
+
+  void toggleExampleFurigana() {
+    if (isSwipingAway || isReturningPreviousCard) return;
+
+    final nextShowExampleFurigana = !showExampleFurigana;
+
+    setState(() {
+      showExampleFurigana = nextShowExampleFurigana;
+      showMenu = false;
+    });
+
+    GakujiLocalPreferences.saveBool(
+      _showExampleFuriganaPreferenceKey,
+      nextShowExampleFurigana,
+    );
   }
 
   void toggleCardOrientation() {
     if (isSwipingAway || isReturningPreviousCard) return;
 
+    final nextTermFirst = !termFirst;
+
     setState(() {
-      termFirst = !termFirst;
+      termFirst = nextTermFirst;
       showMenu = false;
       _flipController.value = 0;
     });
 
-    scheduleUserDataSave();
+    GakujiLocalPreferences.saveBool(
+      _termFirstPreferenceKey,
+      nextTermFirst,
+    );
   }
 
   Future<void> openDeckEdit() async {
@@ -1065,7 +1107,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (context) => DeckEditPage(deck: widget.deck),
       ),
     );
@@ -1137,6 +1179,16 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                   ? GakujiColors.darkGray
                   : GakujiColors.mediumGray,
               onTap: toggleFurigana,
+            ),
+            GakujiOptionsSheetItem(
+              textIcon: '例',
+              label: showExampleFurigana
+                  ? 'Hide Example Sentence Furigana'
+                  : 'Show Example Sentence Furigana',
+              iconColor: showExampleFurigana
+                  ? GakujiColors.darkGray
+                  : GakujiColors.mediumGray,
+              onTap: toggleExampleFurigana,
             ),
             GakujiOptionsSheetItem(
               icon: Icons.swap_horiz_rounded,
@@ -1393,7 +1445,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }) {
     return GakujiTopBar(
       leftIcon: leftIcon,
-      leftIconSize: 34,
+      leftIconSize: GakujiTopBar.iconSize,
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: onLeftTap,
       title: title,
@@ -1405,7 +1457,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
         color: GakujiColors.darkGray,
       ),
       rightIcon: rightIcon,
-      rightIconSize: 36,
+      rightIconSize: GakujiTopBar.iconSize,
       rightIconColor: GakujiColors.darkGray,
       onRightTap: onRightTap,
     );
@@ -1763,14 +1815,18 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       borderWidth: hasSwipeFeedback ? 5 : 1.2,
       isStarred: term.marked,
       onStarTap: () => _toggleFavorite(term),
-      child: Center(
-        child: Opacity(
-          opacity: contentOpacity,
-          child: _cardContent(
-            term,
-            showDefinition: showDefinition,
+      child: Stack(
+        children: [
+          Center(
+            child: Opacity(
+              opacity: contentOpacity,
+              child: _cardContent(
+                term,
+                showDefinition: showDefinition,
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1788,6 +1844,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
   Widget _definitionCardContent(Term term) {
     final readingText = term.reading.trim();
+    final editData = _cardEditFor(term);
     final photoPath = _studyPhotoExistsFor(term)
         ? _studyPhotoPathFor(term)
         : null;
@@ -1797,8 +1854,13 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       note: _studyNoteFor(term),
       examples: _studyExamplesFor(term),
       photoPath: photoPath,
+      photoScale: editData?.photoScale ?? 1.0,
+      photoOffsetX: editData?.photoOffsetX ?? 0.0,
+      photoOffsetY: editData?.photoOffsetY ?? 0.0,
       readingText: readingText,
       showReadingOnBack: !showFurigana && readingText.isNotEmpty,
+      showExampleFurigana: showExampleFurigana,
+      textColor: blueCardTextEnabled ? GakujiColors.reading : null,
     );
   }
 
@@ -1826,7 +1888,9 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                     height: 1,
                     fontWeight: FontWeight.w600,
                     letterSpacing: -0.8,
-                    color: GakujiColors.darkGray,
+                    color: blueCardTextEnabled
+                        ? GakujiColors.reading
+                        : GakujiColors.darkGray,
                   ),
                 ),
               ),
@@ -1844,7 +1908,9 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                       fontSize: 20,
                       height: 1,
                       fontWeight: FontWeight.w600,
-                      color: GakujiColors.mediumGray,
+                      color: blueCardTextEnabled
+                          ? GakujiColors.reading
+                          : GakujiColors.mediumGray,
                     ),
                   ),
                 ),
@@ -1869,17 +1935,28 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     required bool alignLeft,
   }) {
     final isIncorrect = color == incorrectRed;
+    final fillColor = isIncorrect
+        ? const Color(0xFFF28F8F)
+        : const Color(0xFFB8DF91);
+    final outlineColor = isIncorrect
+        ? const Color(0xFFD85F5F)
+        : const Color(0xFF78AA50);
+    final countText = '$count';
+    final fontSize = countText.length >= 5
+        ? 16.0
+        : countText.length >= 4
+            ? 17.0
+            : countText.length >= 3
+                ? 18.0
+                : 20.0;
 
     return Container(
-      width: 78,
-      height: 34,
-      padding: EdgeInsets.only(
-        left: alignLeft ? 24 : 0,
-        right: alignLeft ? 0 : 24,
-      ),
-      alignment: alignLeft ? Alignment.centerLeft : Alignment.centerRight,
+      width: 70,
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color,
+        color: fillColor,
         borderRadius: alignLeft
             ? const BorderRadius.horizontal(
                 right: Radius.circular(30),
@@ -1888,18 +1965,19 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                 left: Radius.circular(30),
               ),
         border: Border.all(
-          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
-          width: 3,
+          color: outlineColor,
+          width: 2.5,
         ),
       ),
-      child: Text(
-        '$count',
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 24,
-          height: 1,
-          fontWeight: FontWeight.w700,
-          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          countText,
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.studyCounter.copyWith(
+            fontSize: fontSize,
+            color: outlineColor,
+          ),
         ),
       ),
     );
