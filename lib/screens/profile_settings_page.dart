@@ -284,6 +284,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
       return;
     }
 
+    if (!mounted) return;
+
     String? currentPassword;
     if (profile.hasPassword) {
       currentPassword = await showGakujiPasswordConfirmationDialog(
@@ -493,18 +495,34 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
   }
 
   Widget _profileIcon() {
-    return Container(
-      width: 134,
-      height: 134,
-      decoration: BoxDecoration(
-        color: GakujiColors.reading,
-        shape: BoxShape.circle,
-        boxShadow: [GakujiShadows.soft],
-      ),
-      child: Icon(
-        Icons.person_rounded,
-        size: 90,
-        color: context.gakujiColors.warmCard,
+    final colorIndex = selectedProfileIconIndex.clamp(
+      0,
+      _temporaryProfileColors.length - 1,
+    );
+    final iconColor = _temporaryProfileColors[colorIndex];
+
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: _openProfileIconPicker,
+        customBorder: const CircleBorder(),
+        splashColor: iconColor.withValues(alpha: 0.12),
+        highlightColor: iconColor.withValues(alpha: 0.06),
+        child: Container(
+          width: 134,
+          height: 134,
+          decoration: BoxDecoration(
+            color: iconColor,
+            shape: BoxShape.circle,
+            boxShadow: [GakujiShadows.soft],
+          ),
+          child: Icon(
+            Icons.person_rounded,
+            size: 90,
+            color: context.gakujiColors.warmCard,
+          ),
+        ),
       ),
     );
   }

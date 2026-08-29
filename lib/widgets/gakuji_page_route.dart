@@ -13,13 +13,10 @@ class GakujiPageRoute<T> extends PageRouteBuilder<T> {
     required WidgetBuilder builder,
     GakujiPageSide side = GakujiPageSide.right,
     bool enableSwipeBack = true,
-    RouteSettings? settings,
-    Duration transitionDuration = gakujiPageOpenDuration,
-    Duration reverseTransitionDuration = gakujiPageCloseDuration,
+    super.settings,
+    super.transitionDuration = gakujiPageOpenDuration,
+    super.reverseTransitionDuration = gakujiPageCloseDuration,
   }) : super(
-          settings: settings,
-          transitionDuration: transitionDuration,
-          reverseTransitionDuration: reverseTransitionDuration,
           pageBuilder: (context, animation, secondaryAnimation) {
             final page = builder(context);
 

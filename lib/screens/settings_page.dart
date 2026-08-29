@@ -453,11 +453,16 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _profileIcon() {
+    final colorIndex = _accountProfileIconIndex.clamp(
+      0,
+      _profileColors.length - 1,
+    );
+
     return Container(
       width: 66,
       height: 66,
       decoration: BoxDecoration(
-        color: GakujiColors.reading,
+        color: _profileColors[colorIndex],
         shape: BoxShape.circle,
         boxShadow: [GakujiShadows.soft],
       ),
@@ -516,7 +521,7 @@ class _SettingsPageState extends State<SettingsPage> {
           Switch.adaptive(
             value: value,
             onChanged: onChanged,
-            activeColor: GakujiColors.reading,
+            activeThumbColor: GakujiColors.reading,
           ),
         ],
       ),

@@ -1465,7 +1465,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -1571,7 +1571,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         if (activeItems.length > 1) _readingBlankCardBehind(),
         Transform(
           transform: Matrix4.identity()
-            ..translate(dragOffset.dx, dragOffset.dy)
+            ..translateByDouble(dragOffset.dx, dragOffset.dy, 0, 1)
             ..rotateZ(rotation),
           alignment: Alignment.center,
           child: GestureDetector(
@@ -1618,7 +1618,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         else
           Transform(
             transform: Matrix4.identity()
-              ..translate(dragOffset.dx, dragOffset.dy)
+              ..translateByDouble(dragOffset.dx, dragOffset.dy, 0, 1)
               ..rotateZ(rotation),
             alignment: Alignment.center,
             child: GestureDetector(
@@ -2484,8 +2484,8 @@ class _HybridStudyPageState extends State<HybridStudyPage>
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: Colors.white.withOpacity(0.10),
-          highlightColor: Colors.white.withOpacity(0.05),
+          splashColor: Colors.white.withValues(alpha: 0.10),
+          highlightColor: Colors.white.withValues(alpha: 0.05),
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2512,8 +2512,8 @@ class _HybridStudyPageState extends State<HybridStudyPage>
       child: InkWell(
         onTap: _goBack,
         borderRadius: BorderRadius.circular(20),
-        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
-        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: 20,
@@ -2718,56 +2718,6 @@ class _HybridAnswerSlotMetrics {
     required this.lineWidth,
     required this.lineHeight,
   });
-}
-
-class _HybridWritingPainter extends CustomPainter {
-  final List<List<WritingPoint>> strokes;
-  final bool showGrid;
-
-  _HybridWritingPainter(
-    this.strokes,
-    this.showGrid,
-  );
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final pen = Paint()
-      ..color = GakujiColors.darkGray
-      ..strokeWidth = 4
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final grid = Paint()
-      ..color = GakujiColors.warmDivider
-      ..strokeWidth = 1;
-
-    if (showGrid) {
-      canvas.drawLine(
-        Offset(size.width / 2, 0),
-        Offset(size.width / 2, size.height),
-        grid,
-      );
-
-      canvas.drawLine(
-        Offset(0, size.height / 2),
-        Offset(size.width, size.height / 2),
-        grid,
-      );
-    }
-
-    for (final stroke in strokes) {
-      for (var index = 0; index < stroke.length - 1; index++) {
-        canvas.drawLine(
-          Offset(stroke[index].x, stroke[index].y),
-          Offset(stroke[index + 1].x, stroke[index + 1].y),
-          pen,
-        );
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
 
 class _HybridCompletionGaugePainter extends CustomPainter {

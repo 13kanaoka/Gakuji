@@ -48,7 +48,7 @@ class GakujiLowLatencyWritingCanvas extends StatefulWidget {
 
 class _GakujiLowLatencyWritingCanvasState
     extends State<GakujiLowLatencyWritingCanvas> {
-  final ChangeNotifier _repaint = ChangeNotifier();
+  final _RepaintNotifier _repaint = _RepaintNotifier();
 
   int? _activePointer;
   Offset? _lastAcceptedPoint;
@@ -75,7 +75,7 @@ class _GakujiLowLatencyWritingCanvasState
     _activePointer = event.pointer;
     _lastAcceptedPoint = event.localPosition;
     widget.onStrokeStart(event.localPosition);
-    _repaint.notifyListeners();
+    _repaint.notify();
   }
 
   void _updateStroke(PointerMoveEvent event) {
@@ -86,7 +86,7 @@ class _GakujiLowLatencyWritingCanvasState
 
     _lastAcceptedPoint = point;
     widget.onStrokeUpdate(point);
-    _repaint.notifyListeners();
+    _repaint.notify();
   }
 
   void _finishStroke(PointerEvent event) {
@@ -96,7 +96,7 @@ class _GakujiLowLatencyWritingCanvasState
     if (_shouldAccept(point)) {
       _lastAcceptedPoint = point;
       widget.onStrokeUpdate(point);
-      _repaint.notifyListeners();
+      _repaint.notify();
     }
 
     _activePointer = null;
@@ -228,4 +228,11 @@ class _LowLatencyWritingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LowLatencyWritingPainter oldDelegate) => true;
+}
+
+/// A [ChangeNotifier] that exposes a public method for firing notifications,
+/// since [ChangeNotifier.notifyListeners] is `@protected` and can only be
+/// called from within a subclass.
+class _RepaintNotifier extends ChangeNotifier {
+  void notify() => notifyListeners();
 }

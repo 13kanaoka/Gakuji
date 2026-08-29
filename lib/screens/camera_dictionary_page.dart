@@ -728,9 +728,11 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
       _isOpeningSavedScans = true;
     });
 
+    final navigator = Navigator.of(context);
+
     await _disposeCameraController();
 
-    final selected = await Navigator.of(context).push<CameraSavedScan>(
+    final selected = await navigator.push<CameraSavedScan>(
       GakujiPageRoute<CameraSavedScan>(
         builder: (context) => const CameraSavedScansPage(),
       ),

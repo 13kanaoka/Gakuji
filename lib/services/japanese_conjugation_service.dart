@@ -78,7 +78,7 @@ class JapaneseConjugationService {
       }
 
       if (stem.endsWith('来')) {
-        add('${stem}る');
+        add('$stemる');
       }
     }
 
@@ -103,7 +103,7 @@ class JapaneseConjugationService {
       }
 
       if (stem.endsWith('来')) {
-        add('${stem}る');
+        add('$stemる');
       }
     }
 
@@ -182,14 +182,14 @@ class JapaneseConjugationService {
 
     if (polite != null && polite.endsWith('ます')) {
       final politeStem = polite.substring(0, polite.length - 2);
-      forms.add('${politeStem}ました');
-      forms.add('${politeStem}ません');
-      forms.add('${politeStem}ませんでした');
+      forms.add('$politeStemました');
+      forms.add('$politeStemません');
+      forms.add('$politeStemませんでした');
     }
 
     if (teForm != null) {
-      forms.add('${teForm}ください');
-      forms.add('${teForm}下さい');
+      forms.add('$teFormください');
+      forms.add('$teForm下さい');
     }
 
     return forms;
@@ -398,18 +398,18 @@ class JapaneseConjugationService {
         label: 'Negative imperative',
         value: negativeImperative,
       ),
-      JapaneseConjugationForm(label: 'Polite', value: '${politeStem}ます'),
+      JapaneseConjugationForm(label: 'Polite', value: '$politeStemます'),
       JapaneseConjugationForm(
         label: 'Polite past',
-        value: '${politeStem}ました',
+        value: '$politeStemました',
       ),
       JapaneseConjugationForm(
         label: 'Polite conditional',
-        value: '${politeStem}ませば',
+        value: '$politeStemませば',
       ),
       JapaneseConjugationForm(
         label: 'Polite tara conditional',
-        value: '${politeStem}ましたら',
+        value: '$politeStemましたら',
       ),
       JapaneseConjugationForm(
         label: 'Polite potential',
@@ -425,19 +425,19 @@ class JapaneseConjugationService {
       ),
       JapaneseConjugationForm(
         label: 'Polite imperative',
-        value: '${teForm}ください',
+        value: '$teFormください',
       ),
       JapaneseConjugationForm(
         label: 'Polite volitional',
-        value: '${politeStem}ましょう',
+        value: '$politeStemましょう',
       ),
       JapaneseConjugationForm(
         label: 'Polite negative',
-        value: '${politeStem}ません',
+        value: '$politeStemません',
       ),
       JapaneseConjugationForm(
         label: 'Polite negative past',
-        value: '${politeStem}ませんでした',
+        value: '$politeStemませんでした',
       ),
       JapaneseConjugationForm(
         label: 'Polite negative potential',
@@ -466,25 +466,25 @@ class JapaneseConjugationService {
     return _verbForms(
       dictionary: word,
       politeStem: stem,
-      negative: '${stem}ない',
-      past: '${stem}た',
-      negativePast: '${stem}なかった',
-      teForm: '${stem}て',
-      negativeTeForm: '${stem}なくて',
-      potential: '${stem}られる',
-      passive: '${stem}られる',
-      causative: '${stem}させる',
-      volitional: '${stem}よう',
-      conditional: '${stem}れば',
-      taraConditional: '${stem}たら',
-      imperative: '${stem}ろ',
-      negativeConditional: '${stem}なければ',
-      negativeTaraConditional: '${stem}なかったら',
-      negativePotential: '${stem}られない',
-      negativePassive: '${stem}られない',
-      negativeCausative: '${stem}させない',
+      negative: '$stemない',
+      past: '$stemた',
+      negativePast: '$stemなかった',
+      teForm: '$stemて',
+      negativeTeForm: '$stemなくて',
+      potential: '$stemられる',
+      passive: '$stemられる',
+      causative: '$stemさせる',
+      volitional: '$stemよう',
+      conditional: '$stemれば',
+      taraConditional: '$stemたら',
+      imperative: '$stemろ',
+      negativeConditional: '$stemなければ',
+      negativeTaraConditional: '$stemなかったら',
+      negativePotential: '$stemられない',
+      negativePassive: '$stemられない',
+      negativeCausative: '$stemさせない',
       negativeImperative: '$wordな',
-      negativeRequest: '${stem}ないでください',
+      negativeRequest: '$stemないでください',
     );
   }
 
@@ -515,7 +515,7 @@ class JapaneseConjugationService {
       causative: '$stem${row.a}せる',
       volitional: '$stem${row.o}う',
       conditional: '$stem${row.e}ば',
-      taraConditional: '${past}ら',
+      taraConditional: '$pastら',
       imperative: '$stem${row.e}',
       negativeConditional: '$stem${row.a}なければ',
       negativeTaraConditional: '$stem${row.a}なかったら',
@@ -534,26 +534,26 @@ class JapaneseConjugationService {
 
     return _verbForms(
       dictionary: word,
-      politeStem: '${stem}し',
-      negative: '${stem}しない',
-      past: '${stem}した',
-      negativePast: '${stem}しなかった',
-      teForm: '${stem}して',
-      negativeTeForm: '${stem}しなくて',
-      potential: '${stem}できる',
-      passive: '${stem}される',
-      causative: '${stem}させる',
-      volitional: '${stem}しよう',
-      conditional: '${stem}すれば',
-      taraConditional: '${stem}したら',
-      imperative: '${stem}しろ',
-      negativeConditional: '${stem}しなければ',
-      negativeTaraConditional: '${stem}しなかったら',
-      negativePotential: '${stem}できない',
-      negativePassive: '${stem}されない',
-      negativeCausative: '${stem}させない',
+      politeStem: '$stemし',
+      negative: '$stemしない',
+      past: '$stemした',
+      negativePast: '$stemしなかった',
+      teForm: '$stemして',
+      negativeTeForm: '$stemしなくて',
+      potential: '$stemできる',
+      passive: '$stemされる',
+      causative: '$stemさせる',
+      volitional: '$stemしよう',
+      conditional: '$stemすれば',
+      taraConditional: '$stemしたら',
+      imperative: '$stemしろ',
+      negativeConditional: '$stemしなければ',
+      negativeTaraConditional: '$stemしなかったら',
+      negativePotential: '$stemできない',
+      negativePassive: '$stemされない',
+      negativeCausative: '$stemさせない',
       negativeImperative: '$wordな',
-      negativeRequest: '${stem}しないでください',
+      negativeRequest: '$stemしないでください',
     );
   }
 
@@ -564,25 +564,25 @@ class JapaneseConjugationService {
       return _verbForms(
         dictionary: word,
         politeStem: stem,
-        negative: '${stem}ない',
-        past: '${stem}た',
-        negativePast: '${stem}なかった',
-        teForm: '${stem}て',
-        negativeTeForm: '${stem}なくて',
-        potential: '${stem}られる',
-        passive: '${stem}られる',
-        causative: '${stem}させる',
-        volitional: '${stem}よう',
-        conditional: '${stem}れば',
-        taraConditional: '${stem}たら',
-        imperative: '${stem}い',
-        negativeConditional: '${stem}なければ',
-        negativeTaraConditional: '${stem}なかったら',
-        negativePotential: '${stem}られない',
-        negativePassive: '${stem}られない',
-        negativeCausative: '${stem}させない',
+        negative: '$stemない',
+        past: '$stemた',
+        negativePast: '$stemなかった',
+        teForm: '$stemて',
+        negativeTeForm: '$stemなくて',
+        potential: '$stemられる',
+        passive: '$stemられる',
+        causative: '$stemさせる',
+        volitional: '$stemよう',
+        conditional: '$stemれば',
+        taraConditional: '$stemたら',
+        imperative: '$stemい',
+        negativeConditional: '$stemなければ',
+        negativeTaraConditional: '$stemなかったら',
+        negativePotential: '$stemられない',
+        negativePassive: '$stemられない',
+        negativeCausative: '$stemさせない',
         negativeImperative: '$wordな',
-        negativeRequest: '${stem}ないでください',
+        negativeRequest: '$stemないでください',
       );
     }
 
@@ -592,26 +592,26 @@ class JapaneseConjugationService {
 
     return _verbForms(
       dictionary: word,
-      politeStem: '${stem}き',
-      negative: '${stem}こない',
-      past: '${stem}きた',
-      negativePast: '${stem}こなかった',
-      teForm: '${stem}きて',
-      negativeTeForm: '${stem}こなくて',
-      potential: '${stem}こられる',
-      passive: '${stem}こられる',
-      causative: '${stem}こさせる',
-      volitional: '${stem}こよう',
-      conditional: '${stem}くれば',
-      taraConditional: '${stem}きたら',
-      imperative: '${stem}こい',
-      negativeConditional: '${stem}こなければ',
-      negativeTaraConditional: '${stem}こなかったら',
-      negativePotential: '${stem}こられない',
-      negativePassive: '${stem}こられない',
-      negativeCausative: '${stem}こさせない',
+      politeStem: '$stemき',
+      negative: '$stemこない',
+      past: '$stemきた',
+      negativePast: '$stemこなかった',
+      teForm: '$stemきて',
+      negativeTeForm: '$stemこなくて',
+      potential: '$stemこられる',
+      passive: '$stemこられる',
+      causative: '$stemこさせる',
+      volitional: '$stemこよう',
+      conditional: '$stemくれば',
+      taraConditional: '$stemきたら',
+      imperative: '$stemこい',
+      negativeConditional: '$stemこなければ',
+      negativeTaraConditional: '$stemこなかったら',
+      negativePotential: '$stemこられない',
+      negativePassive: '$stemこられない',
+      negativeCausative: '$stemこさせない',
       negativeImperative: '$wordな',
-      negativeRequest: '${stem}こないでください',
+      negativeRequest: '$stemこないでください',
     );
   }
 
@@ -626,46 +626,46 @@ class JapaneseConjugationService {
 
     return [
       JapaneseConjugationForm(label: 'Dictionary', value: word),
-      JapaneseConjugationForm(label: 'Past', value: '${inflectedStem}かった'),
-      JapaneseConjugationForm(label: 'て-form', value: '${inflectedStem}くて'),
+      JapaneseConjugationForm(label: 'Past', value: '$inflectedStemかった'),
+      JapaneseConjugationForm(label: 'て-form', value: '$inflectedStemくて'),
       JapaneseConjugationForm(
         label: 'Conditional',
-        value: '${inflectedStem}ければ',
+        value: '$inflectedStemければ',
       ),
       JapaneseConjugationForm(
         label: 'Tara conditional',
-        value: '${inflectedStem}かったら',
+        value: '$inflectedStemかったら',
       ),
-      JapaneseConjugationForm(label: 'Adverbial', value: '${inflectedStem}く'),
-      JapaneseConjugationForm(label: 'Negative', value: '${inflectedStem}くない'),
+      JapaneseConjugationForm(label: 'Adverbial', value: '$inflectedStemく'),
+      JapaneseConjugationForm(label: 'Negative', value: '$inflectedStemくない'),
       JapaneseConjugationForm(
         label: 'Negative past',
-        value: '${inflectedStem}くなかった',
+        value: '$inflectedStemくなかった',
       ),
       JapaneseConjugationForm(
         label: 'Negative て-form',
-        value: '${inflectedStem}くなくて',
+        value: '$inflectedStemくなくて',
       ),
       JapaneseConjugationForm(
         label: 'Negative conditional',
-        value: '${inflectedStem}くなければ',
+        value: '$inflectedStemくなければ',
       ),
       JapaneseConjugationForm(
         label: 'Negative tara conditional',
-        value: '${inflectedStem}くなかったら',
+        value: '$inflectedStemくなかったら',
       ),
-      JapaneseConjugationForm(label: 'Polite', value: '${word}です'),
+      JapaneseConjugationForm(label: 'Polite', value: '$wordです'),
       JapaneseConjugationForm(
         label: 'Polite past',
-        value: '${inflectedStem}かったです',
+        value: '$inflectedStemかったです',
       ),
       JapaneseConjugationForm(
         label: 'Polite negative',
-        value: '${inflectedStem}くないです',
+        value: '$inflectedStemくないです',
       ),
       JapaneseConjugationForm(
         label: 'Polite negative past',
-        value: '${inflectedStem}くなかったです',
+        value: '$inflectedStemくなかったです',
       ),
     ];
   }

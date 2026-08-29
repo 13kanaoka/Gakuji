@@ -1375,7 +1375,7 @@ class GakujiCloudSyncService {
   }) {
     final approxBytes = records.fold<int>(
       64,
-      (sum, record) => sum + record.approxBytes + 16,
+      (runningTotal, record) => runningTotal + record.approxBytes + 16,
     );
     final fits = records.length <= _maxTermsPerChunk &&
         approxBytes <= _maxApproxTermChunkBytes;

@@ -177,7 +177,7 @@ Future<bool?> showGakujiActionDialog({
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: Colors.black.withValues(alpha: 0.42),
     transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (dialogContext, _, __) {
+    pageBuilder: (dialogContext, _, _) {
       return SafeArea(
         child: GakujiActionDialog(
           title: title,
@@ -382,7 +382,7 @@ Future<String?> showGakujiPasswordConfirmationDialog({
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: Colors.black.withValues(alpha: 0.42),
     transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (dialogContext, _, __) {
+    pageBuilder: (dialogContext, _, _) {
       return SafeArea(
         child: GakujiPasswordConfirmationDialog(
           title: title,

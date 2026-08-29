@@ -2416,22 +2416,6 @@ class CameraTextRecognitionService {
     }
   }
 
-  bool _shouldMergeAcrossLine(
-    _CameraTextFragment current,
-    _CameraTextFragment next,
-    _CameraBoundaryLanguageEvidence languageEvidence, {
-    bool isInferredTextBox = false,
-  }) {
-    final confidence = _lineConnectionConfidence(
-      current,
-      next,
-      languageEvidence,
-      isInferredTextBox: isInferredTextBox,
-    );
-
-    return confidence >= 0.56;
-  }
-
   double _lineConnectionConfidence(
     _CameraTextFragment current,
     _CameraTextFragment next,

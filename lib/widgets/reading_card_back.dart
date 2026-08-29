@@ -836,8 +836,7 @@ class _AutoFitSingleText extends StatelessWidget {
     required this.lineHeight,
     required this.fontWeight,
     required this.color,
-    this.letterSpacing = 0,
-  });
+  }) : letterSpacing = 0;
 
   @override
   Widget build(BuildContext context) {

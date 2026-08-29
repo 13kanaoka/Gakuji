@@ -54,7 +54,7 @@ class WritingSessionController {
   List<Term> activeTerms;
 
   final List<Term> answeredTerms = [];
-  final List<_WritingHistoryEntry> history = [];
+  final List<WritingHistoryEntry> history = [];
   final List<Term> incorrectReviewTerms = [];
 
   final String deckId;
@@ -337,7 +337,7 @@ class WritingSessionController {
     final answeredTerm = activeTerms.first;
 
     history.add(
-      _WritingHistoryEntry(
+      WritingHistoryEntry(
         term: answeredTerm,
         correct: correct,
       ),
@@ -366,7 +366,7 @@ class WritingSessionController {
     final skippedTerm = activeTerms.first;
 
     history.add(
-      _WritingHistoryEntry(
+      WritingHistoryEntry(
         term: skippedTerm,
         correct: false,
       ),
@@ -1094,7 +1094,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1500),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -1298,7 +1298,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         else
           Transform(
             transform: Matrix4.identity()
-              ..translate(revealDragOffset.dx, revealDragOffset.dy)
+              ..translateByDouble(revealDragOffset.dx, revealDragOffset.dy, 0, 1)
               ..rotateZ(rotation),
             alignment: Alignment.center,
             child: GestureDetector(
@@ -1584,8 +1584,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: Colors.white.withOpacity(0.10),
-          highlightColor: Colors.white.withOpacity(0.05),
+          splashColor: Colors.white.withValues(alpha: 0.10),
+          highlightColor: Colors.white.withValues(alpha: 0.05),
           child: Center(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1612,8 +1612,8 @@ class _WritingStudyPageState extends State<WritingStudyPage>
       child: InkWell(
         onTap: goBack,
         borderRadius: BorderRadius.circular(20),
-        splashColor: GakujiColors.deckBlue.withOpacity(0.08),
-        highlightColor: GakujiColors.deckBlue.withOpacity(0.04),
+        splashColor: GakujiColors.deckBlue.withValues(alpha: 0.08),
+        highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: 20,
@@ -1795,11 +1795,11 @@ class _PushableState extends State<_Pushable> {
   }
 }
 
-class _WritingHistoryEntry {
+class WritingHistoryEntry {
   final Term term;
   final bool correct;
 
-  const _WritingHistoryEntry({
+  const WritingHistoryEntry({
     required this.term,
     required this.correct,
   });
