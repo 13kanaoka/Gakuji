@@ -26,7 +26,7 @@ class ImportTermsResultsPage extends StatelessWidget {
             children: [
               GakujiTopBar(
                 title: 'Import Complete',
-                titleStyle: GakujiText.small.copyWith(
+                titleStyle: GakujiText.pageTitle.copyWith(
                   color: GakujiColors.darkGray,
                 ),
               ),

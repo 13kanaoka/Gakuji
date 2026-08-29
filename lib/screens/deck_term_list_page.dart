@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../models/deck.dart';
 import '../models/term.dart';
@@ -21,8 +22,6 @@ class DeckTermListPage extends StatefulWidget {
 }
 
 class _DeckTermListPageState extends State<DeckTermListPage> {
-  static const Color metadataGray = Color(0xFF6F6F6F);
-
   static const Duration _headerCollapseDuration = Duration(milliseconds: 400);
 
   final TextEditingController searchController = TextEditingController();
@@ -97,9 +96,8 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
                 leftIconColor: GakujiColors.darkGray,
                 onLeftTap: () => Navigator.pop(context),
                 title: 'Term List',
-                titleStyle: GakujiText.medium.copyWith(
+                titleStyle: GakujiText.pageTitle.copyWith(
                   color: GakujiColors.darkGray,
-                  fontWeight: FontWeight.w700,
                 ),
                 showOptionsButton: false,
               ),
@@ -174,9 +172,8 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: GakujiText.large.copyWith(
+            style: GakujiText.pageTitle.copyWith(
               color: GakujiColors.darkGray,
-              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(height: 6),
@@ -184,11 +181,8 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
             countLabel,
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
-              fontSize: 16,
-              height: 1,
-              fontWeight: FontWeight.w500,
-              color: metadataGray,
+            style: GakujiText.deckMeta.copyWith(
+              color: GakujiColors.mediumGray,
             ),
           ),
         ],
@@ -220,10 +214,7 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
       child: Text(
         searchQuery.trim().isEmpty ? 'No terms yet' : 'No terms found',
         textScaler: TextScaler.noScaling,
-        style: const TextStyle(
-          color: Colors.grey,
-          fontSize: 16,
-        ),
+        style: GakujiText.body.copyWith(color: Colors.grey),
       ),
     );
   }
@@ -278,7 +269,7 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
+                GakujiPageRoute(
                   builder: (context) => DictionaryDetailPage(word: term),
                 ),
               );

@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/deck.dart';
 import '../models/imposter_round.dart';
 import '../models/term.dart';
+import '../services/gakuji_local_preferences.dart';
 import '../services/imposter_round_generator.dart';
 import '../widgets/gakuji_styles.dart';
 
@@ -32,11 +32,11 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   static const Duration _rushRoundDuration = Duration(seconds: 5);
   static const Duration _rushTickInterval = Duration(milliseconds: 50);
 
-  // Match the Study page's correct/incorrect feedback palette.
-  static const Color _incorrectRed = Color(0xFFF6A3A3);
-  static const Color _incorrectRedOutline = Color(0xFFE06F6F);
-  static const Color _correctGreen = Color(0xFFC5E7A5);
-  static const Color _correctGreenOutline = Color(0xFF8DBB66);
+  // Crosscheck verdict palette: soft, but stronger than the old washed-out fills.
+  static const Color _incorrectRed = Color(0xFFF29A9A);
+  static const Color _incorrectRedOutline = Color(0xFFD75F5F);
+  static const Color _correctGreen = Color(0xFFBDE68F);
+  static const Color _correctGreenOutline = Color(0xFF78A94F);
 
   late final List<Term> gameTerms;
 
@@ -106,14 +106,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
 
 
   Color get deckPrimaryColor {
-    switch (widget.deck.type) {
-      case DeckType.reading:
-        return GakujiColors.reading;
-      case DeckType.writing:
-        return GakujiColors.writing;
-      case DeckType.hybrid:
-        return GakujiColors.hybrid;
-    }
+    return GakujiColors.deckColorFor(widget.deck);
   }
 
   bool get clearedDeck {
@@ -137,21 +130,26 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }
 
   Future<void> _loadHighScores() async {
-    final prefs = await SharedPreferences.getInstance();
+    final loadedScores = <CrosscheckMode, int>{};
+    for (final mode in CrosscheckMode.values) {
+      loadedScores[mode] =
+          await GakujiLocalPreferences.loadInt(_highScoreKey(mode)) ?? 0;
+    }
 
     if (!mounted) return;
 
     setState(() {
-      for (final mode in CrosscheckMode.values) {
-        highScores[mode] = prefs.getInt(_highScoreKey(mode)) ?? 0;
-      }
+      highScores.addAll(loadedScores);
     });
   }
 
   Future<void> _loadRushSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedReading = prefs.getBool('crosscheck_rush_check_reading_v1');
-    final savedDefinition = prefs.getBool('crosscheck_rush_check_definition_v1');
+    final savedReading = await GakujiLocalPreferences.loadBool(
+      'crosscheck_rush_check_reading_v1',
+    );
+    final savedDefinition = await GakujiLocalPreferences.loadBool(
+      'crosscheck_rush_check_definition_v1',
+    );
 
     if (!mounted) return;
 
@@ -167,10 +165,15 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }
 
   Future<void> _persistRushSettings() async {
-    final prefs = await SharedPreferences.getInstance();
     await Future.wait([
-      prefs.setBool('crosscheck_rush_check_reading_v1', _rushCheckReading),
-      prefs.setBool('crosscheck_rush_check_definition_v1', _rushCheckDefinition),
+      GakujiLocalPreferences.saveBool(
+        'crosscheck_rush_check_reading_v1',
+        _rushCheckReading,
+      ),
+      GakujiLocalPreferences.saveBool(
+        'crosscheck_rush_check_definition_v1',
+        _rushCheckDefinition,
+      ),
     ]);
   }
 
@@ -179,8 +182,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }
 
   Future<void> _persistHighScore(CrosscheckMode mode, int score) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_highScoreKey(mode), score);
+    await GakujiLocalPreferences.saveInt(_highScoreKey(mode), score);
   }
 
   void _recordHighScoreIfNeeded() {
@@ -529,7 +531,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           children: [
             _simpleTopBar(
               context: context,
-              icon: Icons.close_rounded,
+              icon: Icons.arrow_back_ios_new_rounded,
             ),
             Expanded(
               child: LayoutBuilder(
@@ -722,10 +724,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
                         Text(
                           'Score  $correctCount',
                           textScaler: TextScaler.noScaling,
-                          style: GakujiText.small.copyWith(
-                            color: GakujiColors.mediumGray,
-                            fontWeight: FontWeight.w700,
-                          ),
+                          style: GakujiText.gameScore,
                         ),
                       ],
                     ),
@@ -766,7 +765,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
                         children: [
                           Expanded(
                             child: _verdictButton(
-                              label: 'Incorrect',
+                              icon: Icons.close_rounded,
+                              semanticLabel: 'Incorrect',
                               fillColor: _incorrectRed,
                               foregroundColor: _incorrectRedOutline,
                               onTap: () => answer(approved: false),
@@ -775,7 +775,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
                           const SizedBox(width: 14),
                           Expanded(
                             child: _verdictButton(
-                              label: 'Correct',
+                              icon: Icons.check_rounded,
+                              semanticLabel: 'Correct',
                               fillColor: _correctGreen,
                               foregroundColor: _correctGreenOutline,
                               onTap: () => answer(approved: true),
@@ -805,7 +806,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           children: [
             _simpleTopBar(
               context: context,
-              icon: Icons.close_rounded,
+              icon: Icons.arrow_back_ios_new_rounded,
             ),
             Expanded(
               child: Padding(
@@ -1054,7 +1055,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
               ),
             ),
             _topIconButton(
-              icon: Icons.more_horiz_rounded,
+              icon: Icons.menu_rounded,
               onTap: () => _showOptions(context),
             ),
           ],
@@ -1101,7 +1102,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           height: 44,
           child: Icon(
             icon,
-            size: 34,
+            size: 28,
             color: GakujiColors.darkGray,
           ),
         ),
@@ -1151,11 +1152,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           maxLines: 1,
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
+          style: GakujiText.gameTarget.copyWith(
             fontSize: _termFontSizeFor(text),
-            height: 1,
-            fontWeight: FontWeight.w600,
-            color: GakujiColors.darkGray,
           ),
         ),
       ),
@@ -1306,36 +1304,38 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }
 
   Widget _verdictButton({
-    required String label,
+    required IconData icon,
+    required String semanticLabel,
     required Color fillColor,
     required Color foregroundColor,
     required VoidCallback onTap,
   }) {
-    return SizedBox(
-      height: 116,
-      child: Material(
-        color: fillColor,
-        borderRadius: BorderRadius.circular(GakujiRadius.small),
-        clipBehavior: Clip.antiAlias,
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(GakujiRadius.small),
-            border: Border.all(
-              color: foregroundColor,
-              width: 2,
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: SizedBox(
+        height: 116,
+        child: Material(
+          color: fillColor,
+          borderRadius: BorderRadius.circular(GakujiRadius.small),
+          clipBehavior: Clip.antiAlias,
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(GakujiRadius.small),
+              border: Border.all(
+                color: foregroundColor,
+                width: 2,
+              ),
             ),
-          ),
-          child: InkWell(
-            onTap: onTap,
-            splashColor: foregroundColor.withValues(alpha: 0.12),
-            highlightColor: foregroundColor.withValues(alpha: 0.06),
-            child: Center(
-              child: Text(
-                label,
-                textScaler: TextScaler.noScaling,
-                style: GakujiText.medium.copyWith(
+            child: InkWell(
+              onTap: onTap,
+              splashColor: foregroundColor.withValues(alpha: 0.12),
+              highlightColor: foregroundColor.withValues(alpha: 0.06),
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 68,
                   color: foregroundColor,
-                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -1654,12 +1654,12 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }
 
   double _termFontSizeFor(String text) {
-    if (text.length >= 9) return 34;
-    if (text.length >= 7) return 38;
-    if (text.length >= 5) return 42;
-    if (text.length >= 3) return 46;
+    if (text.length >= 9) return 32;
+    if (text.length >= 7) return 36;
+    if (text.length >= 5) return 40;
+    if (text.length >= 3) return 44;
 
-    return 52;
+    return 48;
   }
 }
 

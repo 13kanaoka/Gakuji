@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../models/deck.dart';
 import '../models/review_card.dart';
 import '../models/term.dart';
 import '../services/review_calendar_service.dart';
-import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
 import '../widgets/gakuji_term_row.dart';
+import '../widgets/gakuji_top_bar.dart';
 import 'dictionary_detail_page.dart';
 
 enum ReviewCalendarListType {
@@ -64,7 +64,7 @@ class ReviewCalendarTermListPage extends StatelessWidget {
     };
   }
 
-  List<_CalendarTermGroup> get _groups {
+  List<_CalendarTermGroup> get groups {
     switch (listType) {
       case ReviewCalendarListType.projected:
         return [
@@ -97,7 +97,7 @@ class ReviewCalendarTermListPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visibleGroups = _groups
+    final visibleGroups = groups
         .where((group) => group.cards.isNotEmpty)
         .toList();
 
@@ -111,7 +111,26 @@ class ReviewCalendarTermListPage extends StatelessWidget {
             Expanded(
               child: visibleGroups.isEmpty
                   ? _emptyState()
-                  : GakujiFadedScroll(
+                  : ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      shaderCallback: (bounds) {
+                        return const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0x00000000),
+                            Colors.black,
+                            Colors.black,
+                            Color(0x00000000),
+                          ],
+                          stops: [
+                            0.0,
+                            0.035,
+                            0.94,
+                            1.0,
+                          ],
+                        ).createShader(bounds);
+                      },
                       child: ListView.builder(
                         padding: const EdgeInsets.only(
                           top: 18,
@@ -146,11 +165,11 @@ class ReviewCalendarTermListPage extends StatelessWidget {
             pageTitle,
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: GakujiText.large.copyWith(
+            style: GakujiText.dictionaryTopBarTitle.copyWith(
               color: GakujiColors.darkGray,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 1),
           Text(
             dateLabel,
             textAlign: TextAlign.center,
@@ -198,7 +217,8 @@ class ReviewCalendarTermListPage extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionHeader('${group.label} ${visibleTerms.length}'),
+        _sectionHeader(group.label, visibleTerms.length),
+        const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: Column(
@@ -217,7 +237,7 @@ class ReviewCalendarTermListPage extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
+                        GakujiPageRoute(
                           builder: (context) =>
                               DictionaryDetailPage(word: term),
                         ),
@@ -239,7 +259,9 @@ class ReviewCalendarTermListPage extends StatelessWidget {
     );
   }
 
-  Widget _sectionHeader(String title) {
+  Widget _sectionHeader(String label, int termCount) {
+    final countLabel = termCount == 1 ? '(1 term)' : '($termCount terms)';
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
@@ -247,24 +269,39 @@ class ReviewCalendarTermListPage extends StatelessWidget {
         color: GakujiColors.sectionHeader,
         border: Border(
           top: BorderSide(
-            color: GakujiColors.darkGray.withValues(alpha: 0.16),
+            color: GakujiColors.darkGray.withOpacity(0.16),
             width: 1,
           ),
           bottom: BorderSide(
-            color: GakujiColors.darkGray.withValues(alpha: 0.16),
+            color: GakujiColors.darkGray.withOpacity(0.16),
             width: 1,
           ),
         ),
       ),
-      child: Text(
-        title,
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          height: 1,
-          color: GakujiColors.darkGray,
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: label,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                height: 1,
+                color: GakujiColors.darkGray,
+              ),
+            ),
+            TextSpan(
+              text: ' $countLabel',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                height: 1,
+                color: GakujiColors.mediumGray,
+              ),
+            ),
+          ],
         ),
+        textScaler: TextScaler.noScaling,
       ),
     );
   }

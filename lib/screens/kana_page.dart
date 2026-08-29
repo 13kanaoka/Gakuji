@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
+import '../widgets/gakuji_deck_transition.dart';
 import '../models/term.dart';
 import '../models/writing_point.dart';
 import '../services/dictionary_service.dart';
@@ -580,7 +582,8 @@ class _KanaPageState extends State<KanaPage> {
     if (items.isEmpty) return;
 
     Navigator.of(context).push(
-      MaterialPageRoute<void>(
+      GakujiPageRoute<void>(
+        enableSwipeBack: false,
         builder: (context) => KanaStudyPage(
           items: items,
           answerPool: _allStudyItems(),
@@ -658,7 +661,7 @@ class _KanaPageState extends State<KanaPage> {
       context: context,
       isScrollControlled: true,
       isDismissible: true,
-      enableDrag: true,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.56),
       builder: (sheetContext) {
@@ -687,122 +690,130 @@ class _KanaPageState extends State<KanaPage> {
 
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return Scaffold(
-      backgroundColor: GakujiColors.warmBackground,
-      body: SafeArea(
-        bottom: false,
-        child: Stack(
-          children: [
-            Column(
+    return Hero(
+      tag: gakujiLearningHeroTag('kana'),
+      createRectTween: gakujiDeckRectTween,
+      flightShuttleBuilder: gakujiDeckFlightShuttleBuilder,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Scaffold(
+          backgroundColor: GakujiColors.warmBackground,
+          body: SafeArea(
+            bottom: false,
+            child: Stack(
               children: [
-                GakujiTopBar(
-                  leftIcon: GakujiTopBar.backIcon,
-                  leftIconSize: GakujiTopBar.backIconSize,
-                  leftIconColor: GakujiColors.darkGray,
-                  onLeftTap: () => Navigator.of(context).pop(),
-                  rightWidget: _topBarSelectionControl(),
-                ),
-                const SizedBox(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: _KanaScriptSwitcher(
-                    showKatakana: showKatakana,
-                    onHiraganaTap: () => _setScript(false),
-                    onKatakanaTap: () => _setScript(true),
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.only(
-                      top: 22,
-                      bottom: GakujiSpacing.pageBottom +
-                          (isSelectingKana ? 92 : 0),
+                Column(
+                  children: [
+                    GakujiTopBar(
+                      leftIcon: Icons.close_rounded,
+                      leftIconSize: GakujiTopBar.iconSize,
+                      leftIconColor: GakujiColors.darkGray,
+                      onLeftTap: () => Navigator.of(context).pop(),
+                      rightWidget: _topBarSelectionControl(),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 180),
-                          switchInCurve: Curves.easeOut,
-                          switchOutCurve: Curves.easeOut,
-                          child: Column(
-                            key: ValueKey(showKatakana),
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const _KanaSectionHeader(
-                                label: 'Gojūon (basic kana)',
-                              ),
-                              const SizedBox(height: 15),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
-                                child: _KanaChart(
-                                  rows: basicRows,
-                                  selectionMode: isSelectingKana,
-                                  selectedCharacters: selectedKanaCharacters,
-                                  onKanaTap: _handleKanaTap,
-                                ),
-                              ),
-                              const SizedBox(height: 28),
-                              const _KanaSectionHeader(
-                                label: 'Dakuon & Handakuon',
-                              ),
-                              const SizedBox(height: 15),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
-                                child: _KanaChart(
-                                  rows: dakuonRows,
-                                  selectionMode: isSelectingKana,
-                                  selectedCharacters: selectedKanaCharacters,
-                                  onKanaTap: _handleKanaTap,
-                                ),
-                              ),
-                              const SizedBox(height: 28),
-                              const _KanaSectionHeader(label: 'Yōon'),
-                              const SizedBox(height: 15),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
-                                child: _KanaChart(
-                                  rows: yoonRows,
-                                  centerRows: true,
-                                  selectionMode: isSelectingKana,
-                                  selectedCharacters: selectedKanaCharacters,
-                                  onKanaTap: _handleKanaTap,
-                                ),
-                              ),
-                            ],
-                          ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _KanaScriptSwitcher(
+                        showKatakana: showKatakana,
+                        onHiraganaTap: () => _setScript(false),
+                        onKatakanaTap: () => _setScript(true),
+                      ),
+                    ),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: EdgeInsets.only(
+                          top: 22,
+                          bottom: GakujiSpacing.pageBottom +
+                              (isSelectingKana ? 92 : 0),
                         ),
-                      ],
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 180),
+                              switchInCurve: Curves.easeOut,
+                              switchOutCurve: Curves.easeOut,
+                              child: Column(
+                                key: ValueKey(showKatakana),
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const _KanaSectionHeader(
+                                    label: 'Gojūon (basic kana)',
+                                  ),
+                                  const SizedBox(height: 15),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                    ),
+                                    child: _KanaChart(
+                                      rows: basicRows,
+                                      selectionMode: isSelectingKana,
+                                      selectedCharacters: selectedKanaCharacters,
+                                      onKanaTap: _handleKanaTap,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 28),
+                                  const _KanaSectionHeader(
+                                    label: 'Dakuon & Handakuon',
+                                  ),
+                                  const SizedBox(height: 15),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                    ),
+                                    child: _KanaChart(
+                                      rows: dakuonRows,
+                                      selectionMode: isSelectingKana,
+                                      selectedCharacters: selectedKanaCharacters,
+                                      onKanaTap: _handleKanaTap,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 28),
+                                  const _KanaSectionHeader(label: 'Yōon'),
+                                  const SizedBox(height: 15),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                    ),
+                                    child: _KanaChart(
+                                      rows: yoonRows,
+                                      centerRows: true,
+                                      selectionMode: isSelectingKana,
+                                      selectedCharacters: selectedKanaCharacters,
+                                      onKanaTap: _handleKanaTap,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  left: 20,
+                  right: 20,
+                  bottom: isSelectingKana ? bottomInset + 14 : -96,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 160),
+                    opacity: isSelectingKana ? 1 : 0,
+                    child: IgnorePointer(
+                      ignoring: !isSelectingKana,
+                      child: _KanaStudyActionButton(
+                        itemCount: selectedKanaCharacters.length,
+                        onTap: _startSelectedKanaStudy,
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
-            AnimatedPositioned(
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              left: 20,
-              right: 20,
-              bottom: isSelectingKana ? bottomInset + 14 : -96,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 160),
-                opacity: isSelectingKana ? 1 : 0,
-                child: IgnorePointer(
-                  ignoring: !isSelectingKana,
-                  child: _KanaStudyActionButton(
-                    itemCount: selectedKanaCharacters.length,
-                    onTap: _startSelectedKanaStudy,
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -971,8 +982,7 @@ class _KanaScriptTab extends StatelessWidget {
         child: AnimatedDefaultTextStyle(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          style: GakujiText.large.copyWith(
-            fontSize: 27,
+          style: GakujiText.kanaScriptHeader.copyWith(
             color: isSelected ? GakujiColors.reading : GakujiColors.darkGray,
           ),
           child: Text(
@@ -1002,12 +1012,7 @@ class _KanaSectionHeader extends StatelessWidget {
           Text(
             label,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              height: 1,
-              color: GakujiColors.darkGray,
-            ),
+            style: GakujiText.kanaSectionTitle,
           ),
           const SizedBox(height: 8),
           Divider(
@@ -1075,6 +1080,7 @@ class _KanaChart extends StatelessWidget {
                                 child: GakujiDomino(
                                   text: kana.character,
                                   footerText: kana.romaji,
+                                  footerTextStyle: GakujiText.kanaReading,
                                   selected: selectionMode &&
                                       selectedCharacters.contains(
                                         kana.character,
@@ -1122,6 +1128,11 @@ class _KanaDetailSheetState extends State<_KanaDetailSheet> {
   bool showReference = true;
   bool showStrokeAnimation = false;
   int animationRunId = 0;
+  double sheetDismissDragOffset = 0;
+  bool isSheetDismissDragging = false;
+  bool isSheetDismissing = false;
+
+  static const Duration _sheetSnapDuration = Duration(milliseconds: 180);
 
   final List<List<WritingPoint>> practiceStrokes = [];
 
@@ -1217,6 +1228,59 @@ class _KanaDetailSheetState extends State<_KanaDetailSheet> {
     });
   }
 
+  void _startSheetDismissDrag(DragStartDetails details) {
+    if (isSheetDismissing) return;
+
+    setState(() {
+      isSheetDismissDragging = true;
+    });
+  }
+
+  void _updateSheetDismissDrag(DragUpdateDetails details) {
+    if (isSheetDismissing) return;
+
+    final nextOffset = sheetDismissDragOffset + details.delta.dy;
+
+    setState(() {
+      sheetDismissDragOffset = nextOffset < 0 ? 0 : nextOffset;
+    });
+  }
+
+  void _endSheetDismissDrag(DragEndDetails details) {
+    if (isSheetDismissing) return;
+
+    final velocity = details.primaryVelocity ?? 0;
+    final shouldDismiss = sheetDismissDragOffset > 42 || velocity > 650;
+
+    if (!shouldDismiss) {
+      setState(() {
+        isSheetDismissDragging = false;
+        sheetDismissDragOffset = 0;
+      });
+      return;
+    }
+
+    setState(() {
+      isSheetDismissDragging = false;
+      isSheetDismissing = true;
+      sheetDismissDragOffset = MediaQuery.sizeOf(context).height;
+    });
+
+    Future<void>.delayed(_sheetSnapDuration, () {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    });
+  }
+
+  void _cancelSheetDismissDrag() {
+    if (isSheetDismissing) return;
+
+    setState(() {
+      isSheetDismissDragging = false;
+      sheetDismissDragOffset = 0;
+    });
+  }
+
   void _addPracticeStroke(Offset point, {bool isStart = false}) {
     final writingPoint = WritingPoint.fromOffset(
       x: point.dx,
@@ -1244,7 +1308,7 @@ class _KanaDetailSheetState extends State<_KanaDetailSheet> {
     final bottomSafePadding =
         mediaQuery.padding.bottom > 0 ? mediaQuery.padding.bottom + 14.0 : 24.0;
 
-    return Material(
+    final sheet = Material(
       color: GakujiColors.warmBackground,
       borderRadius: const BorderRadius.vertical(
         top: Radius.circular(24),
@@ -1255,13 +1319,7 @@ class _KanaDetailSheetState extends State<_KanaDetailSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sheetHandle(),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: _closeButton(context),
-            ),
-            const SizedBox(height: 10),
+            _sheetTopControls(context),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
@@ -1347,6 +1405,19 @@ class _KanaDetailSheetState extends State<_KanaDetailSheet> {
         ),
       ),
     );
+
+    final animatedSheet = AnimatedContainer(
+      duration: isSheetDismissDragging ? Duration.zero : _sheetSnapDuration,
+      curve: Curves.easeOutCubic,
+      transform: Matrix4.translationValues(0, sheetDismissDragOffset, 0),
+      child: sheet,
+    );
+
+    if (isWritingMode) {
+      return animatedSheet;
+    }
+
+    return _sheetDismissDragRegion(child: animatedSheet);
   }
 
   Widget _detailActionRow({
@@ -1487,17 +1558,53 @@ class _KanaDetailSheetState extends State<_KanaDetailSheet> {
     );
   }
 
-  Widget _sheetHandle() {
-    return Center(
-      child: Container(
-        width: 42,
-        height: 5,
-        decoration: BoxDecoration(
-          color: GakujiColors.softGray,
-          borderRadius: BorderRadius.circular(999),
+  Widget _sheetDismissDragRegion({required Widget child}) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragStart: _startSheetDismissDrag,
+      onVerticalDragUpdate: _updateSheetDismissDrag,
+      onVerticalDragEnd: _endSheetDismissDrag,
+      onVerticalDragCancel: _cancelSheetDismissDrag,
+      child: child,
+    );
+  }
+
+  Widget _sheetDragHandle() {
+    return SizedBox(
+      width: double.infinity,
+      height: 28,
+      child: Center(
+        child: Container(
+          width: 42,
+          height: 5,
+          decoration: BoxDecoration(
+            color: GakujiColors.softGray,
+            borderRadius: BorderRadius.circular(999),
+          ),
         ),
       ),
     );
+  }
+
+  Widget _sheetTopControls(BuildContext context) {
+    final controls = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sheetDragHandle(),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _closeButton(context),
+        ),
+        const SizedBox(height: 10),
+      ],
+    );
+
+    if (!isWritingMode) {
+      return controls;
+    }
+
+    return _sheetDismissDragRegion(child: controls);
   }
 
   Widget _closeButton(BuildContext context) {

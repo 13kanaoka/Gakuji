@@ -28,10 +28,10 @@ class ReviewSettings {
 class ReviewSettingsStore {
   static const String _newLimitKey = 'review_new_limit';
   static const String _reviewLimitKey = 'review_review_limit';
-  static const String _reviewUsageDateKey = 'review_usage_date';
-  static const String _reviewUsageCountKey = 'review_usage_count';
-  static const String _newUsageDateKey = 'review_new_usage_date';
-  static const String _newUsageCountKey = 'review_new_usage_count';
+  static const String _reviewUsageDateKeyPrefix = 'review_usage_date_';
+  static const String _reviewUsageCountKeyPrefix = 'review_usage_count_';
+  static const String _newUsageDateKeyPrefix = 'review_new_usage_date_';
+  static const String _newUsageCountKeyPrefix = 'review_new_usage_count_';
 
   static Future<ReviewSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -57,73 +57,100 @@ class ReviewSettingsStore {
     ]);
   }
 
-  static Future<int> newCardsStartedToday({DateTime? now}) async {
+  static Future<int> newCardsStartedToday({
+    required String deckId,
+    DateTime? now,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final todayKey = _dateKey(now ?? DateTime.now());
-    final savedDate = prefs.getString(_newUsageDateKey);
+    final dateKey = _deckUsageKey(_newUsageDateKeyPrefix, deckId);
+    final countKey = _deckUsageKey(_newUsageCountKeyPrefix, deckId);
+    final savedDate = prefs.getString(dateKey);
 
     if (savedDate != todayKey) {
       await Future.wait([
-        prefs.setString(_newUsageDateKey, todayKey),
-        prefs.setInt(_newUsageCountKey, 0),
+        prefs.setString(dateKey, todayKey),
+        prefs.setInt(countKey, 0),
       ]);
       return 0;
     }
 
-    return prefs.getInt(_newUsageCountKey) ?? 0;
+    return prefs.getInt(countKey) ?? 0;
   }
 
-  static Future<void> recordStartedNewCard({DateTime? now}) async {
+  static Future<void> recordStartedNewCard({
+    required String deckId,
+    DateTime? now,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final todayKey = _dateKey(now ?? DateTime.now());
-    final savedDate = prefs.getString(_newUsageDateKey);
+    final dateKey = _deckUsageKey(_newUsageDateKeyPrefix, deckId);
+    final countKey = _deckUsageKey(_newUsageCountKeyPrefix, deckId);
+    final savedDate = prefs.getString(dateKey);
 
     if (savedDate != todayKey) {
       await Future.wait([
-        prefs.setString(_newUsageDateKey, todayKey),
-        prefs.setInt(_newUsageCountKey, 1),
+        prefs.setString(dateKey, todayKey),
+        prefs.setInt(countKey, 1),
       ]);
       return;
     }
 
-    final currentCount = prefs.getInt(_newUsageCountKey) ?? 0;
+    final currentCount = prefs.getInt(countKey) ?? 0;
     await prefs.setInt(
-      _newUsageCountKey,
+      countKey,
       (currentCount + 1).clamp(0, 9999).toInt(),
     );
   }
 
-  static Future<int> reviewsCompletedToday({DateTime? now}) async {
+  static Future<int> reviewsCompletedToday({
+    required String deckId,
+    DateTime? now,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final todayKey = _dateKey(now ?? DateTime.now());
-    final savedDate = prefs.getString(_reviewUsageDateKey);
+    final dateKey = _deckUsageKey(_reviewUsageDateKeyPrefix, deckId);
+    final countKey = _deckUsageKey(_reviewUsageCountKeyPrefix, deckId);
+    final savedDate = prefs.getString(dateKey);
 
     if (savedDate != todayKey) {
       await Future.wait([
-        prefs.setString(_reviewUsageDateKey, todayKey),
-        prefs.setInt(_reviewUsageCountKey, 0),
+        prefs.setString(dateKey, todayKey),
+        prefs.setInt(countKey, 0),
       ]);
       return 0;
     }
 
-    return prefs.getInt(_reviewUsageCountKey) ?? 0;
+    return prefs.getInt(countKey) ?? 0;
   }
 
-  static Future<void> recordCompletedReview({DateTime? now}) async {
+  static Future<void> recordCompletedReview({
+    required String deckId,
+    DateTime? now,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     final todayKey = _dateKey(now ?? DateTime.now());
-    final savedDate = prefs.getString(_reviewUsageDateKey);
+    final dateKey = _deckUsageKey(_reviewUsageDateKeyPrefix, deckId);
+    final countKey = _deckUsageKey(_reviewUsageCountKeyPrefix, deckId);
+    final savedDate = prefs.getString(dateKey);
 
     if (savedDate != todayKey) {
       await Future.wait([
-        prefs.setString(_reviewUsageDateKey, todayKey),
-        prefs.setInt(_reviewUsageCountKey, 1),
+        prefs.setString(dateKey, todayKey),
+        prefs.setInt(countKey, 1),
       ]);
       return;
     }
 
-    final currentCount = prefs.getInt(_reviewUsageCountKey) ?? 0;
-    await prefs.setInt(_reviewUsageCountKey, currentCount + 1);
+    final currentCount = prefs.getInt(countKey) ?? 0;
+    await prefs.setInt(
+      countKey,
+      (currentCount + 1).clamp(0, 9999).toInt(),
+    );
+  }
+
+  static String _deckUsageKey(String prefix, String deckId) {
+    return '$prefix$deckId';
   }
 
   static int _sanitizeLimit(int? value, int fallback) {

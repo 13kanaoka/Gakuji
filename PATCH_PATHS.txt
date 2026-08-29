@@ -1,0 +1,37 @@
+Gakuji local-first patch
+
+Replace/add these project-relative files:
+LOCAL_FIRST_DATA_ARCHITECTURE.md
+LOCAL_FIRST_TEST_CHECKLIST.md
+PATCH_PATHS.txt
+firestore.rules
+lib/data/recent_deck_data.dart
+lib/data/review_card_data.dart
+lib/main.dart
+lib/models/deck.dart
+lib/screens/account_information_page.dart
+lib/screens/create_deck_page.dart
+lib/screens/deck_edit_page.dart
+lib/screens/deck_page.dart
+lib/screens/dictionary_detail_page.dart
+lib/screens/dictionary_page.dart
+lib/screens/hybrid_study_page.dart
+lib/screens/imposter_detective_page.dart
+lib/screens/kanji_dictionary_detail_page.dart
+lib/screens/kanji_fusion_game_page.dart
+lib/screens/profile_settings_page.dart
+lib/screens/review_study_page.dart
+lib/screens/settings_page.dart
+lib/screens/username_onboarding_gate.dart
+lib/screens/word_fusion_game_page.dart
+lib/screens/writing_study_page.dart
+lib/services/account_auth_service.dart
+lib/services/deck_storage.dart
+lib/services/gakuji_cloud_sync_service.dart
+lib/services/gakuji_local_preferences.dart
+lib/services/gakuji_user_data_store.dart
+lib/services/gakuji_user_database.dart
+lib/services/gakuji_user_repository.dart
+lib/services/reading_card_edit_storage.dart
+lib/services/review_settings.dart
+lib/services/writing_recognition_service.dart

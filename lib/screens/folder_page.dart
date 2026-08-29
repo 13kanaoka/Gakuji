@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../data/deck_data.dart';
 import '../models/deck.dart';
@@ -7,6 +8,7 @@ import '../services/gakuji_user_data_store.dart';
 import '../widgets/gakuji_deck_card.dart';
 import '../widgets/gakuji_faded_scroll.dart';
 import '../widgets/gakuji_search_bar.dart';
+import '../widgets/gakuji_styles.dart';
 import '../widgets/gakuji_top_bar.dart';
 import 'deck_page.dart';
 
@@ -142,10 +144,8 @@ class _FolderPageState extends State<FolderPage> {
                       Navigator.pop(context);
                     },
                     title: widget.folder.name,
-                    titleStyle: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.black,
+                    titleStyle: GakujiText.pageTitle.copyWith(
+                      color: GakujiColors.darkGray,
                     ),
                     rightIcon: isRemovingDecks ? null : Icons.more_horiz,
                     onRightTap: isRemovingDecks
@@ -187,10 +187,7 @@ class _FolderPageState extends State<FolderPage> {
                                           ? 'No decks in this folder yet'
                                           : 'No decks found',
                                       textScaler: TextScaler.noScaling,
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                        fontSize: 16,
-                                      ),
+                                      style: GakujiText.body.copyWith(color: Colors.grey),
                                     ),
                                   )
                                 : GakujiFadedScroll(
@@ -248,6 +245,7 @@ class _FolderPageState extends State<FolderPage> {
         subtitle: _deckTypeLabel(deck.type),
         watermark: _watermarkForDeckType(deck.type),
         watermarkAssetPath: _watermarkAssetForDeckType(deck.type),
+        accentColor: GakujiColors.deckColorFor(deck),
         onTap: () async {
           if (isRemovingDecks) {
             toggleDeckSelection(deck);
@@ -256,7 +254,7 @@ class _FolderPageState extends State<FolderPage> {
 
           await Navigator.push(
             context,
-            MaterialPageRoute(
+            GakujiPageRoute(
               builder: (context) => DeckPage(deck: deck),
             ),
           );

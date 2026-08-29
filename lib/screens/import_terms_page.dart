@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../models/deck_import_row.dart';
 import '../models/term.dart';
@@ -157,7 +158,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
 
     final imported = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (context) => ImportTermsPreviewPage(
           document: selectedDocument,
           mapping: mapping,
@@ -198,7 +199,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: () => Navigator.pop(context),
       title: document == null ? null : 'Import Terms',
-      titleStyle: GakujiText.small.copyWith(
+      titleStyle: GakujiText.pageTitle.copyWith(
         color: GakujiColors.darkGray,
       ),
     );
@@ -214,7 +215,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
           const SizedBox(height: 78),
           Icon(
             Icons.ios_share_rounded,
-            size: 88,
+            size: 76,
             color: GakujiColors.darkGray,
           ),
           const SizedBox(height: 34),
@@ -222,10 +223,8 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
             'Import Terms',
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: GakujiText.large.copyWith(
+            style: GakujiText.pageTitle.copyWith(
               color: GakujiColors.darkGray,
-              fontSize: 28,
-              height: 1,
             ),
           ),
           const SizedBox(height: 22),
@@ -326,7 +325,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: GakujiColors.reading.withValues(alpha: 0.12),
+              color: GakujiColors.reading.withOpacity(0.12),
               borderRadius: BorderRadius.circular(15),
             ),
             child: Icon(
@@ -466,7 +465,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
           ),
           Switch.adaptive(
             value: firstRowIsHeader,
-            activeThumbColor: GakujiColors.reading,
+            activeColor: GakujiColors.reading,
             onChanged: (value) {
               setState(() {
                 firstRowIsHeader = value;
@@ -552,7 +551,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
                   border: Border.all(
                     color: role == TermImportColumnRole.ignore
                         ? GakujiColors.warmDivider
-                        : GakujiColors.reading.withValues(alpha: 0.55),
+                        : GakujiColors.reading.withOpacity(0.55),
                     width: 1.3,
                   ),
                 ),
@@ -662,10 +661,10 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: GakujiColors.pinRed.withValues(alpha: 0.08),
+        color: GakujiColors.pinRed.withOpacity(0.08),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: GakujiColors.pinRed.withValues(alpha: 0.35),
+          color: GakujiColors.pinRed.withOpacity(0.35),
         ),
       ),
       child: Row(

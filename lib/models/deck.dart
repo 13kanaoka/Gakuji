@@ -44,6 +44,12 @@ class Deck {
 
   final DeckType type;
 
+  /// Optional user-selected ARGB color for this deck.
+  ///
+  /// A null value means the UI should fall back to the deck type's original
+  /// default color, which keeps decks saved before custom colors compatible.
+  int? colorValue;
+
   /// Independent term/card copies saved to this deck.
   ///
   /// These are separate from the global dictionary terms.
@@ -65,16 +71,16 @@ class Deck {
   /// If false, the deck is only using normal Study behavior.
   /// If true, Review scheduling data can exist and continue aging
   /// even when the deck's active study mode is Study.
-  final bool reviewEnabled;
+  bool reviewEnabled;
 
   /// The deck's currently active study experience.
   ///
   /// Study = free practice.
   /// Review = scheduled review.
-  final StudyMode activeStudyMode;
+  StudyMode activeStudyMode;
 
   /// When Review was first enabled for this deck.
-  final DateTime? reviewEnabledAt;
+  DateTime? reviewEnabledAt;
 
   /// Study progress tracking.
   int lastStudyIndex;
@@ -86,6 +92,7 @@ class Deck {
     required this.id,
     required this.name,
     required this.type,
+    this.colorValue,
     required this.terms,
     Map<String, HybridCardMode>? hybridCardModes,
     this.reviewEnabled = false,
@@ -177,6 +184,7 @@ class Deck {
     String? id,
     String? name,
     DeckType? type,
+    int? colorValue,
     List<Term>? terms,
     Map<String, HybridCardMode>? hybridCardModes,
     bool? reviewEnabled,
@@ -189,6 +197,7 @@ class Deck {
       id: id ?? this.id,
       name: name ?? this.name,
       type: type ?? this.type,
+      colorValue: colorValue ?? this.colorValue,
       terms: terms ?? this.terms,
       hybridCardModes: hybridCardModes ?? this.hybridCardModes,
       reviewEnabled: reviewEnabled ?? this.reviewEnabled,

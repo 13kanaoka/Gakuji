@@ -5,6 +5,7 @@ import 'gakuji_styles.dart';
 
 class GakujiTermRow extends StatelessWidget {
   static const Color dividerColor = Color(0xFFC8C8C8);
+  static const Color _badgeBorderGray = Color(0xFFB7B8BC);
   static const Color _chevronGray = Color(0xFF8A8A8A);
 
   final Term term;
@@ -13,6 +14,7 @@ class GakujiTermRow extends StatelessWidget {
   final Widget? trailing;
   final String? titleText;
   final String? readingText;
+  final bool showKanjiBadge;
   final bool showChevron;
   final bool isSelected;
   final int meaningMaxLines;
@@ -27,6 +29,7 @@ class GakujiTermRow extends StatelessWidget {
     this.trailing,
     this.titleText,
     this.readingText,
+    this.showKanjiBadge = false,
     this.showChevron = false,
     this.isSelected = false,
     this.meaningMaxLines = 1,
@@ -65,6 +68,20 @@ class GakujiTermRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final titleStyle = GakujiText.termRowTitle.copyWith(
+      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w700,
+      height: 1,
+      color: GakujiColors.darkGray,
+    );
+    final readingStyle = GakujiText.termRowReading.copyWith(
+      height: 1,
+      color: GakujiColors.reading,
+    );
+    final meaningStyle = GakujiText.termRowMeaning.copyWith(
+      height: 1,
+      color: GakujiColors.darkGray,
+    );
+
     final content = Padding(
       padding: padding,
       child: Row(
@@ -77,33 +94,35 @@ class GakujiTermRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.end,
-                  spacing: 10,
-                  runSpacing: 0,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      _resolvedTitleText,
-                      textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 22,
-                        height: 1,
-                        fontWeight:
-                            isSelected ? FontWeight.w800 : FontWeight.w700,
-                        color: GakujiColors.darkGray,
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: _resolvedTitleText,
+                              style: titleStyle,
+                            ),
+                            if (_resolvedReadingText.isNotEmpty)
+                              const TextSpan(text: '  '),
+                            if (_resolvedReadingText.isNotEmpty)
+                              TextSpan(
+                                text: '【$_resolvedReadingText】',
+                                style: readingStyle,
+                              ),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textScaler: TextScaler.noScaling,
                       ),
                     ),
-                    if (_resolvedReadingText.isNotEmpty)
-                      Text(
-                        '【$_resolvedReadingText】',
-                        textScaler: TextScaler.noScaling,
-                        style: const TextStyle(
-                          fontSize: 19,
-                          height: 1,
-                          fontWeight: FontWeight.w600,
-                          color: GakujiColors.reading,
-                        ),
-                      ),
+                    if (showKanjiBadge) ...[
+                      const SizedBox(width: 8),
+                      _kanjiBadge(),
+                    ],
                   ],
                 ),
                 const SizedBox(height: 2),
@@ -112,11 +131,7 @@ class GakujiTermRow extends StatelessWidget {
                   maxLines: meaningMaxLines,
                   overflow: TextOverflow.ellipsis,
                   textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 14,
-                    height: 1,
-                    color: GakujiColors.darkGray,
-                  ),
+                  style: meaningStyle,
                 ),
               ],
             ),
@@ -144,6 +159,30 @@ class GakujiTermRow extends StatelessWidget {
               onTap: onTap,
               child: content,
             ),
+    );
+  }
+
+  static Widget _kanjiBadge() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(7, 3, 7, 4),
+      decoration: BoxDecoration(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: _badgeBorderGray,
+          width: 1,
+        ),
+      ),
+      child: const Text(
+        'Kanji',
+        textScaler: TextScaler.noScaling,
+        style: TextStyle(
+          fontSize: 11.5,
+          height: 1,
+          fontWeight: FontWeight.w700,
+          color: Color(0xFF85868A),
+        ),
+      ),
     );
   }
 }

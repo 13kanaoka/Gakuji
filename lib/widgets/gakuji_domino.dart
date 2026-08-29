@@ -11,6 +11,7 @@ class GakujiDomino extends StatelessWidget {
 
   final String text;
   final String? footerText;
+  final TextStyle? footerTextStyle;
   final VoidCallback? onTap;
   final bool invisible;
   final bool dragging;
@@ -24,6 +25,7 @@ class GakujiDomino extends StatelessWidget {
     super.key,
     required this.text,
     this.footerText,
+    this.footerTextStyle,
     this.onTap,
     this.invisible = false,
     this.dragging = false,
@@ -115,13 +117,14 @@ class GakujiDomino extends StatelessWidget {
                       footerText!,
                       textAlign: TextAlign.center,
                       textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        height: 1,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.1,
-                        color: GakujiColors.mediumGray,
-                      ),
+                      style: footerTextStyle ??
+                          TextStyle(
+                            fontSize: 10.5,
+                            height: 1,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.1,
+                            color: GakujiColors.mediumGray,
+                          ),
                     ),
                   )
                 else if (showFormControl && formCount > 1)

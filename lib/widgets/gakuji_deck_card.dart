@@ -18,6 +18,7 @@ class GakujiDeckCard extends StatelessWidget {
   final GakujiDeckCardSize size;
   final Color? shellColor;
   final Color? cardColor;
+  final Color? accentColor;
   final bool showShell;
   final bool isPinned;
 
@@ -39,6 +40,7 @@ class GakujiDeckCard extends StatelessWidget {
     this.size = GakujiDeckCardSize.large,
     this.shellColor,
     this.cardColor,
+    this.accentColor,
     this.showShell = true,
     this.isPinned = false,
     this.newCount,
@@ -57,25 +59,6 @@ class GakujiDeckCard extends StatelessWidget {
 
   bool get isHybrid {
     return subtitle.toLowerCase().trim() == 'hybrid';
-  }
-
-  int get titleCharacterLimit {
-    switch (size) {
-      case GakujiDeckCardSize.large:
-        return 14;
-      case GakujiDeckCardSize.compact:
-        return 12;
-    }
-  }
-
-  String get displayedTitle {
-    final cleanTitle = title.trim();
-
-    if (cleanTitle.length <= titleCharacterLimit) {
-      return cleanTitle;
-    }
-
-    return '${cleanTitle.substring(0, titleCharacterLimit)}...';
   }
 
   double get cardHeight {
@@ -205,6 +188,12 @@ class GakujiDeckCard extends StatelessWidget {
   }
 
   Color get deckTypeColor {
+    final selectedAccentColor = accentColor;
+
+    if (selectedAccentColor != null) {
+      return selectedAccentColor;
+    }
+
     switch (subtitle.toLowerCase().trim()) {
       case 'reading':
         return readingBlue;
@@ -239,8 +228,8 @@ class GakujiDeckCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          splashColor: GakujiColors.deckBlue.withValues(alpha: 0.07),
-          highlightColor: GakujiColors.deckBlue.withValues(alpha: 0.035),
+          splashColor: deckTypeColor.withValues(alpha: 0.07),
+          highlightColor: deckTypeColor.withValues(alpha: 0.035),
           child: SizedBox(
             height: cardHeight,
             width: double.infinity,
@@ -292,13 +281,11 @@ class GakujiDeckCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          displayedTitle,
+          title.trim(),
           maxLines: 1,
-          overflow: TextOverflow.clip,
+          overflow: TextOverflow.ellipsis,
           textScaler: TextScaler.noScaling,
-          style: GakujiText.small.copyWith(
-            color: GakujiColors.darkGray,
-          ),
+          style: GakujiText.deckTitle,
         ),
         if (hasSubtitle) ...[
           const SizedBox(height: 6),
@@ -307,9 +294,7 @@ class GakujiDeckCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textScaler: TextScaler.noScaling,
-            style: GakujiText.xSmall.copyWith(
-              color: GakujiColors.darkGray,
-            ),
+            style: GakujiText.deckMeta,
           ),
         ],
       ],
@@ -349,6 +334,8 @@ class GakujiDeckCard extends StatelessWidget {
               assetPath,
               fit: BoxFit.contain,
               alignment: Alignment.center,
+              color: deckTypeColor,
+              colorBlendMode: BlendMode.srcIn,
               errorBuilder: (context, error, stackTrace) {
                 return const SizedBox.shrink();
               },

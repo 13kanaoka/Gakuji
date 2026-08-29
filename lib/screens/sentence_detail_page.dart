@@ -126,11 +126,6 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
               leftIconColor: darkText,
               onLeftTap: () => Navigator.of(context).pop(),
               title: '',
-              titleStyle:  TextStyle(
-                fontSize: 23,
-                fontWeight: FontWeight.w500,
-                color: darkText,
-              ),
             ),
             Expanded(
               child: GakujiFadedScroll(
@@ -150,29 +145,31 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
   }
 
   Widget _sentenceSection() {
+    final english = widget.example.english.trim();
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 18, 22, 27),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _furiganaSentence(),
-          const SizedBox(height: 17),
-          Container(
-            width: 34,
-            height: 1.5,
-            color: dividerColor,
-          ),
-          const SizedBox(height: 14),
-          Text(
-            widget.example.english,
-            textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 17.5,
-              height: 1.35,
-              color: darkText,
-              fontWeight: FontWeight.w400,
+          if (english.isNotEmpty) ...[
+            const SizedBox(height: 17),
+            Container(
+              width: 34,
+              height: 1.5,
+              color: dividerColor,
             ),
-          ),
+            const SizedBox(height: 14),
+            Text(
+              english,
+              textScaler: TextScaler.noScaling,
+              style: GakujiText.body.copyWith(
+                height: 1.35,
+                color: darkText,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -180,62 +177,78 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
 
   Widget _furiganaSentence() {
     final segments = _buildSentenceSegments();
+    final baseStyle = GakujiText.dictionaryTerm.copyWith(
+      height: 1.28,
+      color: darkText,
+      fontWeight: FontWeight.w500,
+    );
+    final furiganaStyle = GakujiText.calendarSmall.copyWith(
+      height: 1,
+      color: softTextGray,
+      fontWeight: FontWeight.w500,
+    );
 
-    if (segments.isEmpty) {
-      return Text(
-        widget.example.japanese,
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 25,
-          height: 1.38,
-          color: darkText,
-          fontWeight: FontWeight.w500,
+    final hasFurigana = segments.any((segment) {
+      final token = segment.token;
+      return token != null && _readingForSurfaceToken(token).isNotEmpty;
+    });
+
+    if (segments.isEmpty || !hasFurigana) {
+      return SizedBox(
+        width: double.infinity,
+        child: Text(
+          widget.example.japanese,
+          textAlign: TextAlign.start,
+          textScaler: TextScaler.noScaling,
+          softWrap: true,
+          style: baseStyle,
         ),
       );
     }
 
-    return Wrap(
-      spacing: 0,
-      runSpacing: 9,
-      crossAxisAlignment: WrapCrossAlignment.end,
-      children: segments.map(_sentenceSegmentWidget).toList(),
-    );
-  }
+    final furiganaHeight =
+        (furiganaStyle.fontSize ?? GakujiText.calendarSmall.fontSize ?? 0) *
+            (furiganaStyle.height ?? 1);
 
-  Widget _sentenceSegmentWidget(_SentenceSegment segment) {
-    final token = segment.token;
-    final reading = token == null ? '' : _readingForSurfaceToken(token);
+    return SizedBox(
+      width: double.infinity,
+      child: RichText(
+        textAlign: TextAlign.start,
+        textScaler: TextScaler.noScaling,
+        softWrap: true,
+        text: TextSpan(
+          children: segments.map((segment) {
+            final token = segment.token;
+            final reading =
+                token == null ? '' : _readingForSurfaceToken(token);
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          height: 16,
-          child: reading.isEmpty
-              ? null
-              : Text(
-                  reading,
-                  textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    height: 1,
-                    color: softTextGray,
-                    fontWeight: FontWeight.w500,
+            return WidgetSpan(
+              alignment: PlaceholderAlignment.bottom,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: furiganaHeight,
+                    child: reading.isEmpty
+                        ? null
+                        : Text(
+                            reading,
+                            textScaler: TextScaler.noScaling,
+                            style: furiganaStyle,
+                          ),
                   ),
-                ),
+                  const SizedBox(height: 2),
+                  Text(
+                    segment.text,
+                    textScaler: TextScaler.noScaling,
+                    style: baseStyle,
+                  ),
+                ],
+              ),
+            );
+          }).toList(growable: false),
         ),
-        const SizedBox(height: 2),
-        Text(
-          segment.text,
-          textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 25,
-            height: 1.12,
-            color: darkText,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -266,9 +279,10 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
       matchedToken = true;
 
       if (matchIndex > cursor) {
-        _appendRawSentenceText(
-          segments,
-          sentence.substring(cursor, matchIndex),
+        segments.add(
+          _SentenceSegment(
+            text: sentence.substring(cursor, matchIndex),
+          ),
         );
       }
 
@@ -289,70 +303,39 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
     }
 
     if (cursor < sentence.length) {
-      _appendRawSentenceText(
-        segments,
-        sentence.substring(cursor),
+      segments.add(
+        _SentenceSegment(text: sentence.substring(cursor)),
       );
     }
 
     return segments;
   }
 
-  void _appendRawSentenceText(
-    List<_SentenceSegment> segments,
-    String text,
-  ) {
-    if (text.isEmpty) {
-      return;
-    }
-
-    if (_isPunctuation(text) && segments.isNotEmpty) {
-      final previous = segments.removeLast();
-
-      segments.add(
-        _SentenceSegment(
-          text: '${previous.text}$text',
-          token: previous.token,
-        ),
-      );
-
-      return;
-    }
-
-    segments.add(_SentenceSegment(text: text));
-  }
-
   String _readingForSurfaceToken(DictionaryExampleToken token) {
     final surface = token.displayText.trim();
 
-    if (!_containsKanji(surface)) {
+    if (surface.isEmpty || !_containsKanji(surface)) {
       return '';
     }
 
     final termId = token.termId?.trim() ?? '';
     final termReading = _termsById[termId]?.reading.trim() ?? '';
     final tokenReading = token.reading.trim();
+    final headword = token.headword.trim();
+
+    if (tokenReading.isNotEmpty &&
+        (termReading.isEmpty || tokenReading != termReading)) {
+      return tokenReading == surface ? '' : tokenReading;
+    }
+
     final baseReading = termReading.isNotEmpty ? termReading : tokenReading;
 
     if (baseReading.isEmpty) {
       return '';
     }
 
-    final headword = token.headword.trim();
-
     if (headword.isEmpty || surface == headword) {
       return baseReading == surface ? '' : baseReading;
-    }
-
-    // 来る has irregular stem readings, so a simple suffix replacement can
-    // produce incorrect readings such as くた for 来た. Only use a corpus
-    // reading when it explicitly differs from the dictionary base reading.
-    if (headword == '来る') {
-      if (tokenReading.isNotEmpty && tokenReading != termReading) {
-        return tokenReading;
-      }
-
-      return '';
     }
 
     final inflectedReading = _inflectedReading(
@@ -369,7 +352,6 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
     required String headword,
     required String baseReading,
   }) {
-
     var commonPrefixLength = 0;
     final maxPrefixLength =
         surface.length < headword.length ? surface.length : headword.length;
@@ -396,6 +378,15 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
     return '$readingStem$surfaceSuffix';
   }
 
+  bool _containsKanji(String text) {
+    return RegExp(r'[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF々]')
+        .hasMatch(text);
+  }
+
+  bool _isKanaOnly(String value) {
+    return RegExp(r'^[\u3040-\u30FFー]+$').hasMatch(value);
+  }
+
   Widget _breakdownSection() {
     final includedTokens = widget.example.tokens
         .asMap()
@@ -411,7 +402,7 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
       children: [
         _sectionHeader('Breakdown'),
         if (_termsLoading)
-           Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(22, 18, 22, 20),
             child: Row(
               children: [
@@ -427,8 +418,7 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
                 Text(
                   'Loading terms...',
                   textScaler: TextScaler.noScaling,
-                  style: TextStyle(
-                    fontSize: 15.5,
+                  style: GakujiText.body.copyWith(
                     height: 1.2,
                     color: softTextGray,
                   ),
@@ -437,13 +427,12 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
             ),
           )
         else if (includedTokens.isEmpty)
-           Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(22, 17, 22, 20),
             child: Text(
               'Dictionary terms are not available for this sentence yet.',
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15.5,
+              style: GakujiText.body.copyWith(
                 height: 1.25,
                 color: softTextGray,
               ),
@@ -481,7 +470,7 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
                       : null,
                 ),
                 if (!isLast)
-                   Padding(
+                  Padding(
                     padding: EdgeInsets.only(left: 22, right: 16),
                     child: Divider(
                       height: 1,
@@ -494,27 +483,6 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
           }),
       ],
     );
-  }
-
-  bool _containsKanji(String text) {
-    return RegExp(r'[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF々]')
-        .hasMatch(text);
-  }
-
-  bool _isKanaOnly(String value) {
-    return RegExp(r'^[\u3040-\u30FFー]+$').hasMatch(value);
-  }
-
-  bool _isPunctuation(String value) {
-    final compact = value.replaceAll(RegExp(r'\s+'), '');
-
-    if (compact.isEmpty) {
-      return false;
-    }
-
-    return RegExp(
-      r'^[、。！？!?…‥・「」『』（）()［］\[\]【】〈〉《》〔〕〜～ー—―,.;:]+$',
-    ).hasMatch(compact);
   }
 
   Future<void> _openToken(
@@ -550,11 +518,9 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
       child: Text(
         title,
         textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 20,
-          height: 1,
+        style: GakujiText.body.copyWith(
           color: darkText,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -570,3 +536,4 @@ class _SentenceSegment {
     this.token,
   });
 }
+

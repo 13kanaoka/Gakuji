@@ -20,9 +20,13 @@ class DictionaryService {
   static const String _kanjiIdPrefix = 'kanji_';
   static const String _storedListSeparator = ';';
 
+  // JLPT vocabulary levels are supplemental metadata keyed to dictionary terms.
+  static const String _wordJlptLevelsTable = 'term_jlpt_levels';
+
   static Database? _database;
   static Future<void>? _loadFuture;
   static bool _usingFallbackDictionary = false;
+  static bool? _hasWordJlptLevelsTable;
 
   static Future<void> loadDictionary() {
     if (_database != null || _usingFallbackDictionary) {
@@ -59,6 +63,7 @@ class DictionaryService {
     await database.rawQuery('SELECT COUNT(*) FROM terms LIMIT 1');
     await database.rawQuery('SELECT COUNT(*) FROM kanji_entries LIMIT 1');
 
+    _hasWordJlptLevelsTable = null;
     _database = database;
   }
 
@@ -133,6 +138,153 @@ class DictionaryService {
       secondary: wordResults,
       limit: limit,
     );
+  }
+
+  /// Returns exact Japanese spelling/reading matches for one camera lookup.
+  ///
+  /// Unlike [search], this does not perform contains/prefix/English matching.
+  /// Camera tokenization uses this so a substring is only treated as a word
+  /// when that exact surface or reading exists in the dictionary.
+  static Future<List<Term>> findExactJapanese(
+    String rawQuery, {
+    int limit = 8,
+  }) async {
+    final query = rawQuery.trim();
+
+    if (query.isEmpty || limit <= 0) return const [];
+
+    final grouped = await findExactJapaneseBatch(
+      <String>[query],
+      perQueryLimit: limit,
+    );
+
+    return grouped[query] ?? const [];
+  }
+
+  /// Batched exact lookup used by Camera Mode sentence breakdown.
+  ///
+  /// A scanned line can contain many possible substrings. Fetching them in
+  /// batches avoids running a full dictionary search for every candidate.
+  static Future<Map<String, List<Term>>> findExactJapaneseBatch(
+    Iterable<String> rawQueries, {
+    int perQueryLimit = 4,
+  }) async {
+    if (perQueryLimit <= 0) return const {};
+
+    final queries = <String>[];
+    final seenQueries = <String>{};
+
+    for (final rawQuery in rawQueries) {
+      final query = rawQuery.trim();
+      if (query.isEmpty || !seenQueries.add(query)) continue;
+      queries.add(query);
+    }
+
+    if (queries.isEmpty) return const {};
+
+    await loadDictionary();
+
+    final database = _database;
+
+    if (database == null) {
+      return <String, List<Term>>{
+        for (final query in queries)
+          query: fallback_dictionary.dictionaryWords
+              .where((term) {
+                return term.kanji == query || term.reading == query;
+              })
+              .take(perQueryLimit)
+              .toList(growable: false),
+      };
+    }
+
+    // Each query is used twice in the SQL IN clauses. Keep the chunk well
+    // below SQLite's common 999-variable limit.
+    const chunkSize = 200;
+    final rowsById = <String, Map<String, Object?>>{};
+
+    for (var start = 0; start < queries.length; start += chunkSize) {
+      final end = (start + chunkSize).clamp(0, queries.length).toInt();
+      final chunk = queries.sublist(start, end);
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+
+      final rows = await database.rawQuery(
+        '''
+        SELECT
+          t.id,
+          t.kanji,
+          t.reading,
+          t.meaning,
+          t.part_of_speech,
+          t.is_common,
+          t.common_score
+        FROM terms t
+        WHERE
+          t.kanji IN ($placeholders)
+          OR t.reading IN ($placeholders)
+        ORDER BY
+          t.is_common DESC,
+          t.common_score DESC,
+          LENGTH(t.kanji) ASC
+        ''',
+        <Object?>[
+          ...chunk,
+          ...chunk,
+        ],
+      );
+
+      for (final query in chunk) {
+        var addedForQuery = 0;
+
+        for (final row in rows) {
+          final kanji = row['kanji']?.toString() ?? '';
+          final reading = row['reading']?.toString() ?? '';
+
+          if (kanji != query && reading != query) continue;
+
+          final id = row['id']?.toString() ?? '';
+          if (id.isEmpty) continue;
+
+          rowsById.putIfAbsent(id, () => row);
+          addedForQuery += 1;
+
+          if (addedForQuery >= perQueryLimit) break;
+        }
+      }
+    }
+
+    if (rowsById.isEmpty) {
+      return <String, List<Term>>{
+        for (final query in queries) query: const <Term>[],
+      };
+    }
+
+    final terms = await _termsFromRows(
+      database,
+      rowsById.values.toList(growable: false),
+    );
+
+    final result = <String, List<Term>>{};
+
+    for (final query in queries) {
+      final kanjiMatches = <Term>[];
+      final readingMatches = <Term>[];
+
+      for (final term in terms) {
+        if (term.kanji == query) {
+          kanjiMatches.add(term);
+        } else if (term.reading == query) {
+          readingMatches.add(term);
+        }
+      }
+
+      result[query] = <Term>[
+        ...kanjiMatches,
+        ...readingMatches,
+      ].take(perQueryLimit).toList(growable: false);
+    }
+
+    return result;
   }
 
   /// Finds likely lexical entries for a CSV import row.
@@ -570,6 +722,196 @@ class DictionaryService {
     return _kanjiTermFromRow(rows.first);
   }
 
+  /// Finds extra kanji suggestions related to handwriting recognition results.
+  ///
+  /// ML Kit supplies the shape-based alternatives. This supplements those with
+  /// characters that use the same dictionary radical, preferring candidates with
+  /// a similar stroke count to the strongest recognition results.
+  static Future<List<String>> getRelatedKanjiCandidates(
+    List<String> rawCharacters, {
+    int limit = 20,
+  }) async {
+    if (limit <= 0) return const <String>[];
+
+    final seedCharacters = <String>[];
+    final seenSeeds = <String>{};
+
+    for (final rawCharacter in rawCharacters) {
+      final character = rawCharacter.trim();
+      if (!_isSingleKanjiCharacter(character)) continue;
+      if (!seenSeeds.add(character)) continue;
+
+      seedCharacters.add(character);
+      if (seedCharacters.length >= 6) break;
+    }
+
+    if (seedCharacters.isEmpty) return const <String>[];
+
+    await loadDictionary();
+
+    final database = _database;
+    if (database == null) {
+      return _fallbackRelatedKanjiCandidates(
+        seedCharacters,
+        limit: limit,
+      );
+    }
+
+    final seedPlaceholders =
+        List.filled(seedCharacters.length, '?').join(', ');
+    final seedRows = await database.rawQuery(
+      """
+      SELECT character, radical, stroke_count
+      FROM kanji_entries
+      WHERE character IN ($seedPlaceholders)
+      """,
+      seedCharacters,
+    );
+
+    if (seedRows.isEmpty) return const <String>[];
+
+    final seedByCharacter = <String, Map<String, Object?>>{
+      for (final row in seedRows)
+        if (row['character'] != null) row['character'].toString(): row,
+    };
+
+    final radicals = <String>[];
+    final seenRadicals = <String>{};
+    for (final character in seedCharacters) {
+      final radical = _nullableText(seedByCharacter[character]?['radical']);
+      if (radical != null && seenRadicals.add(radical)) {
+        radicals.add(radical);
+      }
+    }
+
+    if (radicals.isEmpty) return const <String>[];
+
+    final radicalPlaceholders = List.filled(radicals.length, '?').join(', ');
+    final rows = await database.rawQuery(
+      """
+      SELECT character, radical, stroke_count, frequency
+      FROM kanji_entries
+      WHERE radical IN ($radicalPlaceholders)
+      LIMIT 400
+      """,
+      radicals,
+    );
+
+    final seedSet = seedCharacters.toSet();
+    final candidates = rows.where((row) {
+      final character = row['character']?.toString() ?? '';
+      return _isSingleKanjiCharacter(character) && !seedSet.contains(character);
+    }).toList();
+
+    int candidateScore(Map<String, Object?> candidate) {
+      final candidateRadical = _nullableText(candidate['radical']);
+      final candidateStrokeCount = _nullableInt(candidate['stroke_count']);
+      var bestScore = 1000000;
+
+      for (var index = 0; index < seedCharacters.length; index++) {
+        final seed = seedByCharacter[seedCharacters[index]];
+        if (seed == null) continue;
+
+        final seedRadical = _nullableText(seed['radical']);
+        if (seedRadical == null || seedRadical != candidateRadical) continue;
+
+        final seedStrokeCount = _nullableInt(seed['stroke_count']);
+        final strokeDifference = seedStrokeCount == null ||
+                candidateStrokeCount == null
+            ? 8
+            : (seedStrokeCount - candidateStrokeCount).abs();
+
+        final score = (index * 120) + (strokeDifference * 35);
+        if (score < bestScore) bestScore = score;
+      }
+
+      final frequency = _nullableInt(candidate['frequency']);
+      final frequencyTieBreaker = frequency == null ? 250 : frequency ~/ 100;
+      return bestScore + frequencyTieBreaker;
+    }
+
+    candidates.sort((left, right) {
+      final scoreComparison =
+          candidateScore(left).compareTo(candidateScore(right));
+      if (scoreComparison != 0) return scoreComparison;
+
+      final leftCharacter = left['character']?.toString() ?? '';
+      final rightCharacter = right['character']?.toString() ?? '';
+      return leftCharacter.compareTo(rightCharacter);
+    });
+
+    final results = <String>[];
+    final seenResults = <String>{};
+
+    for (final row in candidates) {
+      final character = row['character']?.toString() ?? '';
+      if (!seenResults.add(character)) continue;
+
+      results.add(character);
+      if (results.length >= limit) break;
+    }
+
+    return results;
+  }
+
+  static List<String> _fallbackRelatedKanjiCandidates(
+    List<String> seedCharacters, {
+    required int limit,
+  }) {
+    final results = <String>[];
+    final seen = seedCharacters.toSet();
+    final termsByCharacter = <String, Term>{};
+
+    for (final term in fallback_dictionary.dictionaryWords) {
+      if (_isSingleKanjiCharacter(term.kanji)) {
+        termsByCharacter[term.kanji] = term;
+      }
+    }
+
+    for (final seedCharacter in seedCharacters) {
+      final seedTerm = termsByCharacter[seedCharacter];
+      if (seedTerm == null) continue;
+
+      for (final similarCharacter in seedTerm.similarKanji) {
+        if (!_isSingleKanjiCharacter(similarCharacter)) continue;
+        if (!seen.add(similarCharacter)) continue;
+
+        results.add(similarCharacter);
+        if (results.length >= limit) return results;
+      }
+
+      final radical = seedTerm.radical;
+      if (radical == null || radical.isEmpty) continue;
+
+      final sameRadicalTerms = termsByCharacter.values
+          .where((term) => term.radical == radical && !seen.contains(term.kanji))
+          .toList()
+        ..sort((left, right) {
+          final seedStrokeCount = seedTerm.strokeCount;
+          final leftStrokeCount = left.strokeCount;
+          final rightStrokeCount = right.strokeCount;
+
+          final leftDifference = seedStrokeCount == null || leftStrokeCount == null
+              ? 999
+              : (seedStrokeCount - leftStrokeCount).abs();
+          final rightDifference =
+              seedStrokeCount == null || rightStrokeCount == null
+                  ? 999
+                  : (seedStrokeCount - rightStrokeCount).abs();
+
+          return leftDifference.compareTo(rightDifference);
+        });
+
+      for (final term in sameRadicalTerms) {
+        if (!seen.add(term.kanji)) continue;
+        results.add(term.kanji);
+        if (results.length >= limit) return results;
+      }
+    }
+
+    return results;
+  }
+
   static Future<KanjiStrokeData?> getKanjiStrokeData(
     String rawCharacter,
   ) async {
@@ -745,6 +1087,10 @@ class DictionaryService {
       database: database,
       termIds: ids,
     );
+    final wordJlptLevelsByTermId = await _wordJlptLevelsByTermId(
+      database: database,
+      termIds: ids,
+    );
 
     return rows.map((row) {
       final id = row['id'].toString();
@@ -758,8 +1104,76 @@ class DictionaryService {
         senses: sensesByTermId[id] ?? const [],
         isCommon: row['is_common'] == 1,
         kanjiMeaning: row['meaning']?.toString() ?? '',
+        jlptLevel: wordJlptLevelsByTermId[id],
+        frequency: _nullableInt(row['frequency']),
       );
     }).toList();
+  }
+
+  static Future<Map<String, String>> _wordJlptLevelsByTermId({
+    required Database database,
+    required List<String> termIds,
+  }) async {
+    if (termIds.isEmpty || !await _hasWordJlptMetadata(database)) {
+      return const {};
+    }
+
+    final levelsByTermId = <String, String>{};
+    const chunkSize = 400;
+
+    try {
+      for (var start = 0; start < termIds.length; start += chunkSize) {
+        final end = (start + chunkSize).clamp(0, termIds.length).toInt();
+        final chunk = termIds.sublist(start, end);
+        final placeholders = List.filled(chunk.length, '?').join(', ');
+
+        final rows = await database.rawQuery(
+          '''
+          SELECT term_id, jlpt_level
+          FROM $_wordJlptLevelsTable
+          WHERE term_id IN ($placeholders)
+          ''',
+          chunk,
+        );
+
+        for (final row in rows) {
+          final termId = row['term_id']?.toString().trim() ?? '';
+          final level = _normalizeJlptLevel(row['jlpt_level']);
+
+          if (termId.isEmpty || level == null) continue;
+          levelsByTermId[termId] = level;
+        }
+      }
+    } on DatabaseException catch (error) {
+      debugPrint('Word JLPT metadata lookup failed: $error');
+      return const {};
+    }
+
+    return levelsByTermId;
+  }
+
+  static Future<bool> _hasWordJlptMetadata(Database database) async {
+    final cached = _hasWordJlptLevelsTable;
+    if (cached != null) return cached;
+
+    try {
+      final rows = await database.rawQuery(
+        '''
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name = ?
+        LIMIT 1
+        ''',
+        [_wordJlptLevelsTable],
+      );
+      final exists = rows.isNotEmpty;
+      _hasWordJlptLevelsTable = exists;
+      return exists;
+    } on DatabaseException catch (error) {
+      debugPrint('Word JLPT metadata unavailable: $error');
+      _hasWordJlptLevelsTable = false;
+      return false;
+    }
   }
 
   static Term _kanjiTermFromRow(Map<String, Object?> row) {
@@ -1177,6 +1591,16 @@ class DictionaryService {
     final text = value.toString().trim();
 
     return text.isEmpty ? null : text;
+  }
+
+  static String? _normalizeJlptLevel(Object? value) {
+    final text = _nullableText(value)?.toUpperCase();
+    if (text == null) return null;
+
+    if (RegExp(r'^N[1-5]$').hasMatch(text)) return text;
+    if (RegExp(r'^[1-5]$').hasMatch(text)) return 'N$text';
+
+    return text;
   }
 
   static bool _isLikelyEnglishQuery(String query) {

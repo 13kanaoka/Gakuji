@@ -37,6 +37,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Gakuji uses the camera to scan Japanese text for dictionary lookup.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Gakuji uses selected photos to scan Japanese text for dictionary lookup.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

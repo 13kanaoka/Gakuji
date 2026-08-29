@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../data/deck_data.dart';
 import '../data/pinned_deck_data.dart';
@@ -106,11 +107,11 @@ class _HomePageState extends State<HomePage> {
         children: [
           GakujiTopBar(
             leftIcon: Icons.settings,
-            leftIconSize: 30,
+            leftIconSize: GakujiTopBar.iconSize,
             leftIconColor: GakujiColors.darkGray,
             onLeftTap: _openSettingsPage,
             title: 'Home',
-            titleStyle: GakujiText.large.copyWith(
+            titleStyle: GakujiText.pageTitle.copyWith(
               color: GakujiColors.darkGray,
             ),
           ),
@@ -122,23 +123,9 @@ class _HomePageState extends State<HomePage> {
 
   void _openSettingsPage() {
     Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) {
-          return const SettingsPage();
-        },
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final slideAnimation = Tween<Offset>(
-            begin: const Offset(-1.0, 0.0),
-            end: Offset.zero,
-          ).chain(
-            CurveTween(curve: Curves.easeOutCubic),
-          );
-
-          return SlideTransition(
-            position: animation.drive(slideAnimation),
-            child: child,
-          );
-        },
+      GakujiPageRoute(
+        side: GakujiPageSide.left,
+        builder: (context) => const SettingsPage(),
       ),
     );
   }
@@ -294,7 +281,7 @@ class _HomePageState extends State<HomePage> {
       onTap: () async {
         await Navigator.push(
           context,
-          MaterialPageRoute(
+          GakujiPageRoute(
             builder: (context) => DeckPage(deck: deck),
           ),
         );
@@ -318,12 +305,13 @@ class _HomePageState extends State<HomePage> {
       subtitle: _deckTypeLabel(deck.type),
       watermark: _watermarkForDeckType(deck.type),
       watermarkAssetPath: _watermarkAssetForDeckType(deck.type),
+      accentColor: GakujiColors.deckColorFor(deck),
       patternAssetPath: _patternAssetForDeckType(deck.type),
       isPinned: isDeckPinned(deck),
       onTap: () async {
         await Navigator.push(
           context,
-          MaterialPageRoute(
+          GakujiPageRoute(
             builder: (context) => DeckPage(deck: deck),
           ),
         );

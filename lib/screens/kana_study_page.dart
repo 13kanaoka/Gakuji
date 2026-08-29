@@ -1,12 +1,14 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../widgets/gakuji_page_route.dart';
 
 import '../models/writing_point.dart';
 import '../services/writing_answer_checker.dart';
 import '../services/writing_recognition_service.dart';
 import '../widgets/gakuji_options_sheet.dart';
 import '../widgets/gakuji_styles.dart';
+import '../widgets/low_latency_writing_canvas.dart';
 import '../widgets/gakuji_top_bar.dart';
 
 class KanaStudyItem {
@@ -265,7 +267,8 @@ class _KanaStudyPageState extends State<KanaStudyPage> {
     final reviewEncounters = List<KanaStudyEncounter>.from(incorrectEncounters);
 
     final result = await Navigator.of(context).push<_KanaStudyNavigationResult>(
-      MaterialPageRoute<_KanaStudyNavigationResult>(
+      GakujiPageRoute<_KanaStudyNavigationResult>(
+        enableSwipeBack: false,
         builder: (context) => KanaStudyPage(
           items: widget.items,
           answerPool: widget.answerPool,
@@ -383,13 +386,11 @@ class _KanaStudyPageState extends State<KanaStudyPage> {
       time: DateTime.now().millisecondsSinceEpoch,
     );
 
-    setState(() {
-      if (startsStroke || writingStrokes.isEmpty) {
-        writingStrokes.add(<WritingPoint>[writingPoint]);
-      } else {
-        writingStrokes.last.add(writingPoint);
-      }
-    });
+    if (startsStroke || writingStrokes.isEmpty) {
+      writingStrokes.add(<WritingPoint>[writingPoint]);
+    } else {
+      writingStrokes.last.add(writingPoint);
+    }
   }
 
   void _clearWriting() {
@@ -631,7 +632,7 @@ class _KanaStudyPageState extends State<KanaStudyPage> {
   }) {
     return GakujiTopBar(
       leftIcon: leftIcon,
-      leftIconSize: 34,
+      leftIconSize: GakujiTopBar.iconSize,
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: onLeftTap,
       title: title,
@@ -643,7 +644,7 @@ class _KanaStudyPageState extends State<KanaStudyPage> {
         color: GakujiColors.darkGray,
       ),
       rightIcon: rightIcon,
-      rightIconSize: 36,
+      rightIconSize: GakujiTopBar.iconSize,
       rightIconColor: GakujiColors.darkGray,
       onRightTap: onRightTap,
     );
@@ -707,6 +708,21 @@ class _KanaStudyPageState extends State<KanaStudyPage> {
     );
   }
 
+  Widget _scriptLabel(KanaStudyItem item) {
+    return Text(
+      item.isKatakana ? 'Katakana' : 'Hiragana',
+      textAlign: TextAlign.center,
+      textScaler: TextScaler.noScaling,
+      style: TextStyle(
+        fontSize: 13.5,
+        height: 1,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.1,
+        color: GakujiColors.mediumGray.withValues(alpha: 0.82),
+      ),
+    );
+  }
+
   Widget _encounterView() {
     final encounter = currentEncounter;
     final isReading = encounter.type == KanaStudyEncounterType.reading;
@@ -720,20 +736,31 @@ class _KanaStudyPageState extends State<KanaStudyPage> {
           return SizedBox(
             height: height,
             child: Center(
-              child: Text(
-                isReading ? encounter.item.character : encounter.item.romaji,
-                textAlign: TextAlign.center,
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(
-                  fontFamily: isReading ? GakujiFonts.japanese : null,
-                  fontSize: isReading
-                      ? (encounter.item.character.runes.length > 1 ? 86 : 112)
-                      : 66,
-                  height: 1,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: isReading ? -1.0 : -1.4,
-                  color: GakujiColors.darkGray.withValues(alpha: 0.86),
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isReading
+                        ? encounter.item.character
+                        : encounter.item.romaji,
+                    textAlign: TextAlign.center,
+                    textScaler: TextScaler.noScaling,
+                    style: TextStyle(
+                      fontFamily: isReading ? GakujiFonts.japanese : null,
+                      fontSize: isReading
+                          ? (encounter.item.character.runes.length > 1
+                              ? 86
+                              : 112)
+                          : 66,
+                      height: 1,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: isReading ? -1.0 : -1.4,
+                      color: GakujiColors.darkGray.withValues(alpha: 0.86),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _scriptLabel(encounter.item),
+                ],
               ),
             ),
           );
@@ -861,6 +888,12 @@ class _KanaStudyPageState extends State<KanaStudyPage> {
                     ),
                   ),
                 ),
+              ),
+              Positioned(
+                top: (height / 2) + 48 + (30 * progress),
+                left: 0,
+                right: 0,
+                child: _scriptLabel(encounter.item),
               ),
             ],
           );
@@ -1193,17 +1226,28 @@ class _KanaStudyPageState extends State<KanaStudyPage> {
     required bool alignLeft,
   }) {
     final isIncorrect = color == incorrectRed;
+    final fillColor = isIncorrect
+        ? const Color(0xFFF28F8F)
+        : const Color(0xFFB8DF91);
+    final outlineColor = isIncorrect
+        ? const Color(0xFFD85F5F)
+        : const Color(0xFF78AA50);
+    final countText = '$count';
+    final fontSize = countText.length >= 5
+        ? 16.0
+        : countText.length >= 4
+            ? 17.0
+            : countText.length >= 3
+                ? 18.0
+                : 20.0;
 
     return Container(
-      width: 78,
-      height: 34,
-      padding: EdgeInsets.only(
-        left: alignLeft ? 24 : 0,
-        right: alignLeft ? 0 : 24,
-      ),
-      alignment: alignLeft ? Alignment.centerLeft : Alignment.centerRight,
+      width: 70,
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: color,
+        color: fillColor,
         borderRadius: alignLeft
             ? const BorderRadius.horizontal(
                 right: Radius.circular(30),
@@ -1212,18 +1256,19 @@ class _KanaStudyPageState extends State<KanaStudyPage> {
                 left: Radius.circular(30),
               ),
         border: Border.all(
-          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
-          width: 3,
+          color: outlineColor,
+          width: 2.5,
         ),
       ),
-      child: Text(
-        '$count',
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 24,
-          height: 1,
-          fontWeight: FontWeight.w700,
-          color: isIncorrect ? incorrectRedOutline : correctGreenOutline,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          countText,
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.studyCounter.copyWith(
+            fontSize: fontSize,
+            color: outlineColor,
+          ),
         ),
       ),
     );
@@ -1410,20 +1455,11 @@ class _KanaStudyWritingBox extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onPanStart: (details) {
-              final box = context.findRenderObject() as RenderBox;
-              onStrokeStart(box.globalToLocal(details.globalPosition));
-            },
-            onPanUpdate: (details) {
-              final box = context.findRenderObject() as RenderBox;
-              onStrokeUpdate(box.globalToLocal(details.globalPosition));
-            },
-            child: CustomPaint(
-              painter: _KanaStudyWritingPainter(strokes, showGrid),
-              child: const SizedBox.expand(),
-            ),
+          child: GakujiLowLatencyWritingCanvas(
+            strokes: strokes,
+            showGrid: showGrid,
+            onStrokeStart: onStrokeStart,
+            onStrokeUpdate: onStrokeUpdate,
           ),
         ),
       ),

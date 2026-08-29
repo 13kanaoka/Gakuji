@@ -98,7 +98,7 @@ class _ReviewLimitsPageState extends State<ReviewLimitsPage> {
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: () => Navigator.pop(context),
       title: 'Review Limits',
-      titleStyle: GakujiText.large.copyWith(
+      titleStyle: GakujiText.pageTitle.copyWith(
         color: GakujiColors.darkGray,
       ),
     );

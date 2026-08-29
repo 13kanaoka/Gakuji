@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'gakuji_page_route.dart';
 import '../screens/deck_page.dart';
 import '../data/deck_data.dart';
 
@@ -21,7 +22,7 @@ class SmallCard extends StatelessWidget {
 
         Navigator.push(
           context,
-          MaterialPageRoute(
+          GakujiPageRoute(
             builder: (context) => DeckPage(deck: deck),
           ),
         );

@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/kanji_fusion_round.dart';
 import '../models/term.dart';
+import '../services/gakuji_local_preferences.dart';
 import '../services/kanji_fusion_round_generator.dart';
 import '../widgets/gakuji_domino.dart';
 import '../widgets/gakuji_styles.dart';
@@ -168,9 +168,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   }
 
   Future<void> _loadHighScore() async {
-    final preferences = await SharedPreferences.getInstance();
     final storedHighScore =
-        preferences.getInt(_highScorePreferenceKey) ?? 0;
+        await GakujiLocalPreferences.loadInt(_highScorePreferenceKey) ?? 0;
 
     if (!mounted || storedHighScore <= highScore) return;
 
@@ -189,8 +188,10 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       highScore = completedScore;
     });
 
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setInt(_highScorePreferenceKey, completedScore);
+    await GakujiLocalPreferences.saveInt(
+      _highScorePreferenceKey,
+      completedScore,
+    );
   }
 
   Future<void> _toggleChoice(int choiceIndex) async {
@@ -886,8 +887,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
   Widget _topBar() {
     return GakujiTopBar(
-      leftIcon: Icons.close_rounded,
-      leftIconSize: 34,
+      leftIcon: GakujiTopBar.backIcon,
+      leftIconSize: GakujiTopBar.backIconSize,
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: () => Navigator.pop(context),
       title: '${currentRoundIndex + 1}/${rounds.length}',
@@ -898,8 +899,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         letterSpacing: -0.2,
         color: GakujiColors.darkGray,
       ),
-      rightIcon: Icons.more_horiz_rounded,
-      rightIconSize: 36,
+      rightIcon: Icons.menu_rounded,
+      rightIconSize: GakujiTopBar.iconSize,
       rightIconColor: GakujiColors.darkGray,
       onRightTap: _showOptions,
     );
@@ -1099,13 +1100,35 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         Text(
           'Score  ${_formatScore(arcadeScore)}',
           textScaler: TextScaler.noScaling,
-          style: GakujiText.small.copyWith(
-            color: GakujiColors.mediumGray,
-            fontWeight: FontWeight.w700,
-          ),
+          style: GakujiText.gameScore,
         ),
       ],
     );
+  }
+
+  TextStyle _definitionStyleForWidth(double maxWidth) {
+    final baseStyle = GakujiText.gameDefinition;
+    final baseFontSize = baseStyle.fontSize ?? 16;
+    const minimumFontSize = 11.0;
+
+    var fontSize = baseFontSize;
+    while (fontSize > minimumFontSize) {
+      final painter = TextPainter(
+        text: TextSpan(
+          text: currentRound.definition,
+          style: baseStyle.copyWith(fontSize: fontSize),
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 3,
+      )..layout(maxWidth: maxWidth);
+
+      if (!painter.didExceedMaxLines) {
+        break;
+      }
+      fontSize -= 0.5;
+    }
+
+    return baseStyle.copyWith(fontSize: fontSize);
   }
 
   Widget _prompt() {
@@ -1117,27 +1140,20 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontFamily: GakujiFonts.japanese,
-            fontSize: 25,
-            height: 1.15,
-            fontWeight: FontWeight.w600,
-            color: GakujiColors.darkGray,
-          ),
+          style: GakujiText.gameReading,
         ),
-        SizedBox(height: 5),
-        Text(
-          currentRound.definition,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 18,
-            height: 1.2,
-            fontWeight: FontWeight.w600,
-            color: GakujiColors.darkGray,
-          ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return Text(
+              currentRound.definition,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              textScaler: TextScaler.noScaling,
+              style: _definitionStyleForWidth(constraints.maxWidth),
+            );
+          },
         ),
       ],
     );
@@ -2308,8 +2324,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         child: Column(
           children: [
             GakujiTopBar(
-              leftIcon: Icons.close_rounded,
-              leftIconSize: 34,
+              leftIcon: GakujiTopBar.backIcon,
+              leftIconSize: GakujiTopBar.backIconSize,
               leftIconColor: GakujiColors.darkGray,
               onLeftTap: () => Navigator.pop(context),
             ),
@@ -2482,8 +2498,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         child: Column(
           children: [
             GakujiTopBar(
-              leftIcon: Icons.close_rounded,
-              leftIconSize: 34,
+              leftIcon: GakujiTopBar.backIcon,
+              leftIconSize: GakujiTopBar.backIconSize,
               leftIconColor: GakujiColors.darkGray,
               onLeftTap: () => Navigator.pop(context),
             ),

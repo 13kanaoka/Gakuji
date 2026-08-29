@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../models/review_card.dart';
+import '../services/review_settings.dart';
 import 'gakuji_styles.dart';
 
 class ReviewScheduleCard extends StatefulWidget {
+  final String deckId;
   final List<ReviewCard> reviewCards;
 
   const ReviewScheduleCard({
     super.key,
+    required this.deckId,
     required this.reviewCards,
   });
 
@@ -17,6 +20,8 @@ class ReviewScheduleCard extends StatefulWidget {
 
 class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
   late DateTime selectedDate;
+  int remainingNewCardsToday = ReviewSettings.defaults.newLimit;
+  int remainingReviewCardsToday = ReviewSettings.defaults.reviewLimit;
 
   DateTime get today {
     final now = DateTime.now();
@@ -27,6 +32,34 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
   void initState() {
     super.initState();
     selectedDate = today;
+    _loadDailyAvailability();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReviewScheduleCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.deckId != widget.deckId ||
+        oldWidget.reviewCards != widget.reviewCards) {
+      _loadDailyAvailability();
+    }
+  }
+
+  Future<void> _loadDailyAvailability() async {
+    final settings = await ReviewSettingsStore.load();
+    final newCardsStartedToday =
+        await ReviewSettingsStore.newCardsStartedToday(deckId: widget.deckId);
+    final reviewsCompletedToday =
+        await ReviewSettingsStore.reviewsCompletedToday(deckId: widget.deckId);
+
+    if (!mounted) return;
+
+    setState(() {
+      remainingNewCardsToday =
+          (settings.newLimit - newCardsStartedToday).clamp(0, 9999).toInt();
+      remainingReviewCardsToday =
+          (settings.reviewLimit - reviewsCompletedToday).clamp(0, 9999).toInt();
+    });
   }
 
   List<DateTime> get visibleDates {
@@ -41,9 +74,15 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
   }
 
   int get selectedNewCount {
-    return _cardsForSelectedDate
+    final rawCount = _cardsForSelectedDate
         .where((card) => card.state == ReviewCardState.newCard)
         .length;
+
+    if (!_isSameDate(selectedDate, today)) return rawCount;
+
+    return rawCount < remainingNewCardsToday
+        ? rawCount
+        : remainingNewCardsToday;
   }
 
   int get selectedLearningCount {
@@ -54,9 +93,15 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
   }
 
   int get selectedReviewCount {
-    return _cardsForSelectedDate
+    final rawCount = _cardsForSelectedDate
         .where((card) => card.state == ReviewCardState.review)
         .length;
+
+    if (!_isSameDate(selectedDate, today)) return rawCount;
+
+    return rawCount < remainingReviewCardsToday
+        ? rawCount
+        : remainingReviewCardsToday;
   }
 
   List<ReviewCard> get _cardsForSelectedDate {
@@ -179,12 +224,7 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
           Text(
             '${selectedDate.day}',
             textScaler: TextScaler.noScaling,
-            style: GakujiText.large.copyWith(
-              fontSize: 42,
-              height: 0.9,
-              letterSpacing: -0.9,
-              color: GakujiColors.darkGray,
-            ),
+            style: GakujiText.calendarDate,
           ),
           const SizedBox(width: 22),
           Padding(
@@ -195,17 +235,13 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
                 Text(
                   month,
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.xSmall.copyWith(
-                    color: GakujiColors.darkGray,
-                  ),
+                  style: GakujiText.calendarMeta,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   subtitle,
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.xSmall.copyWith(
-                    color: GakujiColors.darkGray,
-                  ),
+                  style: GakujiText.calendarMeta,
                 ),
               ],
             ),
@@ -257,8 +293,7 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
               Text(
                 _weekdayLabel(date),
                 textScaler: TextScaler.noScaling,
-                style: GakujiText.xSmall.copyWith(
-                  fontSize: 13.5,
+                style: GakujiText.calendarSmall.copyWith(
                   color: muted
                       ? GakujiColors.mediumGray.withValues(alpha: 0.35)
                       : GakujiColors.mediumGray,
@@ -283,8 +318,7 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
                 child: Text(
                   '${date.day}',
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.xSmall.copyWith(
-                    fontSize: 13.5,
+                  style: GakujiText.calendarSmall.copyWith(
                     color: selected
                         ? Colors.white
                         : muted
@@ -344,7 +378,7 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
         Text(
           label,
           textScaler: TextScaler.noScaling,
-          style: GakujiText.xSmall.copyWith(
+          style: GakujiText.calendarMeta.copyWith(
             color: GakujiColors.mediumGray,
           ),
         ),
@@ -352,7 +386,7 @@ class _ReviewScheduleCardState extends State<ReviewScheduleCard> {
         Text(
           '$count',
           textScaler: TextScaler.noScaling,
-          style: GakujiText.xSmall.copyWith(
+          style: GakujiText.calendarMeta.copyWith(
             color: GakujiColors.mediumGray,
           ),
         ),

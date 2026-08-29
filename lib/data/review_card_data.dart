@@ -138,9 +138,15 @@ Future<List<ReviewCard>> getLimitedReviewCardsForDeck(
   final checkTime = now ?? DateTime.now();
   final settings = await ReviewSettingsStore.load();
   final newCardsStartedToday =
-      await ReviewSettingsStore.newCardsStartedToday(now: checkTime);
+      await ReviewSettingsStore.newCardsStartedToday(
+        deckId: deckId,
+        now: checkTime,
+      );
   final reviewsCompletedToday =
-      await ReviewSettingsStore.reviewsCompletedToday(now: checkTime);
+      await ReviewSettingsStore.reviewsCompletedToday(
+        deckId: deckId,
+        now: checkTime,
+      );
 
   final availableNew =
       (settings.newLimit - newCardsStartedToday).clamp(0, 9999).toInt();
