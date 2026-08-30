@@ -229,11 +229,10 @@ class _DeckEditPageState extends State<DeckEditPage> {
               });
             }
 
-            return SafeArea(
-              top: false,
-              bottom: true,
-              minimum: const EdgeInsets.only(bottom: 12),
-              child: AnimatedContainer(
+            final bottomSafePadding =
+                MediaQuery.viewPaddingOf(sheetContext).bottom;
+
+            return AnimatedContainer(
                 duration: isSheetDismissDragging
                     ? Duration.zero
                     : const Duration(milliseconds: 180),
@@ -243,15 +242,22 @@ class _DeckEditPageState extends State<DeckEditPage> {
                   sheetDismissDragOffset,
                   0,
                 ),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.88,
-                  ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.88,
+                ),
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    18,
+                    24,
+                    24 + bottomSafePadding,
+                  ),
                   decoration: BoxDecoration(
                     color: GakujiColors.warmCard,
-                    borderRadius: BorderRadius.circular(26),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(26),
+                    ),
                     border: Border.all(
                       color: GakujiColors.warmDivider,
                       width: 1.2,
@@ -474,7 +480,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
                     ),
                   ),
                 ),
-              ),
               ),
             );
           },

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -9,15 +10,18 @@ import 'package:gakuji/features/games/services/kanji_fusion_round_generator.dart
 import 'package:gakuji/core/widgets/gakuji_domino.dart';
 import 'package:gakuji/core/theme/gakuji_styles.dart';
 import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/data/sync/gakuji_session_storage.dart';
 
 class KanjiFusionGamePage extends StatefulWidget {
   final List<Term> terms;
+  final String? deckId;
   final String deckName;
   final Color? accentColor;
 
   const KanjiFusionGamePage({
     super.key,
     required this.terms,
+    this.deckId,
     required this.deckName,
     this.accentColor,
   });
@@ -63,7 +67,7 @@ class _PlacedFusionBlock {
 }
 
 class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
-  late List<KanjiFusionRound> rounds;
+  List<KanjiFusionRound> rounds = const <KanjiFusionRound>[];
 
   KanjiFusionDifficulty selectedDifficulty = KanjiFusionDifficulty.normal;
   KanjiFusionRadicalMode selectedRadicalMode =
@@ -87,6 +91,11 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   static const Color _studyIncorrectRedFill = Color(0xFFF6A3A3);
   static const String _highScorePreferenceKey =
       'kanji_fusion_high_score_v1';
+  static const String _sessionType = 'kanji_fusion';
+  static const String _roundsSessionType = 'kanji_fusion_rounds';
+
+  late int sessionSeed;
+  bool isLoadingSession = true;
 
   final GlobalKey _fusionFieldKey = GlobalKey();
   final List<_PlacedFusionBlock> placedBlocks = [];
@@ -102,6 +111,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
   Color get _accentColor =>
       widget.accentColor ?? GakujiColors.deckBlue;
+
+  String get _sessionDeckId => widget.deckId ?? widget.deckName;
 
   List<String> get selectedComponents {
     switch (selectedDifficulty) {
@@ -158,13 +169,652 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   @override
   void initState() {
     super.initState();
-    rounds = KanjiFusionRoundGenerator.buildRounds(
+    _loadHighScore();
+    if (!_restoreCachedSession()) {
+      _loadOrCreateSession();
+    }
+  }
+
+  List<String> get _sessionTermIds {
+    return widget.terms.map((term) => term.id).toList(growable: false);
+  }
+
+  String get _sessionTermSignature {
+    var hash = 0x811C9DC5;
+    for (final term in widget.terms) {
+      for (final value in <String>[
+        term.id,
+        term.kanji,
+        term.reading,
+        term.meaning,
+        term.cardMeaning,
+      ]) {
+        for (final codeUnit in value.codeUnits) {
+          hash ^= codeUnit;
+          hash = (hash * 0x01000193) & 0xFFFFFFFF;
+        }
+        hash ^= 0xFE;
+        hash = (hash * 0x01000193) & 0xFFFFFFFF;
+      }
+      hash ^= 0xFF;
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
+    }
+    return '${widget.terms.length}:${hash.toRadixString(16)}';
+  }
+
+  int _newSessionSeed() {
+    return math.Random().nextInt(0x7fffffff);
+  }
+
+  List<KanjiFusionRound> _buildRoundsForSeed(
+    int seed, {
+    required KanjiFusionDifficulty difficulty,
+    required KanjiFusionRadicalMode radicalMode,
+  }) {
+    return KanjiFusionRoundGenerator.buildRounds(
       widget.terms,
+      difficulty: difficulty,
+      radicalMode: radicalMode,
+      random: math.Random(seed),
+    );
+  }
+
+  bool _restoreCachedSession() {
+    if (!GakujiSessionStorage.hasCached(
+      sessionType: _sessionType,
+      deckId: _sessionDeckId,
+    )) {
+      return false;
+    }
+
+    final state = GakujiSessionStorage.peek(
+      sessionType: _sessionType,
+      deckId: _sessionDeckId,
+    );
+    if (state == null) return false;
+
+    final hasCachedRounds = GakujiSessionStorage.hasCached(
+      sessionType: _roundsSessionType,
+      deckId: _sessionDeckId,
+    );
+    if (_asInt(state['version']) == 2 && !hasCachedRounds) {
+      return false;
+    }
+
+    final roundsSnapshot = hasCachedRounds
+        ? GakujiSessionStorage.peek(
+            sessionType: _roundsSessionType,
+            deckId: _sessionDeckId,
+          )
+        : null;
+
+    return _restoreSession(state, roundsSnapshot: roundsSnapshot);
+  }
+
+  Future<void> _loadOrCreateSession() async {
+    final snapshots = await GakujiSessionStorage.loadMany(
+      sessionTypes: const [_sessionType, _roundsSessionType],
+      deckId: _sessionDeckId,
+    );
+
+    if (!mounted) return;
+
+    final state = snapshots[_sessionType];
+    final roundsSnapshot = snapshots[_roundsSessionType];
+    if (state != null &&
+        _restoreSession(state, roundsSnapshot: roundsSnapshot)) {
+      return;
+    }
+
+    _startFreshSession();
+  }
+
+  bool _restoreSession(
+    Map<String, dynamic> snapshot, {
+    Map<String, dynamic>? roundsSnapshot,
+  }) {
+    final version = _asInt(snapshot['version']);
+    if (version == 2) {
+      return _restoreFastSession(snapshot, roundsSnapshot: roundsSnapshot);
+    }
+    if (version == 1) {
+      final restored = _restoreLegacySession(snapshot);
+      if (restored) {
+        unawaited(_saveRoundBlueprint());
+        unawaited(_saveSessionSnapshot());
+      }
+      return restored;
+    }
+    return false;
+  }
+
+  bool _restoreFastSession(
+    Map<String, dynamic> snapshot, {
+    Map<String, dynamic>? roundsSnapshot,
+  }) {
+    if (snapshot['termSignature']?.toString() != _sessionTermSignature) {
+      return false;
+    }
+
+    final seed = _asInt(snapshot['seed']);
+    final difficulty = _difficultyFromName(snapshot['difficulty']?.toString());
+    final radicalMode = _radicalModeFromName(snapshot['radicalMode']?.toString());
+    if (seed == null || difficulty == null || radicalMode == null) return false;
+
+    var restoredRounds = _roundsFromBlueprint(
+      roundsSnapshot,
+      expectedSeed: seed,
+      expectedDifficulty: difficulty,
+      expectedRadicalMode: radicalMode,
+    );
+
+    var rebuiltBlueprint = false;
+    if (restoredRounds == null || restoredRounds.isEmpty) {
+      restoredRounds = _buildRoundsForSeed(
+        seed,
+        difficulty: difficulty,
+        radicalMode: radicalMode,
+      );
+      rebuiltBlueprint = true;
+    }
+    if (restoredRounds.isEmpty) return false;
+
+    final savedRoundCount = _asInt(snapshot['roundCount']);
+    if (savedRoundCount != restoredRounds.length) return false;
+
+    _applyRestoredSession(
+      snapshot,
+      seed: seed,
+      difficulty: difficulty,
+      radicalMode: radicalMode,
+      restoredRounds: restoredRounds,
+    );
+
+    if (rebuiltBlueprint) {
+      unawaited(_saveRoundBlueprint());
+    }
+    return true;
+  }
+
+  bool _restoreLegacySession(Map<String, dynamic> snapshot) {
+    final savedTermIds = _stringList(snapshot['termIds']);
+    if (!_sameStringLists(savedTermIds, _sessionTermIds)) return false;
+
+    final seed = _asInt(snapshot['seed']);
+    if (seed == null) return false;
+
+    final difficulty = _difficultyFromName(snapshot['difficulty']?.toString());
+    final radicalMode = _radicalModeFromName(snapshot['radicalMode']?.toString());
+    if (difficulty == null || radicalMode == null) return false;
+
+    final restoredRounds = _buildRoundsForSeed(
+      seed,
+      difficulty: difficulty,
+      radicalMode: radicalMode,
+    );
+    if (restoredRounds.isEmpty) return false;
+
+    final savedRoundCount = _asInt(snapshot['roundCount']);
+    if (savedRoundCount != restoredRounds.length) return false;
+
+    _applyRestoredSession(
+      snapshot,
+      seed: seed,
+      difficulty: difficulty,
+      radicalMode: radicalMode,
+      restoredRounds: restoredRounds,
+    );
+    return true;
+  }
+
+  void _applyRestoredSession(
+    Map<String, dynamic> snapshot, {
+    required int seed,
+    required KanjiFusionDifficulty difficulty,
+    required KanjiFusionRadicalMode radicalMode,
+    required List<KanjiFusionRound> restoredRounds,
+  }) {
+    final restoredRoundIndex = (_asInt(snapshot['currentRoundIndex']) ?? 0)
+        .clamp(0, restoredRounds.length - 1)
+        .toInt();
+    final restoredHasSubmitted = snapshot['hasSubmitted'] == true;
+
+    setState(() {
+      sessionSeed = seed;
+      selectedDifficulty = difficulty;
+      selectedRadicalMode = radicalMode;
+      rounds = restoredRounds;
+      currentRoundIndex = restoredRoundIndex;
+      correctCount = _asInt(snapshot['correctCount']) ?? 0;
+      incorrectCount = _asInt(snapshot['incorrectCount']) ?? 0;
+      skippedCount = _asInt(snapshot['skippedCount']) ?? 0;
+      isReviewSession = snapshot['isReviewSession'] == true;
+      hasSubmitted = restoredHasSubmitted;
+      lastAnswerCorrect = snapshot['lastAnswerCorrect'] == true;
+      sessionComplete = snapshot['sessionComplete'] == true;
+      incorrectRounds
+        ..clear()
+        ..addAll(_restoreIncorrectRounds(snapshot['incorrectTargets']));
+      _resetRoundPlacement();
+      if (restoredHasSubmitted) {
+        _restoreSubmittedPlacement(snapshot);
+      }
+      isLoadingSession = false;
+    });
+  }
+
+  void _startFreshSession() {
+    final seed = _newSessionSeed();
+    final freshRounds = _buildRoundsForSeed(
+      seed,
       difficulty: selectedDifficulty,
       radicalMode: selectedRadicalMode,
     );
-    _resetRoundPlacement();
-    _loadHighScore();
+
+    setState(() {
+      sessionSeed = seed;
+      rounds = freshRounds;
+      currentRoundIndex = 0;
+      correctCount = 0;
+      incorrectCount = 0;
+      skippedCount = 0;
+      isReviewSession = false;
+      incorrectRounds.clear();
+      hasSubmitted = false;
+      lastAnswerCorrect = false;
+      sessionComplete = false;
+      _resetRoundPlacement();
+      isLoadingSession = false;
+    });
+
+    if (freshRounds.isEmpty) {
+      unawaited(_clearSessionSnapshot());
+    } else {
+      unawaited(_saveRoundBlueprint());
+      unawaited(_saveSessionSnapshot());
+    }
+  }
+
+  Future<void> _saveSessionSnapshot() {
+    if (isLoadingSession || rounds.isEmpty) return Future<void>.value();
+
+    return GakujiSessionStorage.save(
+      sessionType: _sessionType,
+      deckId: _sessionDeckId,
+      snapshot: <String, dynamic>{
+        'version': 2,
+        'termSignature': _sessionTermSignature,
+        'seed': sessionSeed,
+        'difficulty': selectedDifficulty.name,
+        'radicalMode': selectedRadicalMode.name,
+        'roundCount': rounds.length,
+        'currentRoundIndex': currentRoundIndex,
+        'correctCount': correctCount,
+        'incorrectCount': incorrectCount,
+        'skippedCount': skippedCount,
+        'isReviewSession': isReviewSession,
+        'incorrectTargets': incorrectRounds
+            .map((round) => round.targetKanji)
+            .toList(growable: false),
+        'hasSubmitted': hasSubmitted,
+        'lastAnswerCorrect': lastAnswerCorrect,
+        'sessionComplete': sessionComplete,
+        if (hasSubmitted) ..._submittedPlacementSnapshot(),
+      },
+    );
+  }
+
+  Future<void> _saveRoundBlueprint() {
+    if (isLoadingSession || rounds.isEmpty) return Future<void>.value();
+
+    return GakujiSessionStorage.save(
+      sessionType: _roundsSessionType,
+      deckId: _sessionDeckId,
+      snapshot: <String, dynamic>{
+        'version': 1,
+        'termSignature': _sessionTermSignature,
+        'seed': sessionSeed,
+        'difficulty': selectedDifficulty.name,
+        'radicalMode': selectedRadicalMode.name,
+        'rounds': rounds.map(_roundToSnapshot).toList(growable: false),
+      },
+    );
+  }
+
+  Future<void> _clearSessionSnapshot() async {
+    await Future.wait<void>([
+      GakujiSessionStorage.clear(
+        sessionType: _sessionType,
+        deckId: _sessionDeckId,
+      ),
+      GakujiSessionStorage.clear(
+        sessionType: _roundsSessionType,
+        deckId: _sessionDeckId,
+      ),
+    ]);
+  }
+
+  Map<String, dynamic> _roundToSnapshot(KanjiFusionRound round) {
+    return <String, dynamic>{
+      'termId': round.term.id,
+      'reading': round.reading,
+      'definition': round.definition,
+      'targetKanji': round.targetKanji,
+      'requiredComponents': round.requiredComponents,
+      'componentChoices': round.componentChoices,
+      'componentFormChoices': round.componentFormChoices,
+      'structuralSlots': round.structuralSlots.map((slot) {
+        return <String, dynamic>{
+          'component': slot.component,
+          'left': slot.left,
+          'top': slot.top,
+          'width': slot.width,
+          'height': slot.height,
+          'shape': slot.shape.name,
+          'contentLeft': slot.contentLeft,
+          'contentTop': slot.contentTop,
+          'contentWidth': slot.contentWidth,
+          'contentHeight': slot.contentHeight,
+        };
+      }).toList(growable: false),
+      'structuralGroups': round.structuralGroups.map((group) {
+        return <String, dynamic>{
+          'component': group.component,
+          'left': group.left,
+          'top': group.top,
+          'width': group.width,
+          'height': group.height,
+          'depth': group.depth,
+        };
+      }).toList(growable: false),
+    };
+  }
+
+  List<KanjiFusionRound>? _roundsFromBlueprint(
+    Map<String, dynamic>? snapshot, {
+    required int expectedSeed,
+    required KanjiFusionDifficulty expectedDifficulty,
+    required KanjiFusionRadicalMode expectedRadicalMode,
+  }) {
+    if (snapshot == null || _asInt(snapshot['version']) != 1) return null;
+    if (snapshot['termSignature']?.toString() != _sessionTermSignature ||
+        _asInt(snapshot['seed']) != expectedSeed ||
+        snapshot['difficulty']?.toString() != expectedDifficulty.name ||
+        snapshot['radicalMode']?.toString() != expectedRadicalMode.name) {
+      return null;
+    }
+
+    final rawRounds = snapshot['rounds'];
+    if (rawRounds is! List || rawRounds.isEmpty) return null;
+
+    final termsById = <String, Term>{
+      for (final term in widget.terms) term.id: term,
+    };
+    final restored = <KanjiFusionRound>[];
+
+    for (final rawRound in rawRounds) {
+      if (rawRound is! Map) return null;
+      final round = _roundFromSnapshot(rawRound, termsById);
+      if (round == null) return null;
+      restored.add(round);
+    }
+
+    return List<KanjiFusionRound>.unmodifiable(restored);
+  }
+
+  KanjiFusionRound? _roundFromSnapshot(
+    Map raw,
+    Map<String, Term> termsById,
+  ) {
+    final targetKanji = raw['targetKanji']?.toString() ?? '';
+    final termId = raw['termId']?.toString() ?? '';
+    if (targetKanji.isEmpty || termId.isEmpty) return null;
+
+    final requiredComponents = _stringList(raw['requiredComponents']);
+    final componentChoices = _stringList(raw['componentChoices']);
+    final rawForms = raw['componentFormChoices'];
+    final rawSlots = raw['structuralSlots'];
+    final rawGroups = raw['structuralGroups'];
+    if (requiredComponents.isEmpty ||
+        componentChoices.isEmpty ||
+        rawForms is! List ||
+        rawSlots is! List ||
+        rawGroups is! List) {
+      return null;
+    }
+
+    final componentFormChoices = <List<String>>[];
+    for (final rawFormList in rawForms) {
+      if (rawFormList is! List) return null;
+      componentFormChoices.add(
+        rawFormList.map((value) => value.toString()).toList(growable: false),
+      );
+    }
+
+    final slots = <KanjiFusionSlot>[];
+    for (final rawSlot in rawSlots) {
+      if (rawSlot is! Map) return null;
+      final component = rawSlot['component']?.toString();
+      final left = _asDouble(rawSlot['left']);
+      final top = _asDouble(rawSlot['top']);
+      final width = _asDouble(rawSlot['width']);
+      final height = _asDouble(rawSlot['height']);
+      final shape = _slotShapeFromName(rawSlot['shape']?.toString());
+      final contentLeft = _asDouble(rawSlot['contentLeft']);
+      final contentTop = _asDouble(rawSlot['contentTop']);
+      final contentWidth = _asDouble(rawSlot['contentWidth']);
+      final contentHeight = _asDouble(rawSlot['contentHeight']);
+      if (component == null ||
+          left == null ||
+          top == null ||
+          width == null ||
+          height == null ||
+          shape == null ||
+          contentLeft == null ||
+          contentTop == null ||
+          contentWidth == null ||
+          contentHeight == null) {
+        return null;
+      }
+      slots.add(
+        KanjiFusionSlot(
+          component: component,
+          left: left,
+          top: top,
+          width: width,
+          height: height,
+          shape: shape,
+          contentLeft: contentLeft,
+          contentTop: contentTop,
+          contentWidth: contentWidth,
+          contentHeight: contentHeight,
+        ),
+      );
+    }
+
+    final groups = <KanjiFusionGroup>[];
+    for (final rawGroup in rawGroups) {
+      if (rawGroup is! Map) return null;
+      final component = rawGroup['component']?.toString();
+      final left = _asDouble(rawGroup['left']);
+      final top = _asDouble(rawGroup['top']);
+      final width = _asDouble(rawGroup['width']);
+      final height = _asDouble(rawGroup['height']);
+      final depth = _asInt(rawGroup['depth']);
+      if (component == null ||
+          left == null ||
+          top == null ||
+          width == null ||
+          height == null ||
+          depth == null) {
+        return null;
+      }
+      groups.add(
+        KanjiFusionGroup(
+          component: component,
+          left: left,
+          top: top,
+          width: width,
+          height: height,
+          depth: depth,
+        ),
+      );
+    }
+
+    final term = termsById[termId] ??
+        Term(
+          id: termId,
+          kanji: targetKanji,
+          reading: raw['reading']?.toString() ?? '',
+          meaning: raw['definition']?.toString() ?? '',
+        );
+
+    return KanjiFusionRound(
+      term: term,
+      targetKanji: targetKanji,
+      requiredComponents: List<String>.unmodifiable(requiredComponents),
+      componentChoices: List<String>.unmodifiable(componentChoices),
+      componentFormChoices: List<List<String>>.unmodifiable(
+        componentFormChoices.map(
+          (forms) => List<String>.unmodifiable(forms),
+        ),
+      ),
+      structuralSlots: List<KanjiFusionSlot>.unmodifiable(slots),
+      structuralGroups: List<KanjiFusionGroup>.unmodifiable(groups),
+    );
+  }
+
+  static KanjiFusionSlotShape? _slotShapeFromName(String? name) {
+    if (name == null) return null;
+    for (final shape in KanjiFusionSlotShape.values) {
+      if (shape.name == name) return shape;
+    }
+    return null;
+  }
+
+  Map<String, dynamic> _submittedPlacementSnapshot() {
+    return <String, dynamic>{
+      'placedChoiceIndexes': placedChoiceIndexes,
+      'placedComponentForms': placedComponentForms,
+      'choiceFormIndexes': choiceFormIndexes,
+      'placedBlocks': placedBlocks.map((block) {
+        return <String, dynamic>{
+          'choiceIndex': block.choiceIndex,
+          'component': block.component,
+          'dx': block.position.dx,
+          'dy': block.position.dy,
+        };
+      }).toList(growable: false),
+    };
+  }
+
+  void _restoreSubmittedPlacement(Map<String, dynamic> snapshot) {
+    final savedChoiceIndexes = _nullableIntList(snapshot['placedChoiceIndexes']);
+    final savedComponentForms = _nullableStringList(
+      snapshot['placedComponentForms'],
+    );
+    final savedFormIndexes = _intList(snapshot['choiceFormIndexes']);
+
+    if (savedChoiceIndexes.length == placedChoiceIndexes.length) {
+      placedChoiceIndexes
+        ..clear()
+        ..addAll(savedChoiceIndexes);
+    }
+    if (savedComponentForms.length == placedComponentForms.length) {
+      placedComponentForms
+        ..clear()
+        ..addAll(savedComponentForms);
+    }
+    if (savedFormIndexes.length == choiceFormIndexes.length) {
+      choiceFormIndexes
+        ..clear()
+        ..addAll(savedFormIndexes);
+    }
+
+    placedBlocks.clear();
+    final rawBlocks = snapshot['placedBlocks'];
+    if (rawBlocks is List) {
+      for (final rawBlock in rawBlocks) {
+        if (rawBlock is! Map) continue;
+        final choiceIndex = _asInt(rawBlock['choiceIndex']);
+        final component = rawBlock['component']?.toString();
+        final dx = _asDouble(rawBlock['dx']);
+        final dy = _asDouble(rawBlock['dy']);
+        if (choiceIndex == null || component == null || dx == null || dy == null) {
+          continue;
+        }
+        placedBlocks.add(
+          _PlacedFusionBlock(
+            choiceIndex: choiceIndex,
+            component: component,
+            position: Offset(dx, dy),
+          ),
+        );
+      }
+    }
+  }
+
+  List<KanjiFusionRound> _restoreIncorrectRounds(dynamic rawTargets) {
+    final targets = _stringList(rawTargets);
+    if (targets.isEmpty) return <KanjiFusionRound>[];
+
+    final byTarget = <String, KanjiFusionRound>{
+      for (final round in rounds) round.targetKanji: round,
+    };
+    return targets.map((target) => byTarget[target]).whereType<KanjiFusionRound>().toList();
+  }
+
+  static KanjiFusionDifficulty? _difficultyFromName(String? name) {
+    for (final value in KanjiFusionDifficulty.values) {
+      if (value.name == name) return value;
+    }
+    return null;
+  }
+
+  static KanjiFusionRadicalMode? _radicalModeFromName(String? name) {
+    for (final value in KanjiFusionRadicalMode.values) {
+      if (value.name == name) return value;
+    }
+    return null;
+  }
+
+  static int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  static double? _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '');
+  }
+
+  static List<String> _stringList(dynamic value) {
+    if (value is! List) return <String>[];
+    return value.map((item) => item.toString()).toList(growable: false);
+  }
+
+  static List<int> _intList(dynamic value) {
+    if (value is! List) return <int>[];
+    return value.map(_asInt).whereType<int>().toList(growable: false);
+  }
+
+  static List<int?> _nullableIntList(dynamic value) {
+    if (value is! List) return <int?>[];
+    return value.map((item) => item == null ? null : _asInt(item)).toList();
+  }
+
+  static List<String?> _nullableStringList(dynamic value) {
+    if (value is! List) return <String?>[];
+    return value.map((item) => item?.toString()).toList();
+  }
+
+  static bool _sameStringLists(List<String> first, List<String> second) {
+    if (first.length != second.length) return false;
+    for (var index = 0; index < first.length; index++) {
+      if (first[index] != second[index]) return false;
+    }
+    return true;
   }
 
   Future<void> _loadHighScore() async {
@@ -574,6 +1224,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         incorrectRounds.add(currentRound);
       }
     });
+
+    unawaited(_saveSessionSnapshot());
   }
 
   void _continue() {
@@ -583,6 +1235,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       setState(() {
         sessionComplete = true;
       });
+      unawaited(_saveSessionSnapshot());
       _recordHighScoreIfNeeded();
       return;
     }
@@ -593,6 +1246,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       hasSubmitted = false;
       lastAnswerCorrect = false;
     });
+
+    unawaited(_saveSessionSnapshot());
   }
 
   void _skipRound() {
@@ -612,15 +1267,20 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       lastAnswerCorrect = false;
     });
 
+    unawaited(_saveSessionSnapshot());
+
     if (sessionComplete) {
       _recordHighScoreIfNeeded();
     }
   }
 
   void _restart() {
+    final seed = _newSessionSeed();
+
     setState(() {
-      rounds = KanjiFusionRoundGenerator.buildRounds(
-        widget.terms,
+      sessionSeed = seed;
+      rounds = _buildRoundsForSeed(
+        seed,
         difficulty: selectedDifficulty,
         radicalMode: selectedRadicalMode,
       );
@@ -635,6 +1295,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       sessionComplete = false;
       _resetRoundPlacement();
     });
+
+    unawaited(_saveRoundBlueprint());
+    unawaited(_saveSessionSnapshot());
   }
 
   bool _componentCountsMatch(
@@ -850,6 +1513,15 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoadingSession) {
+      return Scaffold(
+        backgroundColor: GakujiColors.warmBackground,
+        body: Center(
+          child: CircularProgressIndicator(color: _accentColor),
+        ),
+      );
+    }
+
     if (rounds.isEmpty) {
       return _emptyScreen();
     }
@@ -2439,7 +3111,11 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                         child: InkWell(
                           borderRadius:
                               BorderRadius.circular(GakujiRadius.pill),
-                          onTap: () => Navigator.pop(context),
+                          onTap: () async {
+                            await _clearSessionSnapshot();
+                            if (!mounted) return;
+                            Navigator.pop(context);
+                          },
                           child: Center(
                             child: Text(
                               'DONE',

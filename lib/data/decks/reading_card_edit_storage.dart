@@ -6,6 +6,16 @@ import 'package:gakuji/domain/term.dart';
 import 'package:gakuji/data/sync/gakuji_cloud_sync_service.dart';
 import 'package:gakuji/data/sync/gakuji_user_repository.dart';
 
+class ReadingCardEditDeckSnapshot {
+  final Map<String, ReadingCardEditData> editsByTermId;
+  final Set<String> savedTermIds;
+
+  const ReadingCardEditDeckSnapshot({
+    required this.editsByTermId,
+    required this.savedTermIds,
+  });
+}
+
 /// Reading-card customization stored in the local SQLite user database.
 ///
 /// SharedPreferences is only consulted as a one-time migration path for cards
@@ -20,6 +30,87 @@ class ReadingCardEditStorage {
     return ReadingCardEditData.preferenceKeyFor(
       deckId: deck.id,
       termId: term.id,
+    );
+  }
+
+  /// Loads every card edit needed by one deck with a single SQLite query.
+  /// Legacy SharedPreferences values are scanned in one pass only for terms
+  /// that are not already present in SQLite.
+  static Future<ReadingCardEditDeckSnapshot> loadDeck({
+    required Deck deck,
+    required List<Term> terms,
+  }) async {
+    final storedEdits =
+        await GakujiUserRepository.loadReadingCardEditsForDeck(deck.id);
+    final storedByTermId = <String, ReadingCardEditData>{
+      for (final edit in storedEdits) edit.termId: edit,
+    };
+
+    final editsByTermId = <String, ReadingCardEditData>{};
+    final savedTermIds = <String>{};
+    final missingTerms = <Term>[];
+
+    for (final term in terms) {
+      final stored = storedByTermId[term.id];
+      if (stored == null) {
+        missingTerms.add(term);
+        continue;
+      }
+
+      editsByTermId[term.id] = stored.copyWith(
+        deckId: deck.id,
+        termId: term.id,
+        sourceId: ReadingCardEditData.sourceIdFor(term),
+      );
+      savedTermIds.add(term.id);
+    }
+
+    if (missingTerms.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      var migratedAny = false;
+
+      for (final term in missingTerms) {
+        final key = preferenceKeyFor(deck: deck, term: term);
+        final savedValue = prefs.getString(key);
+
+        if (savedValue == null || savedValue.trim().isEmpty) {
+          editsByTermId[term.id] = ReadingCardEditData.empty(
+            deckId: deck.id,
+            termId: term.id,
+            sourceId: ReadingCardEditData.sourceIdFor(term),
+          );
+          continue;
+        }
+
+        try {
+          final migrated = ReadingCardEditData.fromJsonString(savedValue).copyWith(
+            deckId: deck.id,
+            termId: term.id,
+            sourceId: ReadingCardEditData.sourceIdFor(term),
+          );
+          await GakujiUserRepository.saveReadingCardEdit(migrated);
+          await prefs.remove(key);
+          editsByTermId[term.id] = migrated;
+          savedTermIds.add(term.id);
+          migratedAny = true;
+        } catch (_) {
+          await prefs.remove(key);
+          editsByTermId[term.id] = ReadingCardEditData.empty(
+            deckId: deck.id,
+            termId: term.id,
+            sourceId: ReadingCardEditData.sourceIdFor(term),
+          );
+        }
+      }
+
+      if (migratedAny) {
+        GakujiCloudSyncService.schedulePush();
+      }
+    }
+
+    return ReadingCardEditDeckSnapshot(
+      editsByTermId: editsByTermId,
+      savedTermIds: savedTermIds,
     );
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:gakuji/core/widgets/gakuji_page_route.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,6 +32,7 @@ import 'package:gakuji/features/study/hybrid_study_page.dart';
 import 'package:gakuji/features/games/kanji_fusion_game_page.dart';
 import 'package:gakuji/features/games/word_fusion_game_page.dart';
 import 'package:gakuji/features/games/imposter_detective_page.dart';
+import 'package:gakuji/data/sync/gakuji_session_storage.dart';
 
 class DeckPage extends StatefulWidget {
   final Deck deck;
@@ -206,6 +209,42 @@ class _DeckPageState extends State<DeckPage> {
     pageScrollController.addListener(_handlePageScroll);
     markDeckOpenedRecently(widget.deck.id);
     loadState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_prefetchResumeSessions());
+      }
+    });
+  }
+
+  Future<void> _prefetchResumeSessions() async {
+    try {
+      final states = await GakujiSessionStorage.loadMany(
+        sessionTypes: const [
+          'flashcards',
+          'kanji_fusion',
+          'word_fusion',
+        ],
+        deckId: widget.deck.id,
+      );
+
+      final roundTypes = <String>[];
+      if (states['kanji_fusion'] != null) {
+        roundTypes.add('kanji_fusion_rounds');
+      }
+      if (states['word_fusion'] != null) {
+        roundTypes.add('word_fusion_rounds');
+      }
+
+      if (roundTypes.isNotEmpty) {
+        await GakujiSessionStorage.loadMany(
+          sessionTypes: roundTypes,
+          deckId: widget.deck.id,
+        );
+      }
+    } catch (_) {
+      // Prefetch is only a latency optimization; normal page loading remains
+      // the fallback if the database is temporarily unavailable.
+    }
   }
 
   @override
@@ -825,6 +864,7 @@ class _DeckPageState extends State<DeckPage> {
       GakujiPageRoute(
         builder: (_) => KanjiFusionGamePage(
           terms: gameTerms,
+          deckId: widget.deck.id,
           deckName: widget.deck.name,
           accentColor: deckPrimaryColor,
         ),
@@ -852,6 +892,7 @@ class _DeckPageState extends State<DeckPage> {
       GakujiPageRoute(
         builder: (_) => WordFusionGamePage(
           terms: gameTerms,
+          deckId: widget.deck.id,
           deckName: widget.deck.name,
           accentColor: deckPrimaryColor,
         ),

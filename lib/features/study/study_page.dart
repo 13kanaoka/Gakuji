@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -17,6 +18,7 @@ import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
 import 'package:gakuji/features/decks/deck_edit_page.dart';
 import 'package:gakuji/core/widgets/gakuji_options_sheet.dart';
 import 'package:gakuji/features/study/widgets/reading_card_back.dart';
+import 'package:gakuji/data/sync/gakuji_session_storage.dart';
 
 class StudyPage extends StatefulWidget {
   final List<Term> terms;
@@ -44,6 +46,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       'study_show_example_furigana';
   static const String _termFirstPreferenceKey = 'study_term_first';
   static const String _blueCardTextPreferenceKey = 'blue_card_text_enabled';
+  static const String _sessionType = 'flashcards';
   static String _starredOnlyPreferenceKey(String deckId) {
     return 'study_starred_only_$deckId';
   }
@@ -104,6 +107,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   bool termFirst = true;
   bool blueCardTextEnabled = false;
   bool showStarredOnly = false;
+  bool isSessionReady = false;
 
   int get totalSessionCount => answeredTerms.length + activeTerms.length;
 
@@ -148,6 +152,11 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+
+    blueCardTextEnabled = GakujiLocalPreferences.peekBool(
+          _blueCardTextPreferenceKey,
+        ) ??
+        false;
 
     isShuffled = widget.initialIsShuffled;
     showFurigana = widget.initialShowFurigana;
@@ -209,6 +218,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       _handlePreviousCardReturnAnimationTick,
     );
 
+    _restoreCachedSessionSnapshot();
     _loadProgress();
     _loadReadingCardEdits();
   }
@@ -241,21 +251,73 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }
 
   Future<void> _loadProgress() async {
-    final saved = await DeckStorage.loadProgress(widget.deck.id);
-    final savedShowFurigana =
-        await GakujiLocalPreferences.loadBool(_showFuriganaPreferenceKey);
-    final savedShowExampleFurigana = await GakujiLocalPreferences.loadBool(
+    final savedSessionFuture = GakujiSessionStorage.load(
+      sessionType: _sessionType,
+      deckId: widget.deck.id,
+    );
+    final savedProgressFuture = DeckStorage.loadProgress(widget.deck.id);
+    final savedShowFuriganaFuture =
+        GakujiLocalPreferences.loadBool(_showFuriganaPreferenceKey);
+    final savedShowExampleFuriganaFuture = GakujiLocalPreferences.loadBool(
       _showExampleFuriganaPreferenceKey,
     );
-    final savedTermFirst =
-        await GakujiLocalPreferences.loadBool(_termFirstPreferenceKey);
-    final savedBlueCardText =
-        await GakujiLocalPreferences.loadBool(_blueCardTextPreferenceKey);
-    final savedShowStarredOnly = await GakujiLocalPreferences.loadBool(
+    final savedTermFirstFuture =
+        GakujiLocalPreferences.loadBool(_termFirstPreferenceKey);
+    final savedBlueCardTextFuture =
+        GakujiLocalPreferences.loadBool(_blueCardTextPreferenceKey);
+    final savedShowStarredOnlyFuture = GakujiLocalPreferences.loadBool(
       _starredOnlyPreferenceKey(widget.deck.id),
     );
 
-    if (!mounted || isReviewingIncorrect) return;
+    // Resume the actual card order/history as soon as the session record is
+    // available. Display preferences continue loading in parallel and are
+    // applied immediately afterward instead of blocking the resume itself.
+    final savedSession = await savedSessionFuture;
+
+    if (!mounted || (isReviewingIncorrect && !isSessionReady)) return;
+
+    if (savedSession != null &&
+        _restoreSessionSnapshot(
+          savedSession,
+          savedShowFurigana: null,
+          savedShowExampleFurigana: null,
+          savedTermFirst: null,
+          savedBlueCardText: null,
+        )) {
+      final savedShowFurigana = await savedShowFuriganaFuture;
+      final savedShowExampleFurigana = await savedShowExampleFuriganaFuture;
+      final savedTermFirst = await savedTermFirstFuture;
+      final savedBlueCardText = await savedBlueCardTextFuture;
+
+      if (!mounted) return;
+
+      setState(() {
+        if (savedShowFurigana != null) {
+          showFurigana = savedShowFurigana;
+        }
+        if (savedShowExampleFurigana != null) {
+          showExampleFurigana = savedShowExampleFurigana;
+        }
+        if (savedTermFirst != null) {
+          termFirst = savedTermFirst;
+        }
+        blueCardTextEnabled = savedBlueCardText ?? false;
+      });
+      return;
+    }
+
+    if (savedSession != null) {
+      unawaited(_clearSessionSnapshot());
+    }
+
+    final saved = await savedProgressFuture;
+    final savedShowFurigana = await savedShowFuriganaFuture;
+    final savedShowExampleFurigana = await savedShowExampleFuriganaFuture;
+    final savedTermFirst = await savedTermFirstFuture;
+    final savedBlueCardText = await savedBlueCardTextFuture;
+    final savedShowStarredOnly = await savedShowStarredOnlyFuture;
+
+    if (!mounted || (isReviewingIncorrect && !isSessionReady)) return;
 
     final nextShowStarredOnly = savedShowStarredOnly ?? showStarredOnly;
     final nextAllTerms = nextShowStarredOnly
@@ -279,6 +341,10 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       answeredTerms
         ..clear()
         ..addAll(allTerms.take(savedCount));
+      history.clear();
+      incorrectReviewTerms.clear();
+      correctCount = 0;
+      incorrectCount = 0;
 
       activeTerms = List<Term>.from(allTerms.skip(savedCount));
 
@@ -298,43 +364,380 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       blueCardTextEnabled = savedBlueCardText ?? false;
       hasCompletedDeck = activeTerms.isEmpty && allTerms.isNotEmpty;
       _cardContentController.value = 1;
+      isSessionReady = true;
     });
+
+    unawaited(_saveSessionSnapshot());
+  }
+
+  void _restoreCachedSessionSnapshot() {
+    if (!GakujiSessionStorage.hasCached(
+      sessionType: _sessionType,
+      deckId: widget.deck.id,
+    )) {
+      return;
+    }
+
+    final cached = GakujiSessionStorage.peek(
+      sessionType: _sessionType,
+      deckId: widget.deck.id,
+    );
+    if (cached == null) return;
+
+    _restoreSessionSnapshot(
+      cached,
+      savedShowFurigana: null,
+      savedShowExampleFurigana: null,
+      savedTermFirst: null,
+      savedBlueCardText: null,
+    );
+  }
+
+  List<String> get _deckSessionTermIds {
+    return widget.terms.map((term) => term.id).toList(growable: false);
+  }
+
+  String get _deckSessionSignature {
+    var hash = 0x811C9DC5;
+    for (final term in widget.terms) {
+      for (final codeUnit in term.id.codeUnits) {
+        hash ^= codeUnit;
+        hash = (hash * 0x01000193) & 0xFFFFFFFF;
+      }
+      hash ^= 0xFF;
+      hash = (hash * 0x01000193) & 0xFFFFFFFF;
+    }
+    return '${widget.terms.length}:${hash.toRadixString(16)}';
+  }
+
+  bool _restoreSessionSnapshot(
+    Map<String, dynamic> snapshot, {
+    required bool? savedShowFurigana,
+    required bool? savedShowExampleFurigana,
+    required bool? savedTermFirst,
+    required bool? savedBlueCardText,
+  }) {
+    final version = _asInt(snapshot['version']);
+    if (version == 2) {
+      return _restoreCompactSessionSnapshot(
+        snapshot,
+        savedShowFurigana: savedShowFurigana,
+        savedShowExampleFurigana: savedShowExampleFurigana,
+        savedTermFirst: savedTermFirst,
+        savedBlueCardText: savedBlueCardText,
+      );
+    }
+    if (version == 1) {
+      final restored = _restoreLegacySessionSnapshot(
+        snapshot,
+        savedShowFurigana: savedShowFurigana,
+        savedShowExampleFurigana: savedShowExampleFurigana,
+        savedTermFirst: savedTermFirst,
+        savedBlueCardText: savedBlueCardText,
+      );
+      if (restored) {
+        unawaited(_saveSessionSnapshot());
+      }
+      return restored;
+    }
+    return false;
+  }
+
+  bool _restoreCompactSessionSnapshot(
+    Map<String, dynamic> snapshot, {
+    required bool? savedShowFurigana,
+    required bool? savedShowExampleFurigana,
+    required bool? savedTermFirst,
+    required bool? savedBlueCardText,
+  }) {
+    if (snapshot['deckSignature']?.toString() != _deckSessionSignature) {
+      return false;
+    }
+
+    final termsById = <String, Term>{
+      for (final term in widget.terms) term.id: term,
+    };
+    final savedAllTermIds = _stringList(snapshot['allTermIds']);
+    final savedSessionOrderIds = _stringList(snapshot['sessionOrderTermIds']);
+    final savedIncorrectTermIds = _stringList(snapshot['incorrectTermIds']);
+    final answeredCount = _asInt(snapshot['answeredCount']);
+    final historyStartIndex = _asInt(snapshot['historyStartIndex']) ?? 0;
+    final rawHistoryCorrect = snapshot['historyCorrect'];
+
+    if (savedAllTermIds.isEmpty ||
+        savedSessionOrderIds.isEmpty ||
+        answeredCount == null ||
+        answeredCount < 0 ||
+        answeredCount > savedSessionOrderIds.length ||
+        rawHistoryCorrect is! List) {
+      return false;
+    }
+
+    final historyCorrect = <bool>[];
+    for (final value in rawHistoryCorrect) {
+      if (value is! bool) return false;
+      historyCorrect.add(value);
+    }
+
+    if (historyStartIndex < 0 ||
+        historyStartIndex > answeredCount ||
+        historyStartIndex + historyCorrect.length > answeredCount) {
+      return false;
+    }
+
+    final restoredAllTerms = _termsForIds(savedAllTermIds, termsById);
+    final restoredSessionOrder = _termsForIds(savedSessionOrderIds, termsById);
+    final restoredIncorrectTerms =
+        _termsForIds(savedIncorrectTermIds, termsById);
+
+    if (restoredAllTerms.length != savedAllTermIds.length ||
+        restoredSessionOrder.length != savedSessionOrderIds.length ||
+        restoredIncorrectTerms.length != savedIncorrectTermIds.length) {
+      return false;
+    }
+
+    final restoredAnsweredTerms =
+        restoredSessionOrder.take(answeredCount).toList(growable: false);
+    final restoredActiveTerms =
+        restoredSessionOrder.skip(answeredCount).toList(growable: false);
+    final restoredHistory = <_StudyHistoryEntry>[];
+
+    for (var index = 0; index < historyCorrect.length; index++) {
+      restoredHistory.add(
+        _StudyHistoryEntry(
+          term: restoredAnsweredTerms[historyStartIndex + index],
+          correct: historyCorrect[index],
+        ),
+      );
+    }
+
+    return _applyRestoredSession(
+      restoredAllTerms: restoredAllTerms,
+      restoredAnsweredTerms: restoredAnsweredTerms,
+      restoredActiveTerms: restoredActiveTerms,
+      restoredHistory: restoredHistory,
+      restoredIncorrectTerms: restoredIncorrectTerms,
+      restoredCorrectCount: historyCorrect.where((value) => value).length,
+      restoredIncorrectCount: historyCorrect.where((value) => !value).length,
+      isShuffledValue: snapshot['isShuffled'] == true,
+      showStarredOnlyValue: snapshot['showStarredOnly'] == true,
+      isReviewingIncorrectValue: snapshot['isReviewingIncorrect'] == true,
+      savedShowFurigana: savedShowFurigana,
+      savedShowExampleFurigana: savedShowExampleFurigana,
+      savedTermFirst: savedTermFirst,
+      savedBlueCardText: savedBlueCardText,
+    );
+  }
+
+  bool _restoreLegacySessionSnapshot(
+    Map<String, dynamic> snapshot, {
+    required bool? savedShowFurigana,
+    required bool? savedShowExampleFurigana,
+    required bool? savedTermFirst,
+    required bool? savedBlueCardText,
+  }) {
+    final savedDeckTermIds = _stringList(snapshot['deckTermIds']);
+    if (!_sameStringLists(savedDeckTermIds, _deckSessionTermIds)) return false;
+
+    final termsById = <String, Term>{
+      for (final term in widget.terms) term.id: term,
+    };
+
+    final savedAllTermIds = _stringList(snapshot['allTermIds']);
+    final savedAnsweredTermIds = _stringList(snapshot['answeredTermIds']);
+    final savedActiveTermIds = _stringList(snapshot['activeTermIds']);
+    final savedIncorrectTermIds = _stringList(snapshot['incorrectTermIds']);
+    final rawHistory = snapshot['history'];
+
+    if (savedAllTermIds.isEmpty || rawHistory is! List) return false;
+
+    final restoredAllTerms = _termsForIds(savedAllTermIds, termsById);
+    final restoredAnsweredTerms =
+        _termsForIds(savedAnsweredTermIds, termsById);
+    final restoredActiveTerms = _termsForIds(savedActiveTermIds, termsById);
+    final restoredIncorrectTerms =
+        _termsForIds(savedIncorrectTermIds, termsById);
+
+    if (restoredAllTerms.length != savedAllTermIds.length ||
+        restoredAnsweredTerms.length != savedAnsweredTermIds.length ||
+        restoredActiveTerms.length != savedActiveTermIds.length ||
+        restoredIncorrectTerms.length != savedIncorrectTermIds.length) {
+      return false;
+    }
+
+    final restoredHistory = <_StudyHistoryEntry>[];
+    for (final rawEntry in rawHistory) {
+      if (rawEntry is! Map) return false;
+      final termId = rawEntry['termId']?.toString();
+      final term = termId == null ? null : termsById[termId];
+      final correct = rawEntry['correct'];
+      if (term == null || correct is! bool) return false;
+      restoredHistory.add(
+        _StudyHistoryEntry(term: term, correct: correct),
+      );
+    }
+
+    return _applyRestoredSession(
+      restoredAllTerms: restoredAllTerms,
+      restoredAnsweredTerms: restoredAnsweredTerms,
+      restoredActiveTerms: restoredActiveTerms,
+      restoredHistory: restoredHistory,
+      restoredIncorrectTerms: restoredIncorrectTerms,
+      restoredCorrectCount: _asInt(snapshot['correctCount']) ?? 0,
+      restoredIncorrectCount: _asInt(snapshot['incorrectCount']) ?? 0,
+      isShuffledValue: snapshot['isShuffled'] == true,
+      showStarredOnlyValue: snapshot['showStarredOnly'] == true,
+      isReviewingIncorrectValue: snapshot['isReviewingIncorrect'] == true,
+      savedShowFurigana: savedShowFurigana,
+      savedShowExampleFurigana: savedShowExampleFurigana,
+      savedTermFirst: savedTermFirst,
+      savedBlueCardText: savedBlueCardText,
+    );
+  }
+
+  bool _applyRestoredSession({
+    required List<Term> restoredAllTerms,
+    required List<Term> restoredAnsweredTerms,
+    required List<Term> restoredActiveTerms,
+    required List<_StudyHistoryEntry> restoredHistory,
+    required List<Term> restoredIncorrectTerms,
+    required int restoredCorrectCount,
+    required int restoredIncorrectCount,
+    required bool isShuffledValue,
+    required bool showStarredOnlyValue,
+    required bool isReviewingIncorrectValue,
+    required bool? savedShowFurigana,
+    required bool? savedShowExampleFurigana,
+    required bool? savedTermFirst,
+    required bool? savedBlueCardText,
+  }) {
+    setState(() {
+      allTerms = restoredAllTerms;
+      activeTerms = restoredActiveTerms;
+      answeredTerms
+        ..clear()
+        ..addAll(restoredAnsweredTerms);
+      history
+        ..clear()
+        ..addAll(restoredHistory);
+      incorrectReviewTerms
+        ..clear()
+        ..addAll(restoredIncorrectTerms);
+      correctCount = restoredCorrectCount;
+      incorrectCount = restoredIncorrectCount;
+      isShuffled = isShuffledValue;
+      showStarredOnly = showStarredOnlyValue;
+      isReviewingIncorrect = isReviewingIncorrectValue;
+      hasCompletedDeck = activeTerms.isEmpty && allTerms.isNotEmpty;
+
+      if (savedShowFurigana != null) {
+        showFurigana = savedShowFurigana;
+      }
+      if (savedShowExampleFurigana != null) {
+        showExampleFurigana = savedShowExampleFurigana;
+      }
+      if (savedTermFirst != null) {
+        termFirst = savedTermFirst;
+      }
+      if (savedBlueCardText != null) {
+        blueCardTextEnabled = savedBlueCardText;
+      }
+
+      dragOffset = Offset.zero;
+      isDragging = false;
+      isSwipingAway = false;
+      isReturningPreviousCard = false;
+      outgoingCardTerm = null;
+      showMenu = false;
+      _flipController.value = 0;
+      _cardContentController.value = 1;
+      isSessionReady = true;
+    });
+
+    return true;
+  }
+
+  Future<void> _saveSessionSnapshot() {
+    if (!isSessionReady || allTerms.isEmpty) return Future<void>.value();
+
+    final sessionOrderTermIds = <String>[
+      ...answeredTerms.map((term) => term.id),
+      ...activeTerms.map((term) => term.id),
+    ];
+    final historyStartIndex = answeredTerms.length - history.length;
+
+    return GakujiSessionStorage.save(
+      sessionType: _sessionType,
+      deckId: widget.deck.id,
+      snapshot: <String, dynamic>{
+        'version': 2,
+        'deckSignature': _deckSessionSignature,
+        'allTermIds': allTerms.map((term) => term.id).toList(growable: false),
+        'sessionOrderTermIds': sessionOrderTermIds,
+        'answeredCount': answeredTerms.length,
+        'historyStartIndex': historyStartIndex < 0 ? 0 : historyStartIndex,
+        'historyCorrect':
+            history.map((entry) => entry.correct).toList(growable: false),
+        'incorrectTermIds': incorrectReviewTerms
+            .map((term) => term.id)
+            .toList(growable: false),
+        'isShuffled': isShuffled,
+        'showStarredOnly': showStarredOnly,
+        'isReviewingIncorrect': isReviewingIncorrect,
+      },
+    );
+  }
+
+  Future<void> _clearSessionSnapshot() {
+    return GakujiSessionStorage.clear(
+      sessionType: _sessionType,
+      deckId: widget.deck.id,
+    );
+  }
+
+  static List<Term> _termsForIds(
+    List<String> ids,
+    Map<String, Term> termsById,
+  ) {
+    return ids.map((id) => termsById[id]).whereType<Term>().toList();
+  }
+
+  static int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  static List<String> _stringList(dynamic value) {
+    if (value is! List) return <String>[];
+    return value.map((item) => item.toString()).toList(growable: false);
+  }
+
+  static bool _sameStringLists(List<String> first, List<String> second) {
+    if (first.length != second.length) return false;
+    for (var index = 0; index < first.length; index++) {
+      if (first[index] != second[index]) return false;
+    }
+    return true;
   }
 
   Future<void> _loadReadingCardEdits() async {
-    final loadedEdits = <String, ReadingCardEditData>{};
-    final loadedSavedIds = <String>{};
-
     final termsToLoad = List<Term>.from(widget.deck.terms);
-
-    for (final term in termsToLoad) {
-      final hasSavedEdit = await ReadingCardEditStorage.hasSavedEdit(
-        deck: widget.deck,
-        term: term,
-      );
-
-      final editData = await ReadingCardEditStorage.load(
-        deck: widget.deck,
-        term: term,
-      );
-
-      loadedEdits[term.id] = editData;
-
-      if (hasSavedEdit) {
-        loadedSavedIds.add(term.id);
-      }
-    }
+    final snapshot = await ReadingCardEditStorage.loadDeck(
+      deck: widget.deck,
+      terms: termsToLoad,
+    );
 
     if (!mounted) return;
 
     setState(() {
       readingCardEdits
         ..clear()
-        ..addAll(loadedEdits);
+        ..addAll(snapshot.editsByTermId);
 
       savedReadingCardEditTermIds
         ..clear()
-        ..addAll(loadedSavedIds);
+        ..addAll(snapshot.savedTermIds);
     });
   }
 
@@ -351,10 +754,12 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }
 
   void _saveProgress() {
-    if (isReviewingIncorrect) return;
+    if (!isReviewingIncorrect) {
+      DeckStorage.saveProgress(widget.deck.id, answeredTerms.length);
+      scheduleUserDataSave();
+    }
 
-    DeckStorage.saveProgress(widget.deck.id, answeredTerms.length);
-    scheduleUserDataSave();
+    unawaited(_saveSessionSnapshot());
   }
 
   bool _isSameTerm(Term first, Term second) {
@@ -715,6 +1120,8 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       hasCompletedDeck = false;
       isReviewingIncorrect = true;
     });
+
+    _saveProgress();
   }
 
   void goBack() {
@@ -947,9 +1354,12 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }
 
   Future<void> handleExit() async {
-    if (hasCompletedDeck && !isReviewingIncorrect) {
+    if (hasCompletedDeck) {
+      await _clearSessionSnapshot();
       await DeckStorage.saveProgress(widget.deck.id, 0);
       scheduleUserDataSave();
+    } else {
+      await _saveSessionSnapshot();
     }
 
     if (!mounted) return;
@@ -1015,6 +1425,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
       showStarredOnly,
     );
     scheduleUserDataSave();
+    unawaited(_saveSessionSnapshot());
   }
 
   void toggleShuffle() {
@@ -1209,13 +1620,19 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
               iconColor: isShuffled
                   ? GakujiColors.darkGray
                   : GakujiColors.mediumGray,
-              onTap: toggleShuffle,
+              onTap: () {
+                Navigator.of(context).pop();
+                toggleShuffle();
+              },
             ),
             GakujiOptionsSheetItem(
               icon: Icons.refresh_rounded,
               label: 'Reset Deck',
               iconColor: GakujiColors.mediumGray,
-              onTap: restart,
+              onTap: () {
+                Navigator.of(context).pop();
+                restart();
+              },
             ),
           ],
         ),
@@ -1608,18 +2025,24 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                             SizedBox(height: legendGap),
                             _completionLegend(),
                             const Spacer(),
-                            _completeActionButton(
-                              label: 'Review Incorrect Answers',
-                              color: GakujiColors.deckBlue,
-                              height: buttonHeight,
-                              onTap: startIncorrectReview,
-                            ),
-                            SizedBox(height: buttonGap),
+                            if (incorrectReviewTerms.isNotEmpty) ...[
+                              _completeActionButton(
+                                label: 'Review Incorrect Answers',
+                                color: GakujiColors.deckBlue,
+                                height: buttonHeight,
+                                onTap: startIncorrectReview,
+                              ),
+                              SizedBox(height: buttonGap),
+                            ],
                             _completeActionButton(
                               label: 'Restart Deck',
-                              color: GakujiColors.whiteCard,
-                              textColor: GakujiColors.mediumGray,
-                              outlined: true,
+                              color: incorrectReviewTerms.isEmpty
+                                  ? GakujiColors.deckBlue
+                                  : GakujiColors.whiteCard,
+                              textColor: incorrectReviewTerms.isEmpty
+                                  ? Colors.white
+                                  : GakujiColors.mediumGray,
+                              outlined: incorrectReviewTerms.isNotEmpty,
                               height: buttonHeight,
                               onTap: restart,
                             ),
@@ -1737,7 +2160,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
                 child: Text(
                   label,
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.small.copyWith(
+                  style: GakujiText.actionLabel.copyWith(
                     color: textColor,
                   ),
                 ),
@@ -1774,7 +2197,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
               Text(
                 'Return to Last Card',
                 textScaler: TextScaler.noScaling,
-                style: GakujiText.xSmall.copyWith(
+                style: GakujiText.body.copyWith(
                   color: GakujiColors.mediumGray,
                 )
               ),

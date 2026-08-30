@@ -44,7 +44,9 @@ class ImportTermsResultsPage extends StatelessWidget {
                         Text(
                           'Rows Not Imported',
                           textScaler: TextScaler.noScaling,
-                          style: GakujiText.small.copyWith(
+                          style: GakujiText.actionLabel.copyWith(
+                            fontSize:
+                                (GakujiText.actionLabel.fontSize ?? 16) + 2,
                             color: GakujiColors.darkGray,
                           ),
                         ),
@@ -84,7 +86,7 @@ class ImportTermsResultsPage extends StatelessWidget {
           '${result.importedCount} terms imported',
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: GakujiText.medium.copyWith(
+          style: GakujiText.sectionTitle.copyWith(
             color: GakujiColors.darkGray,
           ),
         ),
@@ -93,8 +95,7 @@ class ImportTermsResultsPage extends StatelessWidget {
           'Your terms are ready in “${result.deckName}.”',
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: TextStyle(
-            fontSize: 15,
+          style: GakujiText.body.copyWith(
             height: 1.4,
             fontWeight: FontWeight.w500,
             color: GakujiColors.mediumGray,
@@ -177,9 +178,7 @@ class ImportTermsResultsPage extends StatelessWidget {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
+              style: GakujiText.actionLabel.copyWith(
                 color: GakujiColors.darkGray,
               ),
             ),
@@ -187,8 +186,7 @@ class ImportTermsResultsPage extends StatelessWidget {
           Text(
             '$value',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 16,
+            style: GakujiText.actionLabel.copyWith(
               fontWeight: FontWeight.w800,
               color: GakujiColors.darkGray,
             ),
@@ -252,10 +250,8 @@ class ImportTermsResultsPage extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             textScaler: TextScaler.noScaling,
-                            style: TextStyle(
+                            style: GakujiText.termRowTitle.copyWith(
                               fontFamily: GakujiFonts.japanese,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
                               color: GakujiColors.darkGray,
                             ),
                           ),
@@ -263,10 +259,9 @@ class ImportTermsResultsPage extends StatelessWidget {
                           Text(
                             'Row ${row.rowNumber} • ${_statusLabel(row)}',
                             textScaler: TextScaler.noScaling,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
+                            style: GakujiText.termRowMeaning.copyWith(
                               color: statusColor,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
@@ -313,7 +308,7 @@ class ImportTermsResultsPage extends StatelessWidget {
                 child: Text(
                   'Done',
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.small.copyWith(
+                  style: GakujiText.actionLabel.copyWith(
                     color: Colors.white,
                   ),
                 ),
