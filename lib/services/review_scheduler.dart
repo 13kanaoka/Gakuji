@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:fsrs/fsrs.dart' as fsrs;
 
-import '../models/review_card.dart';
+import 'package:gakuji/models/review_card.dart';
 
 class ReviewScheduleResult {
   final ReviewCard card;

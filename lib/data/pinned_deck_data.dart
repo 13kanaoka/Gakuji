@@ -1,4 +1,4 @@
-import '../models/deck.dart';
+import 'package:gakuji/models/deck.dart';
 
 const int maxPinnedDecks = 3;
 

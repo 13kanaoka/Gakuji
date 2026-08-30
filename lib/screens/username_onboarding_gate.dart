@@ -2,9 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../services/account_username_service.dart';
-import '../widgets/gakuji_styles.dart';
-import 'username_settings_page.dart';
+import 'package:gakuji/services/account_username_service.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/screens/username_settings_page.dart';
 
 /// Places the mandatory username setup in front of newly-created accounts
 /// while allowing accounts created before the username rollout to continue.

@@ -6,16 +6,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-import 'firebase_options.dart';
-import 'screens/email_verification_gate.dart';
-import 'screens/login_page.dart';
-import 'screens/main_shell.dart';
-import 'screens/username_onboarding_gate.dart';
-import 'services/app_theme_controller.dart';
-import 'services/dictionary_service.dart';
-import 'services/gakuji_user_data_store.dart';
-import 'services/writing_recognition_service.dart';
-import 'widgets/gakuji_styles.dart';
+import 'package:gakuji/firebase_options.dart';
+import 'package:gakuji/screens/email_verification_gate.dart';
+import 'package:gakuji/screens/login_page.dart';
+import 'package:gakuji/screens/main_shell.dart';
+import 'package:gakuji/screens/username_onboarding_gate.dart';
+import 'package:gakuji/services/app_theme_controller.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/services/writing_recognition_service.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

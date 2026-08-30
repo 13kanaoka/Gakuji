@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 class DetectivePerspectiveTestPage extends StatefulWidget {
   const DetectivePerspectiveTestPage({

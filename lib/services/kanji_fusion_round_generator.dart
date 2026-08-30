@@ -1,7 +1,7 @@
 import 'dart:math';
 
-import '../models/kanji_fusion_round.dart';
-import '../models/term.dart';
+import 'package:gakuji/models/kanji_fusion_round.dart';
+import 'package:gakuji/models/term.dart';
 
 class _FusionChoiceSpec {
   final String label;

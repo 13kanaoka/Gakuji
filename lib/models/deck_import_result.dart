@@ -1,4 +1,4 @@
-import 'deck_import_row.dart';
+import 'package:gakuji/models/deck_import_row.dart';
 
 class DeckImportResult {
   final String deckName;

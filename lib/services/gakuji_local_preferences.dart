@@ -1,7 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'gakuji_cloud_sync_service.dart';
-import 'gakuji_user_repository.dart';
+import 'package:gakuji/services/gakuji_cloud_sync_service.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
 
 /// User-scoped preferences that belong to the local Gakuji workspace.
 ///

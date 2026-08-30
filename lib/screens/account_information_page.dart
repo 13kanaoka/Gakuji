@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
-import '../services/account_auth_service.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/services/account_auth_service.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 class AccountInformationPage extends StatefulWidget {
   const AccountInformationPage({super.key});

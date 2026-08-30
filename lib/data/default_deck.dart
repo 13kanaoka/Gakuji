@@ -1,6 +1,6 @@
-import '../models/deck.dart';
-import '../models/term.dart';
-import 'dictionary_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/data/dictionary_data.dart';
 
 class DefaultDecks {
   /// 📚 SAME DICTIONARY SOURCE SET USED FOR BOTH MODES

@@ -2,12 +2,12 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/deck.dart';
-import '../models/review_card.dart';
-import '../models/term.dart';
-import '../services/gakuji_user_repository.dart';
-import '../services/review_scheduler.dart';
-import '../services/review_settings.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/review_card.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
+import 'package:gakuji/services/review_scheduler.dart';
+import 'package:gakuji/services/review_settings.dart';
 
 const String _legacyReviewCardsStorageKey = 'review_cards';
 

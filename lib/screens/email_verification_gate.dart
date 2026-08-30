@@ -4,8 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-import '../services/account_auth_service.dart';
-import '../widgets/gakuji_styles.dart';
+import 'package:gakuji/services/account_auth_service.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 class EmailVerificationGate extends StatefulWidget {
   final User user;

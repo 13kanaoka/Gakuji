@@ -1,6 +1,6 @@
-import '../models/term.dart';
-import 'dictionary_service.dart';
-import 'japanese_conjugation_service.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/services/japanese_conjugation_service.dart';
 
 class CameraTextAnalysisResult {
   final String text;

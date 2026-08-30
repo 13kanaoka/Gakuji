@@ -2,21 +2,21 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
-import '../data/reading_card_edit_data.dart';
-import '../models/deck.dart';
-import '../models/term.dart';
-import '../services/deck_storage.dart';
-import '../services/gakuji_local_preferences.dart';
-import '../services/gakuji_user_data_store.dart';
-import '../services/reading_card_edit_storage.dart';
-import '../services/term_favorite_service.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
-import 'deck_edit_page.dart';
-import '../widgets/gakuji_options_sheet.dart';
-import '../widgets/reading_card_back.dart';
+import 'package:gakuji/data/reading_card_edit_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/deck_storage.dart';
+import 'package:gakuji/services/gakuji_local_preferences.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/services/reading_card_edit_storage.dart';
+import 'package:gakuji/services/term_favorite_service.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/screens/deck_edit_page.dart';
+import 'package:gakuji/widgets/gakuji_options_sheet.dart';
+import 'package:gakuji/widgets/reading_card_back.dart';
 
 class StudyPage extends StatefulWidget {
   final List<Term> terms;

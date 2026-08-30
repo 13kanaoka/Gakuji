@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/deck.dart';
-import 'gakuji_styles.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 class GakujiTodoDeckCard extends StatelessWidget {
   final Deck deck;

@@ -1,9 +1,9 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../data/deck_data.dart';
-import '../models/term.dart';
-import 'gakuji_cloud_sync_service.dart';
-import 'gakuji_user_repository.dart';
+import 'package:gakuji/data/deck_data.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/gakuji_cloud_sync_service.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
 
 /// Canonical local-first storage for user dictionary notes.
 ///

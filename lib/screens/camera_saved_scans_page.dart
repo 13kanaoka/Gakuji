@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../services/camera_saved_scan_store.dart';
-import '../widgets/gakuji_styles.dart';
+import 'package:gakuji/services/camera_saved_scan_store.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 class CameraSavedScansPage extends StatefulWidget {
   const CameraSavedScansPage({super.key});

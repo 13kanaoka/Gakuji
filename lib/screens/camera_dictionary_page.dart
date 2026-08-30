@@ -8,17 +8,17 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path_util;
 import 'package:path_provider/path_provider.dart';
 
-import '../models/term.dart';
-import '../services/camera_saved_scan_store.dart';
-import '../services/camera_text_analysis_service.dart';
-import '../services/camera_text_recognition_service.dart';
-import '../services/dictionary_service.dart';
-import '../widgets/gakuji_page_route.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_term_row.dart';
-import 'camera_saved_scans_page.dart';
-import 'dictionary_detail_page.dart';
-import 'camera_sentence_detail_page.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/camera_saved_scan_store.dart';
+import 'package:gakuji/services/camera_text_analysis_service.dart';
+import 'package:gakuji/services/camera_text_recognition_service.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_term_row.dart';
+import 'package:gakuji/screens/camera_saved_scans_page.dart';
+import 'package:gakuji/screens/dictionary_detail_page.dart';
+import 'package:gakuji/screens/camera_sentence_detail_page.dart';
 
 class CameraDictionaryPage extends StatefulWidget {
   const CameraDictionaryPage({super.key});

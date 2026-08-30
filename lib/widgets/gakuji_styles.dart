@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/deck.dart';
-import '../services/app_theme_controller.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/services/app_theme_controller.dart';
 
 class GakujiFonts {
   static const String japanese = 'IBMPlexSansJP';

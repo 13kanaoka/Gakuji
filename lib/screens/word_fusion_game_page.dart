@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../models/term.dart';
-import '../models/word_fusion_round.dart';
-import '../services/gakuji_local_preferences.dart';
-import '../services/word_fusion_round_generator.dart';
-import '../widgets/gakuji_domino.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/models/word_fusion_round.dart';
+import 'package:gakuji/services/gakuji_local_preferences.dart';
+import 'package:gakuji/services/word_fusion_round_generator.dart';
+import 'package:gakuji/widgets/gakuji_domino.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 class WordFusionGamePage extends StatefulWidget {
   final List<Term> terms;

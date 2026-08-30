@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 class GakujiSearchBar extends StatefulWidget {
   final TextEditingController controller;

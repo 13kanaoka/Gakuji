@@ -1,4 +1,4 @@
-import '../models/folder.dart';
+import 'package:gakuji/models/folder.dart';
 
 List<Folder> buildSampleFolders() {
   return [

@@ -1,7 +1,7 @@
 import 'dart:math';
 
-import '../models/imposter_round.dart';
-import '../models/term.dart';
+import 'package:gakuji/models/imposter_round.dart';
+import 'package:gakuji/models/term.dart';
 
 class ImposterRoundGenerator {
   final Random _random = Random();

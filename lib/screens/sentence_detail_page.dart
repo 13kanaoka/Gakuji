@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../models/term.dart';
-import '../services/dictionary_service.dart';
-import '../widgets/gakuji_faded_scroll.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_term_row.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/widgets/gakuji_faded_scroll.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_term_row.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 typedef SentenceTokenTap = Future<void> Function(
   BuildContext context,

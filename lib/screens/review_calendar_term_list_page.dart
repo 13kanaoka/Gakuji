@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
-import '../models/deck.dart';
-import '../models/review_card.dart';
-import '../models/term.dart';
-import '../services/review_calendar_service.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_term_row.dart';
-import '../widgets/gakuji_top_bar.dart';
-import 'dictionary_detail_page.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/review_card.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/review_calendar_service.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_term_row.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/screens/dictionary_detail_page.dart';
 
 enum ReviewCalendarListType {
   projected,

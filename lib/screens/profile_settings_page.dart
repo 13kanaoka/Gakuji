@@ -1,19 +1,19 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../services/account_auth_service.dart';
-import '../services/account_username_service.dart';
-import '../services/gakuji_cloud_sync_service.dart';
-import '../services/gakuji_user_data_store.dart';
-import '../services/gakuji_user_repository.dart';
-import '../widgets/gakuji_action_dialog.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
-import 'account_information_page.dart';
-import 'username_settings_page.dart';
+import 'package:gakuji/services/account_auth_service.dart';
+import 'package:gakuji/services/account_username_service.dart';
+import 'package:gakuji/services/gakuji_cloud_sync_service.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
+import 'package:gakuji/widgets/gakuji_action_dialog.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/screens/account_information_page.dart';
+import 'package:gakuji/screens/username_settings_page.dart';
 
 class ProfileSettingsPage extends StatefulWidget {
   final String? initialUsername;

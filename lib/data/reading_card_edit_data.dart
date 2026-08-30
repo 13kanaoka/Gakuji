@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import '../models/term.dart';
+import 'package:gakuji/models/term.dart';
 
 class ReadingCardEditData {
   static const String storagePrefix = 'gakuji_reading_card_edit';

@@ -2,13 +2,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../models/kanji_fusion_round.dart';
-import '../models/term.dart';
-import '../services/gakuji_local_preferences.dart';
-import '../services/kanji_fusion_round_generator.dart';
-import '../widgets/gakuji_domino.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/models/kanji_fusion_round.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/gakuji_local_preferences.dart';
+import 'package:gakuji/services/kanji_fusion_round_generator.dart';
+import 'package:gakuji/widgets/gakuji_domino.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 class KanjiFusionGamePage extends StatefulWidget {
   final List<Term> terms;

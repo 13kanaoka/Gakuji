@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../services/account_username_service.dart';
-import '../widgets/gakuji_action_dialog.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/services/account_username_service.dart';
+import 'package:gakuji/widgets/gakuji_action_dialog.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 class UsernameSettingsPage extends StatefulWidget {
   final bool requiredSetup;

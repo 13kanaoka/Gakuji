@@ -1,16 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
-import '../services/account_username_service.dart';
-import '../services/app_theme_controller.dart';
-import '../services/gakuji_local_preferences.dart';
-import '../services/gakuji_user_repository.dart';
-import '../services/review_settings.dart';
-import '../widgets/gakuji_faded_scroll.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
-import 'profile_settings_page.dart';
+import 'package:gakuji/services/account_username_service.dart';
+import 'package:gakuji/services/app_theme_controller.dart';
+import 'package:gakuji/services/gakuji_local_preferences.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
+import 'package:gakuji/services/review_settings.dart';
+import 'package:gakuji/widgets/gakuji_faded_scroll.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/screens/profile_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});

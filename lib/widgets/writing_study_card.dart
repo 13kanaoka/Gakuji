@@ -2,12 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../models/writing_point.dart';
-import '../models/writing_prompt.dart';
-import '../services/writing_answer_checker.dart';
-import 'gakuji_styles.dart';
-import 'low_latency_writing_canvas.dart';
-import 'reading_card_back.dart';
+import 'package:gakuji/models/writing_point.dart';
+import 'package:gakuji/models/writing_prompt.dart';
+import 'package:gakuji/services/writing_answer_checker.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/low_latency_writing_canvas.dart';
+import 'package:gakuji/widgets/reading_card_back.dart';
 
 class WritingStudyBlankCard extends StatelessWidget {
   const WritingStudyBlankCard({super.key});

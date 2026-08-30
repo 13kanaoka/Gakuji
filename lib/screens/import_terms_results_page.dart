@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../models/deck_import_result.dart';
-import '../models/deck_import_row.dart';
-import '../widgets/gakuji_faded_scroll.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/models/deck_import_result.dart';
+import 'package:gakuji/models/deck_import_row.dart';
+import 'package:gakuji/widgets/gakuji_faded_scroll.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 class ImportTermsResultsPage extends StatelessWidget {
   final DeckImportResult result;

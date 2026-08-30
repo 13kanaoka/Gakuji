@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_deck_transition.dart';
+import 'package:gakuji/widgets/gakuji_deck_transition.dart';
 
-import '../widgets/gakuji_learning_card.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
-import 'kana_page.dart';
-import 'kanji_page.dart';
+import 'package:gakuji/widgets/gakuji_learning_card.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/screens/kana_page.dart';
+import 'package:gakuji/screens/kanji_page.dart';
 
 class LearningPage extends StatelessWidget {
   const LearningPage({super.key});

@@ -2,18 +2,18 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../data/deck_data.dart';
-import '../data/folder_data.dart';
-import '../data/pinned_deck_data.dart';
-import '../data/recent_deck_data.dart';
-import '../data/recent_searches.dart';
-import '../data/review_card_data.dart';
-import '../models/deck.dart';
-import 'gakuji_cloud_sync_service.dart';
-import 'gakuji_guest_repository.dart';
-import 'gakuji_user_database.dart';
-import 'gakuji_user_repository.dart';
-import 'gakuji_term_payload_repair.dart';
+import 'package:gakuji/data/deck_data.dart';
+import 'package:gakuji/data/folder_data.dart';
+import 'package:gakuji/data/pinned_deck_data.dart';
+import 'package:gakuji/data/recent_deck_data.dart';
+import 'package:gakuji/data/recent_searches.dart';
+import 'package:gakuji/data/review_card_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/services/gakuji_cloud_sync_service.dart';
+import 'package:gakuji/services/gakuji_guest_repository.dart';
+import 'package:gakuji/services/gakuji_user_database.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
+import 'package:gakuji/services/gakuji_term_payload_repair.dart';
 
 class GakujiUnsyncedDataException implements Exception {
   final String message;

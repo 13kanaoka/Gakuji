@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'gakuji_page_route.dart';
-import '../screens/deck_page.dart';
-import '../data/deck_data.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
+import 'package:gakuji/screens/deck_page.dart';
+import 'package:gakuji/data/deck_data.dart';
 
 class SmallCard extends StatelessWidget {
   final String title;

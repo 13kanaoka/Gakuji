@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/term.dart';
-import 'gakuji_styles.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 class GakujiTermRow extends StatelessWidget {
   static const Color dividerColor = Color(0xFFC8C8C8);

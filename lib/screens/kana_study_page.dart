@@ -1,15 +1,15 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
-import '../models/writing_point.dart';
-import '../services/writing_answer_checker.dart';
-import '../services/writing_recognition_service.dart';
-import '../widgets/gakuji_options_sheet.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/low_latency_writing_canvas.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/models/writing_point.dart';
+import 'package:gakuji/services/writing_answer_checker.dart';
+import 'package:gakuji/services/writing_recognition_service.dart';
+import 'package:gakuji/widgets/gakuji_options_sheet.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/low_latency_writing_canvas.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 class KanaStudyItem {
   final String character;
