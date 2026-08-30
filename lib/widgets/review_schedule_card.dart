@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../models/review_card.dart';
-import '../services/review_settings.dart';
-import 'gakuji_styles.dart';
+import 'package:gakuji/models/review_card.dart';
+import 'package:gakuji/services/review_settings.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 class ReviewScheduleCard extends StatefulWidget {
   final String deckId;

@@ -1,5 +1,5 @@
-import '../models/term.dart';
-import 'dictionary_data.dart' as dictionary;
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/data/dictionary_data.dart' as dictionary;
 
 /// Looks up a term from the global dictionary by dictionary term ID.
 ///

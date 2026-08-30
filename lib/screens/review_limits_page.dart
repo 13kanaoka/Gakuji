@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../services/review_settings.dart';
-import '../widgets/gakuji_faded_scroll.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/services/review_settings.dart';
+import 'package:gakuji/widgets/gakuji_faded_scroll.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 class ReviewLimitsPage extends StatefulWidget {
   const ReviewLimitsPage({super.key});

@@ -1,9 +1,9 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../data/deck_data.dart';
-import '../models/deck.dart';
-import 'gakuji_cloud_sync_service.dart';
-import 'gakuji_user_repository.dart';
+import 'package:gakuji/data/deck_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/services/gakuji_cloud_sync_service.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
 
 /// Local persistence for per-deck study runtime state.
 ///

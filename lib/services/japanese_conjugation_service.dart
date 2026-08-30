@@ -1,4 +1,4 @@
-import '../models/term.dart';
+import 'package:gakuji/models/term.dart';
 
 class JapaneseConjugationForm {
   final String label;

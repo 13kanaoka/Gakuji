@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
-import '../models/term.dart';
-import '../models/word_fusion_round.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/models/word_fusion_round.dart';
 
 class WordFusionRoundGenerator {
   static final RegExp _kanjiOnlyPattern = RegExp(r'^[一-龯]{2,6}$');

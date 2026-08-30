@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
-import '../models/deck_import_row.dart';
-import '../models/term.dart';
-import '../services/term_import_service.dart';
-import '../widgets/gakuji_faded_scroll.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_term_row.dart';
-import '../widgets/gakuji_top_bar.dart';
-import 'import_terms_preview_page.dart';
+import 'package:gakuji/models/deck_import_row.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/term_import_service.dart';
+import 'package:gakuji/widgets/gakuji_faded_scroll.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_term_row.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/screens/import_terms_preview_page.dart';
 
 class ImportTermsPage extends StatefulWidget {
   const ImportTermsPage({super.key});

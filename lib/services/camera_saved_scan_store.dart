@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path_util;
 import 'package:path_provider/path_provider.dart';
 
-import 'camera_text_recognition_service.dart';
+import 'package:gakuji/services/camera_text_recognition_service.dart';
 
 class CameraSavedScan {
   final String id;

@@ -1,5 +1,5 @@
-import '../models/term.dart';
-import '../models/writing_prompt.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/models/writing_prompt.dart';
 
 class PromptConverter {
   static WritingPrompt fromTerm(Term term) {

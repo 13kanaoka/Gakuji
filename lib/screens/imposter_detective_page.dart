@@ -3,12 +3,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../models/deck.dart';
-import '../models/imposter_round.dart';
-import '../models/term.dart';
-import '../services/gakuji_local_preferences.dart';
-import '../services/imposter_round_generator.dart';
-import '../widgets/gakuji_styles.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/imposter_round.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/gakuji_local_preferences.dart';
+import 'package:gakuji/services/imposter_round_generator.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 enum CrosscheckMode { normal, rush, endless }
 

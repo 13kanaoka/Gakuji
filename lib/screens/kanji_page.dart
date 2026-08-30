@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../widgets/gakuji_deck_transition.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/widgets/gakuji_deck_transition.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 class KanjiPage extends StatelessWidget {
   const KanjiPage({super.key});

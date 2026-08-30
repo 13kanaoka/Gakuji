@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../services/gakuji_user_data_store.dart';
-import '../widgets/gakuji_styles.dart';
-import 'dictionary_page.dart';
-import 'library_page.dart';
-import 'learning_page.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/screens/dictionary_page.dart';
+import 'package:gakuji/screens/library_page.dart';
+import 'package:gakuji/screens/learning_page.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});

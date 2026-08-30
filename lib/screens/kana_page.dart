@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
-import '../widgets/gakuji_deck_transition.dart';
-import '../models/term.dart';
-import '../models/writing_point.dart';
-import '../services/dictionary_service.dart';
-import '../widgets/gakuji_domino.dart';
-import 'kana_study_page.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_deck_transition.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/models/writing_point.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/widgets/gakuji_domino.dart';
+import 'package:gakuji/screens/kana_study_page.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
 
 class KanaPage extends StatefulWidget {
   const KanaPage({super.key});

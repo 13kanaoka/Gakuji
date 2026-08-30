@@ -7,8 +7,8 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
-import '../data/dictionary_data.dart' as fallback_dictionary;
-import '../models/term.dart';
+import 'package:gakuji/data/dictionary_data.dart' as fallback_dictionary;
+import 'package:gakuji/models/term.dart';
 
 class DictionaryService {
   static const String dictionaryAssetPath = 'assets/dictionary/dictionary.db';

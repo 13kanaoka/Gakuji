@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../data/recent_deck_data.dart';
-import '../models/deck.dart';
-import '../services/account_username_service.dart';
-import '../services/gakuji_user_data_store.dart';
-import 'gakuji_styles.dart';
+import 'package:gakuji/data/recent_deck_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/services/account_username_service.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 Future<GakujiDeckSheetResult?> showGakujiDeckSaveSheet({
   required BuildContext context,

@@ -1,4 +1,4 @@
-import 'term.dart';
+import 'package:gakuji/models/term.dart';
 
 enum KanjiFusionDifficulty { easy, normal, hard }
 

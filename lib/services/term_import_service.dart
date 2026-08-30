@@ -5,7 +5,7 @@ import 'package:csv/csv.dart';
 import 'package:excel/excel.dart' as spreadsheet;
 import 'package:file_picker/file_picker.dart';
 
-import '../models/deck_import_row.dart';
+import 'package:gakuji/models/deck_import_row.dart';
 
 class TermImportException implements Exception {
   final String message;

@@ -2,22 +2,22 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
-import '../data/deck_data.dart';
-import '../data/review_card_data.dart';
-import '../models/deck.dart';
-import '../models/term.dart';
-import '../services/deck_storage.dart';
-import '../services/gakuji_cloud_sync_service.dart';
-import '../services/gakuji_user_data_store.dart';
-import '../services/gakuji_user_repository.dart';
-import '../services/term_favorite_service.dart';
-import '../widgets/gakuji_search_bar.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_term_row.dart';
-import '../widgets/gakuji_top_bar.dart';
-import 'reading_card_edit_page.dart';
+import 'package:gakuji/data/deck_data.dart';
+import 'package:gakuji/data/review_card_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/deck_storage.dart';
+import 'package:gakuji/services/gakuji_cloud_sync_service.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
+import 'package:gakuji/services/term_favorite_service.dart';
+import 'package:gakuji/widgets/gakuji_search_bar.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_term_row.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/screens/reading_card_edit_page.dart';
 
 enum _HybridCardEditView {
   reading,

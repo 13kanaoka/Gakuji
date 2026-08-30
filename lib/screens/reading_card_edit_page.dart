@@ -5,17 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../data/reading_card_edit_data.dart';
-import '../models/deck.dart';
-import '../models/term.dart';
-import '../services/dictionary_service.dart';
-import '../services/dictionary_note_service.dart';
-import '../services/reading_card_edit_storage.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
-import '../widgets/reading_card_back.dart';
-import '../services/gakuji_user_data_store.dart';
-import '../services/gakuji_local_preferences.dart';
+import 'package:gakuji/data/reading_card_edit_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/services/dictionary_note_service.dart';
+import 'package:gakuji/services/reading_card_edit_storage.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/widgets/reading_card_back.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/services/gakuji_local_preferences.dart';
 
 class ReadingCardEditPage extends StatefulWidget {
   final Deck deck;

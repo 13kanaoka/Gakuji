@@ -3,25 +3,25 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../data/reading_card_edit_data.dart';
-import '../models/deck.dart';
-import '../models/term.dart';
-import '../models/writing_point.dart';
-import '../models/writing_prompt.dart';
-import '../services/deck_storage.dart';
-import '../services/gakuji_local_preferences.dart';
-import '../services/gakuji_user_data_store.dart';
-import '../services/prompt_converter.dart';
-import '../services/reading_card_edit_storage.dart';
-import '../services/term_favorite_service.dart';
-import '../services/writing_answer_checker.dart';
-import '../services/writing_recognition_service.dart';
-import '../widgets/gakuji_options_sheet.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
-import '../widgets/low_latency_writing_canvas.dart';
-import '../widgets/reading_card_back.dart';
-import '../widgets/writing_study_card.dart';
+import 'package:gakuji/data/reading_card_edit_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/models/writing_point.dart';
+import 'package:gakuji/models/writing_prompt.dart';
+import 'package:gakuji/services/deck_storage.dart';
+import 'package:gakuji/services/gakuji_local_preferences.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/services/prompt_converter.dart';
+import 'package:gakuji/services/reading_card_edit_storage.dart';
+import 'package:gakuji/services/term_favorite_service.dart';
+import 'package:gakuji/services/writing_answer_checker.dart';
+import 'package:gakuji/services/writing_recognition_service.dart';
+import 'package:gakuji/widgets/gakuji_options_sheet.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/widgets/low_latency_writing_canvas.dart';
+import 'package:gakuji/widgets/reading_card_back.dart';
+import 'package:gakuji/widgets/writing_study_card.dart';
 
 enum _HybridCardType {
   reading,

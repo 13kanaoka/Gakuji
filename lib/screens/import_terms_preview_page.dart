@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
-import '../data/deck_data.dart';
-import '../models/deck.dart';
-import '../models/deck_import_result.dart';
-import '../models/deck_import_row.dart';
-import '../models/term.dart';
-import '../services/account_username_service.dart';
-import '../services/term_import_service.dart';
-import '../services/dictionary_import_matcher.dart';
-import '../services/dictionary_service.dart';
-import '../services/gakuji_user_data_store.dart';
-import '../widgets/gakuji_faded_scroll.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_term_row.dart';
-import '../widgets/gakuji_top_bar.dart';
-import 'import_terms_results_page.dart';
+import 'package:gakuji/data/deck_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/deck_import_result.dart';
+import 'package:gakuji/models/deck_import_row.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/account_username_service.dart';
+import 'package:gakuji/services/term_import_service.dart';
+import 'package:gakuji/services/dictionary_import_matcher.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/widgets/gakuji_faded_scroll.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_term_row.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/screens/import_terms_results_page.dart';
 
 class ImportTermsPreviewPage extends StatefulWidget {
   final TermImportDocument document;

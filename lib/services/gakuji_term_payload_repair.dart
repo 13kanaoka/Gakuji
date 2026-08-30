@@ -1,6 +1,6 @@
-import '../models/deck.dart';
-import '../models/term.dart';
-import 'dictionary_service.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/dictionary_service.dart';
 
 /// Repairs legacy/partial deck terms at persistence boundaries.
 ///

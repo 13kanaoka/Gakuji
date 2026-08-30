@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../models/deck.dart';
-import '../services/gakuji_user_repository.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
 
 const String _legacyRecentDeckIdsPreferenceKey = 'library_recent_deck_ids_v1';
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
 const Duration gakujiDeckOpenDuration = Duration(milliseconds: 340);
 const Duration gakujiDeckCloseDuration = Duration(milliseconds: 300);

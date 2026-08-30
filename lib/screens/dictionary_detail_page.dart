@@ -1,26 +1,26 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../data/deck_data.dart';
-import '../data/recent_deck_data.dart';
-import '../data/review_card_data.dart';
-import '../models/deck.dart';
-import '../models/term.dart';
-import '../services/deck_storage.dart';
-import '../services/dictionary_service.dart';
-import '../services/dictionary_note_service.dart';
-import '../widgets/gakuji_faded_scroll.dart';
-import '../widgets/gakuji_furigana_sentence.dart';
-import '../widgets/gakuji_deck_save_sheet.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_top_bar.dart';
-import 'kanji_dictionary_detail_page.dart';
-import 'sentence_detail_page.dart';
-import '../services/gakuji_user_data_store.dart';
-import '../services/japanese_conjugation_service.dart';
+import 'package:gakuji/data/deck_data.dart';
+import 'package:gakuji/data/recent_deck_data.dart';
+import 'package:gakuji/data/review_card_data.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/deck_storage.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/services/dictionary_note_service.dart';
+import 'package:gakuji/widgets/gakuji_faded_scroll.dart';
+import 'package:gakuji/widgets/gakuji_furigana_sentence.dart';
+import 'package:gakuji/widgets/gakuji_deck_save_sheet.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/screens/kanji_dictionary_detail_page.dart';
+import 'package:gakuji/screens/sentence_detail_page.dart';
+import 'package:gakuji/services/gakuji_user_data_store.dart';
+import 'package:gakuji/services/japanese_conjugation_service.dart';
 
 class DictionaryDetailBackResult {
   final bool returnToResults;

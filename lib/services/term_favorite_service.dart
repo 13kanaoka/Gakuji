@@ -1,6 +1,6 @@
-import '../data/deck_data.dart';
-import '../data/dictionary_data.dart';
-import '../models/term.dart';
+import 'package:gakuji/data/deck_data.dart';
+import 'package:gakuji/data/dictionary_data.dart';
+import 'package:gakuji/models/term.dart';
 
 class TermFavoriteService {
   static String sourceIdFor(Term term) => term.sourceId ?? term.id;

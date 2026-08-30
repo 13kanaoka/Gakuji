@@ -1,24 +1,24 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import '../widgets/gakuji_page_route.dart';
+import 'package:gakuji/widgets/gakuji_page_route.dart';
 
-import '../data/recent_searches.dart';
-import '../models/term.dart';
-import '../models/writing_point.dart';
-import '../services/dictionary_service.dart';
-import '../services/gakuji_cloud_sync_service.dart';
-import '../services/gakuji_user_repository.dart';
-import '../services/writing_recognition_service.dart';
-import '../widgets/gakuji_styles.dart';
-import '../widgets/gakuji_term_row.dart';
-import '../widgets/gakuji_top_bar.dart';
-import '../widgets/low_latency_writing_canvas.dart';
-import 'camera_dictionary_page.dart';
-import 'dictionary_detail_page.dart';
-import 'kanji_dictionary_detail_page.dart';
-import 'settings_page.dart';
-import '../widgets/gakuji_search_bar.dart';
+import 'package:gakuji/data/recent_searches.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/models/writing_point.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/services/gakuji_cloud_sync_service.dart';
+import 'package:gakuji/services/gakuji_user_repository.dart';
+import 'package:gakuji/services/writing_recognition_service.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/widgets/gakuji_term_row.dart';
+import 'package:gakuji/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/widgets/low_latency_writing_canvas.dart';
+import 'package:gakuji/screens/camera_dictionary_page.dart';
+import 'package:gakuji/screens/dictionary_detail_page.dart';
+import 'package:gakuji/screens/kanji_dictionary_detail_page.dart';
+import 'package:gakuji/screens/settings_page.dart';
+import 'package:gakuji/widgets/gakuji_search_bar.dart';
 
 enum DictionaryInputMode {
   keyboard,

@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../models/term.dart';
-import 'gakuji_furigana_sentence.dart';
-import 'gakuji_styles.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/widgets/gakuji_furigana_sentence.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 /// Shared reading-card shell used by both the study page and card editor.
 ///

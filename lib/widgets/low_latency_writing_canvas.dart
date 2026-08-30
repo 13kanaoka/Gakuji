@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../models/writing_point.dart';
-import 'gakuji_styles.dart';
+import 'package:gakuji/models/writing_point.dart';
+import 'package:gakuji/widgets/gakuji_styles.dart';
 
 /// A low-latency handwriting surface that keeps pointer updates and repaints
 /// isolated from the surrounding page/card.

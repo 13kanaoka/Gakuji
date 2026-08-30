@@ -7,10 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../models/term.dart';
-import 'dictionary_service.dart';
-import 'japanese_conjugation_service.dart';
-import 'paddle_camera_ocr_service.dart';
+import 'package:gakuji/models/term.dart';
+import 'package:gakuji/services/dictionary_service.dart';
+import 'package:gakuji/services/japanese_conjugation_service.dart';
+import 'package:gakuji/services/paddle_camera_ocr_service.dart';
 
 enum CameraTextOrientation {
   horizontal,

@@ -1,6 +1,6 @@
-import '../models/deck.dart';
-import '../models/review_card.dart';
-import 'review_settings.dart';
+import 'package:gakuji/models/deck.dart';
+import 'package:gakuji/models/review_card.dart';
+import 'package:gakuji/services/review_settings.dart';
 
 class ReviewCalendarDayData {
   final List<ReviewCard> projectedNewCards;
