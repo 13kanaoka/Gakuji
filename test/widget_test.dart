@@ -9,8 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:gakuji/main.dart';
-import 'package:gakuji/screens/main_shell.dart';
+import 'package:gakuji/app/app.dart';
+import 'package:gakuji/app/main_shell.dart';
 
 void main() {
   setUp(() {

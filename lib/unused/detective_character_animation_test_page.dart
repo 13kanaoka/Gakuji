@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:gakuji/widgets/gakuji_styles.dart';
+import 'package:gakuji/core/theme/gakuji_styles.dart';
 
 enum VisitorAnimationPhase {
   offstage,
