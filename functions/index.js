@@ -14,7 +14,7 @@ const RESEND_COOLDOWN_MS = 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
 // One JSON secret keeps the SMTP credentials and the verification-code pepper
-// out of source control. See EMAIL_VERIFICATION_SETUP.md for the expected shape.
+// out of source control. See ../docs/EMAIL_VERIFICATION_SETUP.md for the expected shape.
 const emailConfig = defineJsonSecret('GAKUJI_EMAIL_CONFIG');
 
 function requireSignedIn(request) {

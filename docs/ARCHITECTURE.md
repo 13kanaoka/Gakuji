@@ -6,7 +6,7 @@ change constantly and would make this doc wrong within a week; roles change
 rarely. When you add a new file or change what a file is fundamentally *for*,
 update this doc.
 
-## The shape of the app, in one paragraph
+## The shape of the app
 
 Gakuji is a Flutter app for studying Japanese: three tabs (Home / Dictionary /
 Library) plus per-deck study flows (reading flashcards, kanji handwriting, and a
@@ -126,7 +126,7 @@ only when **two or more features** use it. Otherwise it lives inside the one
 feature that uses it. Features may import each other; `core/`, `domain/`, and
 `data/` must not import from `features/`.
 
-## The Term/Deck relationship — the one genuinely tricky part
+## The Term/Deck relationship
 
 The real dictionary (served via `DictionaryService`) is the canonical, global
 list of words — one `Term` per unique dictionary entry. These are never meant
@@ -171,3 +171,15 @@ extracted copy forever.
 All intra-package imports use `package:gakuji/...` (enforced by the
 `always_use_package_imports` lint), never relative paths — so moving a file only
 changes that file's own import line.
+
+## Subsystem docs
+
+Deeper notes on individual subsystems live in [`docs/`](docs/):
+
+- `LOCAL_FIRST_DATA_ARCHITECTURE.md` — how the on-device SQLite / Firestore sync
+  split works (the `data/sync/` layer)
+- `EMAIL_VERIFICATION_SETUP.md` / `VERIFICATION_MODE_NOTE.md` — the email
+  verification Cloud Function and why the six-digit-code path is kept dormant
+- `PADDLE_OCR_ANDROID_SETUP.md` — the experimental PaddleOCR Android backend for
+  Camera Mode (`packages/gakuji_paddle_ocr`)
+- `LOCAL_FIRST_TEST_CHECKLIST.md` — manual QA pass for the local-first data layer
