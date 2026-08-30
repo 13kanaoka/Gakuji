@@ -263,5 +263,8 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# `flutter screenshot` drops these in the repo root
+/flutter_*.png
+
 # Dictionary database is distributed via GitHub releases, not committed
 assets/dictionary/dictionary.db

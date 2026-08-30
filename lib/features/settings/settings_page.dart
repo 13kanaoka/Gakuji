@@ -20,7 +20,8 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  static const String blueCardTextPreferenceKey = 'blue_card_text_enabled';
+  static const String blueCardTextPreferenceKey =
+      GakujiLocalPreferences.blueCardTextPreferenceKey;
   static const String _profileIconPreferenceKey = 'profile_icon_index';
   static const int reviewLimitStep = 5;
 
@@ -64,6 +65,14 @@ class _SettingsPageState extends State<SettingsPage> {
     savedThemeMode = appThemeController.themeMode;
     selectedTextSize = appThemeController.textSize;
     savedTextSize = appThemeController.textSize;
+
+    final cachedBlueCardText =
+        GakujiLocalPreferences.peekBool(blueCardTextPreferenceKey);
+    if (cachedBlueCardText != null) {
+      selectedBlueCardText = cachedBlueCardText;
+      savedBlueCardText = cachedBlueCardText;
+    }
+
     _accountUsername = _isGuest
         ? null
         : GakujiUsernameService.cachedCurrentProfile?.username;
@@ -436,9 +445,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Text(
                 _accountCardLabel,
                 textScaler: TextScaler.noScaling,
-                style: GakujiText.actionLabel.copyWith(
-                  color: context.gakujiColors.darkGray,
-                ),
+                style: _settingsSubheaderStyle(),
               ),
             ),
             Icon(
@@ -474,13 +481,19 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  TextStyle _settingsSubheaderStyle() {
+    final baseStyle = GakujiText.actionLabel;
+    return baseStyle.copyWith(
+      fontSize: (baseStyle.fontSize ?? 16) + 2,
+      color: context.gakujiColors.darkGray,
+    );
+  }
+
   Widget _sectionTitle(String title) {
     return Text(
       title,
       textScaler: TextScaler.noScaling,
-      style: GakujiText.sectionTitle.copyWith(
-        color: context.gakujiColors.darkGray,
-      ),
+      style: _settingsSubheaderStyle(),
     );
   }
 
@@ -580,7 +593,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   Text(
                     _fontSizeLabel(size),
                     textScaler: TextScaler.noScaling,
-                    style: GakujiText.deckMeta.copyWith(
+                    style: GakujiText.actionLabel.copyWith(
                       color: disabled
                           ? context.gakujiColors.softGray
                           : context.gakujiColors.mediumGray,
@@ -650,7 +663,7 @@ class _SettingsPageState extends State<SettingsPage> {
               Text(
                 '$value',
                 textScaler: TextScaler.noScaling,
-                style: GakujiText.deckMeta.copyWith(
+                style: GakujiText.actionLabel.copyWith(
                   color: context.gakujiColors.mediumGray,
                 ),
               ),

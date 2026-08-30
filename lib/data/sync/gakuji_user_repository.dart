@@ -2148,6 +2148,31 @@ class GakujiUserRepository {
     });
   }
 
+  static Future<List<ReadingCardEditData>> loadReadingCardEditsForDeck(
+    String deckId,
+  ) async {
+    final database = await GakujiUserDatabase.database;
+    final rows = await database.query(
+      'reading_card_edits',
+      columns: ['edit_json'],
+      where: 'deck_id = ?',
+      whereArgs: [deckId],
+      orderBy: 'updated_at ASC',
+    );
+
+    final edits = <ReadingCardEditData>[];
+    for (final row in rows) {
+      final raw = row['edit_json']?.toString();
+      if (raw == null || raw.isEmpty) continue;
+      try {
+        edits.add(ReadingCardEditData.fromJsonString(raw));
+      } catch (_) {
+        // Skip a corrupted edit rather than blocking the deck.
+      }
+    }
+    return edits;
+  }
+
   static Future<List<ReadingCardEditData>> loadReadingCardEdits() async {
     final database = await GakujiUserDatabase.database;
     final rows = await database.query(

@@ -13,26 +13,75 @@ import 'package:gakuji/data/sync/gakuji_user_repository.dart';
 /// so a screen that closes/reopens before SQLite finishes cannot momentarily
 /// fall back to an older/default value.
 class GakujiLocalPreferences {
+  static const String blueCardTextPreferenceKey = 'blue_card_text_enabled';
+
+  static final Map<String, String?> _cachedValues = <String, String?>{};
   static final Map<String, String> _pendingValues = <String, String>{};
   static final Map<String, Future<void>> _writeChains =
       <String, Future<void>>{};
+
+  static bool hasCached(String key) => _cachedValues.containsKey(key);
+
+  static void resetMemoryCache() {
+    _cachedValues.clear();
+  }
+
+  static bool? peekBool(String key) {
+    final pending = _pendingValues[key];
+    if (pending != null) return _parseBool(pending);
+
+    if (!_cachedValues.containsKey(key)) return null;
+    final cached = _cachedValues[key];
+    return cached == null ? null : _parseBool(cached);
+  }
+
+  static int? peekInt(String key) {
+    final pending = _pendingValues[key];
+    if (pending != null) return int.tryParse(pending);
+
+    if (!_cachedValues.containsKey(key)) return null;
+    final cached = _cachedValues[key];
+    return cached == null ? null : int.tryParse(cached);
+  }
 
   static Future<bool?> loadBool(String key) async {
     final pending = _pendingValues[key];
     if (pending != null) return _parseBool(pending);
 
+    if (_cachedValues.containsKey(key)) {
+      final cached = _cachedValues[key];
+      return cached == null ? null : _parseBool(cached);
+    }
+
     final stored = await GakujiUserRepository.loadPreference(key);
-    if (stored != null) return _parseBool(stored);
+    if (stored != null) {
+      _cachedValues[key] = stored;
+      return _parseBool(stored);
+    }
 
     final legacy = await SharedPreferences.getInstance();
-    if (!legacy.containsKey(key)) return null;
+    if (!legacy.containsKey(key)) {
+      _cachedValues[key] = null;
+      return null;
+    }
 
     final value = legacy.getBool(key);
-    if (value == null) return null;
+    if (value == null) {
+      _cachedValues[key] = null;
+      return null;
+    }
 
     await _saveValue(key, value.toString());
     await legacy.remove(key);
     return value;
+  }
+
+  static Future<bool?> refreshBool(String key) async {
+    final pending = _pendingValues[key];
+    if (pending != null) return _parseBool(pending);
+
+    _cachedValues.remove(key);
+    return loadBool(key);
   }
 
   static Future<void> saveBool(String key, bool value) {
@@ -43,14 +92,28 @@ class GakujiLocalPreferences {
     final pending = _pendingValues[key];
     if (pending != null) return int.tryParse(pending);
 
+    if (_cachedValues.containsKey(key)) {
+      final cached = _cachedValues[key];
+      return cached == null ? null : int.tryParse(cached);
+    }
+
     final stored = await GakujiUserRepository.loadPreference(key);
-    if (stored != null) return int.tryParse(stored);
+    if (stored != null) {
+      _cachedValues[key] = stored;
+      return int.tryParse(stored);
+    }
 
     final legacy = await SharedPreferences.getInstance();
-    if (!legacy.containsKey(key)) return null;
+    if (!legacy.containsKey(key)) {
+      _cachedValues[key] = null;
+      return null;
+    }
 
     final value = legacy.getInt(key);
-    if (value == null) return null;
+    if (value == null) {
+      _cachedValues[key] = null;
+      return null;
+    }
 
     await _saveValue(key, value.toString());
     await legacy.remove(key);
@@ -65,6 +128,7 @@ class GakujiLocalPreferences {
     // This assignment happens synchronously, before the first await in the
     // queued write. Any immediate read therefore sees the user's newest choice.
     _pendingValues[key] = value;
+    _cachedValues[key] = value;
 
     final previous = _writeChains[key] ?? Future<void>.value();
     final next = () async {

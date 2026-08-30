@@ -276,7 +276,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
                       Text(
                         'Choose a dictionary entry',
                         textScaler: TextScaler.noScaling,
-                        style: GakujiText.medium.copyWith(
+                        style: GakujiText.sectionTitle.copyWith(
                           color: GakujiColors.darkGray,
                         ),
                       ),
@@ -286,8 +286,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         textScaler: TextScaler.noScaling,
-                        style: TextStyle(
-                          fontSize: 14,
+                        style: GakujiText.body.copyWith(
                           height: 1.35,
                           fontWeight: FontWeight.w500,
                           color: GakujiColors.mediumGray,
@@ -642,9 +641,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
                       '${_deckTypeLabel(existingDeck.type)} deck • '
                       '${existingDeck.terms.length} existing terms',
                       textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
+                      style: GakujiText.deckMeta.copyWith(
                         color: GakujiColors.mediumGray,
                       ),
                     ),
@@ -669,7 +666,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
           Text(
             'Matching dictionary entries',
             textScaler: TextScaler.noScaling,
-            style: GakujiText.small.copyWith(
+            style: GakujiText.actionLabel.copyWith(
               color: GakujiColors.darkGray,
             ),
           ),
@@ -677,9 +674,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
           Text(
             '$matchedProgress of $totalMatchableRows rows',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+            style: GakujiText.deckMeta.copyWith(
               color: GakujiColors.mediumGray,
             ),
           ),
@@ -780,8 +775,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
           Text(
             '$value',
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 20,
+            style: GakujiText.sectionTitle.copyWith(
               fontWeight: FontWeight.w800,
               color: GakujiColors.darkGray,
             ),
@@ -791,8 +785,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             label,
             textAlign: TextAlign.center,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 11.5,
+            style: GakujiText.deckMeta.copyWith(
               fontWeight: FontWeight.w700,
               color: GakujiColors.mediumGray,
             ),
@@ -859,8 +852,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontSize: 12.5,
+            style: GakujiText.deckMeta.copyWith(
               fontWeight: FontWeight.w700,
               color: selected ? Colors.white : GakujiColors.mediumGray,
             ),
@@ -905,8 +897,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
         style: TextButton.styleFrom(
           foregroundColor: GakujiColors.reading,
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          textStyle: const TextStyle(
-            fontSize: 12.5,
+          textStyle: GakujiText.deckMeta.copyWith(
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -954,10 +945,8 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 11.5,
+              style: GakujiText.deckMeta.copyWith(
                 height: 1.3,
-                fontWeight: FontWeight.w600,
                 color: statusColor,
               ),
             ),
@@ -979,7 +968,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
           Text(
             'No rows need attention',
             textScaler: TextScaler.noScaling,
-            style: GakujiText.small.copyWith(
+            style: GakujiText.actionLabel.copyWith(
               color: GakujiColors.darkGray,
             ),
           ),
@@ -1023,7 +1012,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
                           ? 'Matching Terms...'
                           : 'Import $readyCount Terms',
                       textScaler: TextScaler.noScaling,
-                      style: GakujiText.small.copyWith(
+                      style: GakujiText.actionLabel.copyWith(
                         color: canImport
                             ? Colors.white
                             : GakujiColors.mediumGray,
@@ -1058,16 +1047,14 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             importError = null;
           });
         },
-        style: TextStyle(
-          fontSize: 16,
+        style: GakujiText.actionLabel.copyWith(
           fontWeight: FontWeight.w600,
           color: GakujiColors.darkGray,
         ),
         decoration: InputDecoration(
           border: InputBorder.none,
           hintText: 'Enter deck name',
-          hintStyle: TextStyle(
-            fontSize: 16,
+          hintStyle: GakujiText.actionLabel.copyWith(
             fontWeight: FontWeight.w500,
             color: GakujiColors.mediumGray,
           ),
@@ -1103,8 +1090,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             Icons.keyboard_arrow_down_rounded,
             color: GakujiColors.mediumGray,
           ),
-          style: TextStyle(
-            fontSize: 15.5,
+          style: GakujiText.actionLabel.copyWith(
             fontWeight: FontWeight.w600,
             color: GakujiColors.darkGray,
           ),
@@ -1131,9 +1117,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             child: Text(
               label,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
+              style: GakujiText.actionLabel.copyWith(
                 color: GakujiColors.reading,
               ),
             ),
@@ -1166,8 +1150,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
             child: Text(
               message,
               textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 13.5,
+              style: GakujiText.body.copyWith(
                 height: 1.35,
                 fontWeight: FontWeight.w600,
                 color: GakujiColors.darkGray,
@@ -1203,7 +1186,8 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
     return Text(
       label,
       textScaler: TextScaler.noScaling,
-      style: GakujiText.small.copyWith(
+      style: GakujiText.actionLabel.copyWith(
+        fontSize: (GakujiText.actionLabel.fontSize ?? 16) + 2,
         color: GakujiColors.darkGray,
       ),
     );
@@ -1213,9 +1197,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
     return Text(
       label,
       textScaler: TextScaler.noScaling,
-      style: TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w700,
+      style: GakujiText.actionLabel.copyWith(
         color: GakujiColors.darkGray,
       ),
     );

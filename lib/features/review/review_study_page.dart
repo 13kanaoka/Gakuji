@@ -183,6 +183,11 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
   void initState() {
     super.initState();
 
+    blueCardTextEnabled = GakujiLocalPreferences.peekBool(
+          _blueCardTextPreferenceKey,
+        ) ??
+        false;
+
     initialSessionCount = widget.reviewCards.length;
     showFurigana = widget.initialShowFurigana;
     showWritingGrid = widget.initialShowWritingGrid;

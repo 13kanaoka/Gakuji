@@ -483,6 +483,11 @@ class _WritingStudyPageState extends State<WritingStudyPage>
   void initState() {
     super.initState();
 
+    blueCardTextEnabled = GakujiLocalPreferences.peekBool(
+          _blueCardTextPreferenceKey,
+        ) ??
+        false;
+
     isShuffled = widget.initialIsShuffled;
 
     controller = WritingSessionController(
@@ -766,13 +771,19 @@ class _WritingStudyPageState extends State<WritingStudyPage>
               iconColor: isShuffled
                   ? GakujiColors.darkGray
                   : GakujiColors.mediumGray,
-              onTap: toggleShuffle,
+              onTap: () {
+                Navigator.of(context).pop();
+                toggleShuffle();
+              },
             ),
             GakujiOptionsSheetItem(
               icon: Icons.refresh_rounded,
               label: 'Reset Deck',
               iconColor: GakujiColors.mediumGray,
-              onTap: restartDeck,
+              onTap: () {
+                Navigator.of(context).pop();
+                restartDeck();
+              },
             ),
           ],
         ),
@@ -1465,18 +1476,24 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                             SizedBox(height: legendGap),
                             _completionLegend(),
                             const Spacer(),
-                            _completeActionButton(
-                              label: 'Review Incorrect Answers',
-                              color: GakujiColors.deckBlue,
-                              height: buttonHeight,
-                              onTap: startIncorrectReview,
-                            ),
-                            SizedBox(height: buttonGap),
+                            if (controller.incorrectReviewTerms.isNotEmpty) ...[
+                              _completeActionButton(
+                                label: 'Review Incorrect Answers',
+                                color: GakujiColors.deckBlue,
+                                height: buttonHeight,
+                                onTap: startIncorrectReview,
+                              ),
+                              SizedBox(height: buttonGap),
+                            ],
                             _completeActionButton(
                               label: 'Restart Deck',
-                              color: GakujiColors.whiteCard,
-                              textColor: GakujiColors.mediumGray,
-                              outlined: true,
+                              color: controller.incorrectReviewTerms.isEmpty
+                                  ? GakujiColors.deckBlue
+                                  : GakujiColors.whiteCard,
+                              textColor: controller.incorrectReviewTerms.isEmpty
+                                  ? Colors.white
+                                  : GakujiColors.mediumGray,
+                              outlined: controller.incorrectReviewTerms.isNotEmpty,
                               height: buttonHeight,
                               onTap: restartDeck,
                             ),
@@ -1594,7 +1611,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
                 child: Text(
                   label,
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.small.copyWith(
+                  style: GakujiText.actionLabel.copyWith(
                     color: textColor,
                   ),
                 ),
@@ -1631,7 +1648,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
               Text(
                 'Return to Last Card',
                 textScaler: TextScaler.noScaling,
-                style: GakujiText.xSmall.copyWith(
+                style: GakujiText.body.copyWith(
                   color: GakujiColors.mediumGray,
                 ),
               ),
