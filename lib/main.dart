@@ -13,6 +13,7 @@ import 'screens/main_shell.dart';
 import 'screens/username_onboarding_gate.dart';
 import 'services/app_theme_controller.dart';
 import 'services/dictionary_service.dart';
+import 'services/gakuji_local_preferences.dart';
 import 'services/gakuji_user_data_store.dart';
 import 'services/writing_recognition_service.dart';
 import 'widgets/gakuji_styles.dart';
@@ -221,6 +222,11 @@ class _SignedInAppState extends State<_SignedInApp> with WidgetsBindingObserver 
   }
 
   Future<void> _loadUserData() async {
+    // The preference cache is process-wide, while Gakuji data is user-scoped.
+    // Clear cached values whenever a signed-in workspace is loaded so one
+    // account can never inherit another account's appearance preference.
+    GakujiLocalPreferences.resetMemoryCache();
+
     await GakujiUserDataStore.load();
 
     if (!mounted) return;
@@ -256,6 +262,14 @@ class _SignedInAppState extends State<_SignedInApp> with WidgetsBindingObserver 
       if (!mounted) return;
     }
 
+    // Warm app-wide appearance preferences before MainShell is shown. This
+    // makes the saved Blue Card Text choice available synchronously to every
+    // study/card screen from its very first frame.
+    await GakujiLocalPreferences.loadBool(
+      GakujiLocalPreferences.blueCardTextPreferenceKey,
+    );
+    if (!mounted) return;
+
     _loadingProgressTimer?.cancel();
     setState(() {
       _loadingProgress = 1.0;
@@ -269,7 +283,15 @@ class _SignedInAppState extends State<_SignedInApp> with WidgetsBindingObserver 
 
   Future<void> _syncAfterLaunch() async {
     final changed = await GakujiUserDataStore.syncAfterLaunch();
-    if (!mounted || !changed) return;
+    if (!changed) return;
+
+    // A cloud merge can update user preferences underneath the in-memory
+    // cache. Refresh the app-wide appearance value before rebuilding.
+    await GakujiLocalPreferences.refreshBool(
+      GakujiLocalPreferences.blueCardTextPreferenceKey,
+    );
+
+    if (!mounted) return;
     setState(() {});
   }
 

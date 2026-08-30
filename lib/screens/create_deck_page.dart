@@ -165,6 +165,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: GakujiColors.warmBackground,
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         child: Column(
           children: [
@@ -246,7 +247,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
     return Text(
       label,
       textScaler: TextScaler.noScaling,
-      style: GakujiText.small.copyWith(
+      style: GakujiText.actionLabel.copyWith(
         color: GakujiColors.darkGray,
       ),
     );
@@ -278,14 +279,14 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
           });
         },
         onSubmitted: (_) => createDeck(),
-        style: GakujiText.small.copyWith(
+        style: GakujiText.actionLabel.copyWith(
           color: GakujiColors.darkGray,
         ),
         cursorColor: GakujiColors.darkGray,
         decoration: InputDecoration(
           border: InputBorder.none,
           hintText: 'Enter deck name',
-          hintStyle: GakujiText.small.copyWith(
+          hintStyle: GakujiText.actionLabel.copyWith(
             color: GakujiColors.mediumGray,
           ),
         ),
@@ -316,7 +317,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
             Icons.keyboard_arrow_down_rounded,
             color: GakujiColors.darkGray,
           ),
-          style: GakujiText.small.copyWith(
+          style: GakujiText.actionLabel.copyWith(
             color: GakujiColors.darkGray,
           ),
           items: DeckType.values.map((type) {
@@ -399,11 +400,10 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
               });
             }
 
-            return SafeArea(
-              top: false,
-              bottom: true,
-              minimum: const EdgeInsets.only(bottom: 12),
-              child: AnimatedContainer(
+            final bottomSafePadding =
+                MediaQuery.viewPaddingOf(sheetContext).bottom;
+
+            return AnimatedContainer(
                 duration: isSheetDismissDragging
                     ? Duration.zero
                     : const Duration(milliseconds: 180),
@@ -413,15 +413,22 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                   sheetDismissDragOffset,
                   0,
                 ),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.88,
-                  ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.88,
+                ),
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    24,
+                    18,
+                    24,
+                    24 + bottomSafePadding,
+                  ),
                   decoration: BoxDecoration(
                     color: GakujiColors.warmCard,
-                    borderRadius: BorderRadius.circular(26),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(26),
+                    ),
                     border: Border.all(
                       color: GakujiColors.warmDivider,
                       width: 1.2,
@@ -460,7 +467,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                                 child: Text(
                                   'Choose Deck Color',
                                   textScaler: TextScaler.noScaling,
-                                  style: GakujiText.medium.copyWith(
+                                  style: GakujiText.sectionTitle.copyWith(
                                     color: GakujiColors.darkGray,
                                   ),
                                 ),
@@ -497,7 +504,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                         Text(
                           'Brightness',
                           textScaler: TextScaler.noScaling,
-                          style: GakujiText.xSmall.copyWith(
+                          style: GakujiText.deckMeta.copyWith(
                             color: GakujiColors.darkGray,
                           ),
                         ),
@@ -533,7 +540,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                         child: Text(
                           'Recent Colors',
                           textScaler: TextScaler.noScaling,
-                          style: GakujiText.xSmall.copyWith(
+                          style: GakujiText.deckMeta.copyWith(
                             color: GakujiColors.darkGray,
                           ),
                         ),
@@ -602,7 +609,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                               child: Text(
                                 'Cancel',
                                 textScaler: TextScaler.noScaling,
-                                style: GakujiText.xSmall.copyWith(
+                                style: GakujiText.deckMeta.copyWith(
                                   color: GakujiColors.darkGray,
                                 ),
                               ),
@@ -628,7 +635,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                               child: Text(
                                 'Use Color',
                                 textScaler: TextScaler.noScaling,
-                                style: GakujiText.xSmall.copyWith(
+                                style: GakujiText.deckMeta.copyWith(
                                   color: readableTextColor(previewColor),
                                 ),
                               ),
@@ -641,7 +648,6 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                     ),
                   ),
                 ),
-              ),
               ),
             );
           },
@@ -687,7 +693,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                   child: Text(
                     'Choose Color',
                     textScaler: TextScaler.noScaling,
-                    style: GakujiText.small.copyWith(
+                    style: GakujiText.actionLabel.copyWith(
                       color: GakujiColors.darkGray,
                     ),
                   ),
@@ -744,7 +750,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                 Text(
                   'Import Terms From File',
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.small.copyWith(
+                  style: GakujiText.actionLabel.copyWith(
                     color: GakujiColors.reading,
                   ),
                 ),
@@ -777,7 +783,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                 child: Text(
                   'Create New Deck',
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.small.copyWith(
+                  style: GakujiText.actionLabel.copyWith(
                     color: readableTextColor(color ?? selectedDeckColor),
                   ),
                 ),

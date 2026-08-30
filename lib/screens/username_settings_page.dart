@@ -323,7 +323,8 @@ class _UsernameSettingsPageState extends State<UsernameSettingsPage> {
                 Text(
                   widget.requiredSetup ? 'Choose your username' : 'Username',
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.sectionTitle.copyWith(
+                  style: GakujiText.actionLabel.copyWith(
+                    fontSize: (GakujiText.actionLabel.fontSize ?? 16) + 2,
                     color: context.gakujiColors.darkGray,
                   ),
                 ),

@@ -426,10 +426,6 @@ class KanjiFusionRoundGenerator {
 
     final entries = deckKanji.toList()..shuffle(rng);
 
-    entries.sort((a, b) {
-      return componentCountFor(b).compareTo(componentCountFor(a));
-    });
-
     // Distractors come from the complete supported component library rather
     // than only the current deck. A deck with one eligible kanji can therefore
     // still receive the full Normal-mode set of ten choices.

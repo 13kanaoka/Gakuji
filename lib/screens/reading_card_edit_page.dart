@@ -106,6 +106,11 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
     super.initState();
 
     sourceTerm = widget.term;
+    blueCardTextEnabled = GakujiLocalPreferences.peekBool(
+          _blueCardTextPreferenceKey,
+        ) ??
+        false;
+
     selectedGlosses = <_SenseGlossOption>[];
     cardNote = widget.term.note ?? '';
     selectedExamples = <DictionaryExample>[];

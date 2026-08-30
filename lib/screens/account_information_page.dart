@@ -190,7 +190,9 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
                         Text(
                           'Sign-in Details',
                           textScaler: TextScaler.noScaling,
-                          style: GakujiText.sectionTitle.copyWith(
+                          style: GakujiText.actionLabel.copyWith(
+                            fontSize:
+                                (GakujiText.actionLabel.fontSize ?? 16) + 2,
                             color: context.gakujiColors.darkGray,
                           ),
                         ),
@@ -222,7 +224,9 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
                         Text(
                           'Sign-in Methods',
                           textScaler: TextScaler.noScaling,
-                          style: GakujiText.sectionTitle.copyWith(
+                          style: GakujiText.actionLabel.copyWith(
+                            fontSize:
+                                (GakujiText.actionLabel.fontSize ?? 16) + 2,
                             color: context.gakujiColors.darkGray,
                           ),
                         ),
@@ -308,7 +312,7 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
                     textScaler: TextScaler.noScaling,
-                    style: GakujiText.deckMeta.copyWith(
+                    style: GakujiText.actionLabel.copyWith(
                       color: context.gakujiColors.mediumGray,
                     ),
                   ),
@@ -751,7 +755,8 @@ class _SecurityFormScaffold extends StatelessWidget {
                 Text(
                   heading,
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.sectionTitle.copyWith(
+                  style: GakujiText.actionLabel.copyWith(
+                    fontSize: (GakujiText.actionLabel.fontSize ?? 16) + 2,
                     color: context.gakujiColors.darkGray,
                   ),
                 ),

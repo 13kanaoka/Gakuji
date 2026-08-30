@@ -136,7 +136,7 @@ class GakujiOptionsSheet extends StatelessWidget {
                             title,
                             textAlign: TextAlign.center,
                             textScaler: TextScaler.noScaling,
-                            style: GakujiText.large.copyWith(
+                            style: GakujiText.sectionTitle.copyWith(
                               color: GakujiColors.darkGray,
                             ),
                           ),

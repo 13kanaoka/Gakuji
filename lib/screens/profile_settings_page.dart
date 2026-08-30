@@ -413,7 +413,8 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                     child: Text(
                       'Account Details',
                       textScaler: TextScaler.noScaling,
-                      style: GakujiText.sectionTitle.copyWith(
+                      style: GakujiText.actionLabel.copyWith(
+                        fontSize: (GakujiText.actionLabel.fontSize ?? 16) + 2,
                         color: context.gakujiColors.darkGray,
                       ),
                     ),
@@ -570,7 +571,7 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
                   Text(
                     trailingText,
                     textScaler: TextScaler.noScaling,
-                    style: GakujiText.deckMeta.copyWith(
+                    style: GakujiText.actionLabel.copyWith(
                       color: context.gakujiColors.mediumGray,
                     ),
                   ),

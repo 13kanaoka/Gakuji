@@ -224,6 +224,11 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   void initState() {
     super.initState();
 
+    blueCardTextEnabled = GakujiLocalPreferences.peekBool(
+          _blueCardTextPreferenceKey,
+        ) ??
+        false;
+
     isShuffled = widget.initialIsShuffled;
     showFurigana = widget.initialShowFurigana;
     termFirst = widget.initialTermFirst;
@@ -977,13 +982,19 @@ class _HybridStudyPageState extends State<HybridStudyPage>
               iconColor: isShuffled
                   ? GakujiColors.darkGray
                   : GakujiColors.mediumGray,
-              onTap: _toggleShuffle,
+              onTap: () {
+                Navigator.of(context).pop();
+                _toggleShuffle();
+              },
             ),
             GakujiOptionsSheetItem(
               icon: Icons.refresh_rounded,
               label: 'Reset Deck',
               iconColor: GakujiColors.mediumGray,
-              onTap: _restart,
+              onTap: () {
+                Navigator.of(context).pop();
+                _restart();
+              },
             ),
           ],
         ),
@@ -2367,18 +2378,24 @@ class _HybridStudyPageState extends State<HybridStudyPage>
                         SizedBox(height: legendGap),
                         _completionLegend(),
                         const Spacer(),
-                        _completeActionButton(
-                          label: 'Review Incorrect Answers',
-                          color: GakujiColors.deckBlue,
-                          height: buttonHeight,
-                          onTap: _startIncorrectReview,
-                        ),
-                        SizedBox(height: buttonGap),
+                        if (incorrectReviewItems.isNotEmpty) ...[
+                          _completeActionButton(
+                            label: 'Review Incorrect Answers',
+                            color: GakujiColors.deckBlue,
+                            height: buttonHeight,
+                            onTap: _startIncorrectReview,
+                          ),
+                          SizedBox(height: buttonGap),
+                        ],
                         _completeActionButton(
                           label: 'Restart Deck',
-                          color: GakujiColors.whiteCard,
-                          textColor: GakujiColors.mediumGray,
-                          outlined: true,
+                          color: incorrectReviewItems.isEmpty
+                              ? GakujiColors.deckBlue
+                              : GakujiColors.whiteCard,
+                          textColor: incorrectReviewItems.isEmpty
+                              ? Colors.white
+                              : GakujiColors.mediumGray,
+                          outlined: incorrectReviewItems.isNotEmpty,
                           height: buttonHeight,
                           onTap: _restart,
                         ),
@@ -2494,7 +2511,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
                 child: Text(
                   label,
                   textScaler: TextScaler.noScaling,
-                  style: GakujiText.small.copyWith(
+                  style: GakujiText.actionLabel.copyWith(
                     color: textColor,
                   ),
                 ),
@@ -2531,7 +2548,7 @@ class _HybridStudyPageState extends State<HybridStudyPage>
               Text(
                 'Return to Last Card',
                 textScaler: TextScaler.noScaling,
-                style: GakujiText.xSmall.copyWith(
+                style: GakujiText.body.copyWith(
                   color: GakujiColors.mediumGray,
                 ),
               ),
