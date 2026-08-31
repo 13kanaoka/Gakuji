@@ -19,6 +19,7 @@ import 'package:gakuji/features/decks/widgets/gakuji_deck_save_sheet.dart';
 import 'package:gakuji/core/theme/gakuji_styles.dart';
 import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
 import 'package:gakuji/features/dictionary/dictionary_detail_page.dart';
+import 'package:gakuji/features/dictionary/kanji_components_page.dart';
 
 class KanjiDictionaryDetailPage extends StatefulWidget {
   final Term kanjiEntry;
@@ -61,6 +62,7 @@ class _KanjiDictionaryDetailPageState
   bool isEditingNote = false;
   bool compoundsLoaded = false;
   bool strokeDataLoaded = false;
+  bool componentTreeLoaded = false;
   bool showTopBarTitle = false;
   bool showSavePopup = false;
 
@@ -70,8 +72,10 @@ class _KanjiDictionaryDetailPageState
   IconData savePopupIcon = Icons.check_circle;
 
   List<Term> compoundTerms = const [];
+  List<KanjiComponentNode> componentTree = const [];
   KanjiStrokeData? strokeData;
   int strokeLoadRequestId = 0;
+  int componentLoadRequestId = 0;
 
   Term get entry => widget.kanjiEntry;
 
@@ -118,6 +122,7 @@ class _KanjiDictionaryDetailPageState
     unawaited(_loadSavedNote());
     unawaited(_loadDirectSaveDeck());
     unawaited(_loadStrokeData());
+    unawaited(_loadComponentTree());
     unawaited(_loadCompounds());
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -138,14 +143,17 @@ class _KanjiDictionaryDetailPageState
     isEditingNote = false;
     compoundsLoaded = false;
     strokeDataLoaded = false;
+    componentTreeLoaded = false;
     showTopBarTitle = false;
     noteText = '';
     compoundTerms = const [];
+    componentTree = const [];
     strokeData = null;
     noteController.clear();
 
     unawaited(_loadSavedNote());
     unawaited(_loadStrokeData());
+    unawaited(_loadComponentTree());
     unawaited(_loadCompounds());
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -256,6 +264,70 @@ class _KanjiDictionaryDetailPageState
       strokeData = loadedStrokeData;
       strokeDataLoaded = true;
     });
+  }
+
+
+  Future<void> _loadComponentTree() async {
+    final requestId = ++componentLoadRequestId;
+    final character = _displayCharacter;
+
+    if (character.isEmpty) {
+      if (!mounted || requestId != componentLoadRequestId) return;
+
+      setState(() {
+        componentTree = const [];
+        componentTreeLoaded = true;
+      });
+      return;
+    }
+
+    final loadedTree =
+        await DictionaryService.getKanjiComponentTree(character);
+
+    if (!mounted || requestId != componentLoadRequestId) return;
+
+    setState(() {
+      componentTree = loadedTree;
+      componentTreeLoaded = true;
+    });
+  }
+
+  void _openComponentsPage() {
+    if (componentTree.isEmpty) return;
+
+    Navigator.of(context).push(
+      GakujiPageRoute(
+        builder: (_) => KanjiComponentsPage(
+          rootEntry: entry,
+          componentTree: componentTree,
+        ),
+      ),
+    );
+  }
+
+
+  void _openStrokeDetailSheet() {
+    final data = strokeData;
+
+    if (data == null || data.isEmpty) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: true,
+      enableDrag: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.56),
+      builder: (sheetContext) {
+        return FractionallySizedBox(
+          heightFactor: 0.80,
+          child: _KanjiStrokeDetailSheet(
+            character: _displayCharacter,
+            data: data,
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _loadCompounds() async {
@@ -601,34 +673,35 @@ class _KanjiDictionaryDetailPageState
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              SizedBox(
-                key: kanjiTitleKey,
-                width: 90,
-                child: Text(
-                  _displayCharacter,
-                  textAlign: TextAlign.center,
-                  textScaler: TextScaler.noScaling,
-                  style: GakujiText.dictionaryKanjiDisplay.copyWith(
-                    color: darkText,
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _openStrokeDetailSheet,
+                child: SizedBox(
+                  key: kanjiTitleKey,
+                  width: 90,
+                  child: Text(
+                    _displayCharacter,
+                    textAlign: TextAlign.center,
+                    textScaler: TextScaler.noScaling,
+                    style: GakujiText.dictionaryKanjiDisplay.copyWith(
+                      fontSize: 65,
+                      color: darkText,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _strokeOrderPanel(),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _openStrokeDetailSheet,
+                  child: _strokeOrderPanel(),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 14),
-          if (meaning.isNotEmpty)
-            Text(
-              meaning,
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.dictionaryDetailBody.copyWith(
-                height: 1.24,
-                color: darkText,
-              ),
-            ),
+          if (meaning.isNotEmpty) _infoRow('Meaning', meaning),
         ],
       ),
     );
@@ -758,7 +831,9 @@ class _KanjiDictionaryDetailPageState
     for (var index = 0; index < safeCount; index++) {
       final stroke = data.strokes[index];
       final isNewestStroke = index == safeCount - 1;
-      final strokeColor = isNewestStroke ? '#5B84B8' : '#414247';
+      final strokeColor = isNewestStroke
+          ? '#5B84B8'
+          : (GakujiColors.isDarkMode ? '#F1EDE5' : '#414247');
 
       buffer
         ..write('<path stroke="$strokeColor" d="')
@@ -1021,13 +1096,14 @@ class _KanjiDictionaryDetailPageState
           : 'N${entry.jlptLevel}',
     );
     addInfo('Frequency', entry.frequency?.toString());
-    addInfo('Radical', entry.radical);
+    addInfo('Radical', DictionaryService.formatRadical(entry.radical));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionHeader('Info'),
-        if (rows.isEmpty)
+        if (rows.isEmpty &&
+            (!componentTreeLoaded || componentTree.isEmpty))
            Padding(
             padding: EdgeInsets.fromLTRB(22, 15, 22, 17),
             child: Text(
@@ -1042,11 +1118,13 @@ class _KanjiDictionaryDetailPageState
           Padding(
             padding: const EdgeInsets.fromLTRB(22, 9, 22, 12),
             child: Column(
-              children: rows
-                  .map(
-                    (row) => _infoRow(row.key, row.value),
-                  )
-                  .toList(),
+              children: [
+                ...rows.map(
+                  (row) => _infoRow(row.key, row.value),
+                ),
+                if (componentTreeLoaded && componentTree.isNotEmpty)
+                  _componentsInfoRow(),
+              ],
             ),
           ),
       ],
@@ -1060,7 +1138,7 @@ class _KanjiDictionaryDetailPageState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 92,
+            width: 98,
             child: Text(
               '$label:',
               textScaler: TextScaler.noScaling,
@@ -1082,6 +1160,55 @@ class _KanjiDictionaryDetailPageState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _componentsInfoRow() {
+    final componentLabel = componentTree
+        .map((node) => node.element.trim())
+        .where((value) => value.isNotEmpty)
+        .join('  ');
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _openComponentsPage,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 98,
+              child: Text(
+                'Components:',
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.dictionaryDetailBody.copyWith(
+                  height: 1.2,
+                  color: accentBlue,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                componentLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.dictionaryDetailBody.copyWith(
+                  height: 1.2,
+                  color: darkText,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 26,
+              color: softTextGray,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1128,6 +1255,16 @@ class _KanjiDictionaryDetailPageState
     required Term compound,
     required bool showDivider,
   }) {
+    final preferredWriting = compound.preferredSpelling.trim().isNotEmpty
+        ? compound.preferredSpelling.trim()
+        : compound.kanji.trim().isNotEmpty
+            ? compound.kanji.trim()
+            : compound.reading.trim();
+    final reading = compound.reading.trim();
+    final showReading = reading.isNotEmpty &&
+        reading != preferredWriting &&
+        RegExp(r'[\u4E00-\u9FFF]').hasMatch(preferredWriting);
+
     return Material(
       color: GakujiColors.warmBackground,
       child: InkWell(
@@ -1142,39 +1279,39 @@ class _KanjiDictionaryDetailPageState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Wrap(
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 8,
-                          runSpacing: 3,
-                          children: [
-                            Text(
-                              compound.kanji,
-                              textScaler: TextScaler.noScaling,
-                              style: GakujiText.dictionaryTerm.copyWith(
-                                color: darkText,
-                              ),
-                            ),
-                            if (compound.reading.trim().isNotEmpty &&
-                                compound.reading != compound.kanji)
-                              Text(
-                                compound.reading,
-                                textScaler: TextScaler.noScaling,
-                                style: GakujiText.dictionaryDetailBody.copyWith(
-                                  color: softTextGray,
-                                  fontWeight: FontWeight.w600,
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: preferredWriting,
+                                style: GakujiText.termRowTitle.copyWith(
+                                  height: 1,
+                                  color: darkText,
                                 ),
                               ),
-                          ],
+                              if (showReading) const TextSpan(text: '  '),
+                              if (showReading)
+                                TextSpan(
+                                  text: '【$reading】',
+                                  style: GakujiText.termRowReading.copyWith(
+                                    height: 1,
+                                    color: accentBlue,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textScaler: TextScaler.noScaling,
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 2),
                         Text(
                           compound.cardMeaning,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           textScaler: TextScaler.noScaling,
-                          style: GakujiText.dictionaryDetailBody.copyWith(
-                            height: 1.18,
-                            color: darkText,
+                          style: GakujiText.termRowMeaning.copyWith(
+                            color: softTextGray,
                           ),
                         ),
                       ],
@@ -1354,6 +1491,737 @@ class _KanjiDictionaryDetailPageState
     );
   }
 
+}
+
+
+class _KanjiStrokeDetailSheet extends StatefulWidget {
+  final String character;
+  final KanjiStrokeData data;
+
+  const _KanjiStrokeDetailSheet({
+    required this.character,
+    required this.data,
+  });
+
+  @override
+  State<_KanjiStrokeDetailSheet> createState() =>
+      _KanjiStrokeDetailSheetState();
+}
+
+class _KanjiStrokeDetailSheetState extends State<_KanjiStrokeDetailSheet>
+    with SingleTickerProviderStateMixin {
+  static const double _strokeTimelineUnits = 1.15;
+  static const int _strokeDrawMilliseconds = 820;
+  static const int _strokePauseMilliseconds = 120;
+  static const String _animationSpeedPreferenceKey =
+      'gakuji_kanji_stroke_animation_speed';
+
+  late final AnimationController _controller;
+  bool isPlaying = false;
+  double animationSpeed = 1.0;
+
+  int get _baseAnimationDurationMilliseconds {
+    final totalStrokes = widget.data.strokeCount;
+    final pauseCount = (totalStrokes - 1).clamp(0, totalStrokes).toInt();
+    return (totalStrokes * _strokeDrawMilliseconds) +
+        (pauseCount * _strokePauseMilliseconds);
+  }
+
+  Duration get _animationDuration {
+    final durationMilliseconds =
+        (_baseAnimationDurationMilliseconds / animationSpeed).round();
+    return Duration(
+      milliseconds: durationMilliseconds > 0 ? durationMilliseconds : 1,
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: _animationDuration,
+    );
+
+    unawaited(_loadAnimationSpeed());
+  }
+
+  Future<void> _loadAnimationSpeed() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedSpeed = prefs.getDouble(_animationSpeedPreferenceKey);
+
+    if (!mounted || savedSpeed == null || isPlaying) return;
+
+    final clampedSpeed = savedSpeed.clamp(0.5, 2.0).toDouble();
+
+    setState(() {
+      animationSpeed = clampedSpeed;
+      _controller.duration = _animationDuration;
+      _controller.value = 0;
+    });
+  }
+
+  void _setAnimationSpeed(double speed) {
+    if (isPlaying) return;
+
+    setState(() {
+      animationSpeed = speed;
+      _controller.duration = _animationDuration;
+      _controller.value = 0;
+    });
+  }
+
+  Future<void> _saveAnimationSpeed(double speed) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_animationSpeedPreferenceKey, speed);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _playAnimation() async {
+    if (isPlaying) return;
+
+    setState(() {
+      isPlaying = true;
+    });
+
+    await _controller.forward(from: 0);
+
+    if (!mounted) return;
+
+    setState(() {
+      isPlaying = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final bottomPadding = mediaQuery.padding.bottom > 0
+        ? mediaQuery.padding.bottom + 14.0
+        : 24.0;
+
+    return Material(
+      color: GakujiColors.warmBackground,
+      borderRadius: const BorderRadius.vertical(
+        top: Radius.circular(24),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, 9, 20, bottomPadding),
+        child: Column(
+          children: [
+            Center(
+              child: Container(
+                width: 47,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: GakujiColors.mediumGray.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final size = constraints.maxWidth.clamp(220.0, 286.0).toDouble();
+
+                return SizedBox(
+                  width: size,
+                  height: size,
+                  child: _KanjiStrokeAnimationCanvas(
+                    data: widget.data,
+                    controller: _controller,
+                    isPlaying: isPlaying,
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.speed_rounded,
+                        size: 21,
+                        color: GakujiColors.mediumGray,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: SliderTheme(
+                          data: SliderTheme.of(context).copyWith(
+                            trackHeight: 3,
+                            activeTrackColor: GakujiColors.reading,
+                            inactiveTrackColor: GakujiColors.mediumGray
+                                .withValues(alpha: 0.28),
+                            thumbColor: GakujiColors.reading,
+                            overlayColor:
+                                GakujiColors.reading.withValues(alpha: 0.10),
+                            thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 7,
+                              disabledThumbRadius: 7,
+                            ),
+                            overlayShape: const RoundSliderOverlayShape(
+                              overlayRadius: 15,
+                            ),
+                          ),
+                          child: Slider(
+                            value: animationSpeed,
+                            min: 0.5,
+                            max: 2.0,
+                            divisions: 6,
+                            onChanged: isPlaying ? null : _setAnimationSpeed,
+                            onChangeEnd: isPlaying
+                                ? null
+                                : (speed) =>
+                                    unawaited(_saveAnimationSpeed(speed)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 14),
+                SizedBox(
+                  width: 50,
+                  height: 50,
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _playAnimation,
+                      splashColor:
+                          GakujiColors.reading.withValues(alpha: 0.08),
+                      highlightColor:
+                          GakujiColors.reading.withValues(alpha: 0.04),
+                      child: Icon(
+                        Icons.play_arrow_rounded,
+                        size: 32,
+                        color: isPlaying
+                            ? GakujiColors.reading
+                            : GakujiColors.mediumGray,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: _largeStrokeOrderDiagram(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _largeStrokeOrderDiagram() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const columns = 4;
+        const spacing = 7.0;
+        final boxWidth =
+            (constraints.maxWidth - (spacing * (columns - 1))) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: List.generate(widget.data.strokes.length, (index) {
+            final visibleStrokeCount = index + 1;
+
+            return Container(
+              width: boxWidth,
+              height: boxWidth,
+              decoration: BoxDecoration(
+                color: GakujiColors.warmCard,
+                border: Border.all(
+                  color: GakujiColors.warmDivider,
+                  width: 1,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  const Positioned.fill(
+                    child: CustomPaint(
+                      painter: _StrokeGuidePainter(),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Padding(
+                      padding: const EdgeInsets.all(5),
+                      child: SvgPicture.string(
+                        _strokeFrameSvg(visibleStrokeCount),
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 4,
+                    left: 5,
+                    child: Text(
+                      '$visibleStrokeCount',
+                      textScaler: TextScaler.noScaling,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1,
+                        fontWeight: FontWeight.w700,
+                        color: GakujiColors.mediumGray,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+
+  String _strokeFrameSvg(int visibleStrokeCount) {
+    final safeCount = visibleStrokeCount
+        .clamp(0, widget.data.strokes.length)
+        .toInt();
+    final buffer = StringBuffer()
+      ..write(
+        '<svg xmlns="http://www.w3.org/2000/svg" '
+        'viewBox="${_escapeSvgAttribute(widget.data.viewBox)}">',
+      )
+      ..write(
+        '<g fill="none" stroke-linecap="round" '
+        'stroke-linejoin="round" stroke-width="3.4">',
+      );
+
+    for (var index = 0; index < safeCount; index++) {
+      final stroke = widget.data.strokes[index];
+      final isNewestStroke = index == safeCount - 1;
+      final strokeColor = isNewestStroke
+          ? '#5B84B8'
+          : (GakujiColors.isDarkMode ? '#F1EDE5' : '#414247');
+
+      buffer
+        ..write('<path stroke="$strokeColor" d="')
+        ..write(_escapeSvgAttribute(stroke.pathData))
+        ..write('"/>');
+    }
+
+    buffer.write('</g></svg>');
+    return buffer.toString();
+  }
+
+  String _escapeSvgAttribute(String value) {
+    return value
+        .replaceAll('&', '&amp;')
+        .replaceAll('"', '&quot;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+  }
+}
+
+class _KanjiStrokeAnimationCanvas extends StatelessWidget {
+  static const double _strokeTimelineUnits = 1.15;
+
+  final KanjiStrokeData data;
+  final AnimationController controller;
+  final bool isPlaying;
+
+  const _KanjiStrokeAnimationCanvas({
+    required this.data,
+    required this.controller,
+    required this.isPlaying,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: GakujiColors.warmCard,
+        border: Border.all(
+          color: GakujiColors.warmDivider,
+          width: 1,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Stack(
+        children: [
+          const Positioned.fill(
+            child: CustomPaint(
+              painter: _StrokeGuidePainter(),
+            ),
+          ),
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: AnimatedBuilder(
+                animation: controller,
+                builder: (context, child) {
+                  final totalStrokes = data.strokeCount;
+                  final totalTimeline = totalStrokes <= 1
+                      ? 1.0
+                      : ((totalStrokes - 1) * _strokeTimelineUnits) + 1.0;
+                  final localTimeline = isPlaying
+                      ? controller.value * totalTimeline
+                      : totalTimeline + 1.0;
+
+                  return CustomPaint(
+                    painter: _KanjiAnimatedStrokePainter(
+                      data: data,
+                      localTimeline: localTimeline,
+                      strokeTimelineUnits: _strokeTimelineUnits,
+                      isPlaying: isPlaying,
+                    ),
+                    child: const SizedBox.expand(),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KanjiAnimatedStrokePainter extends CustomPainter {
+  final KanjiStrokeData data;
+  final double localTimeline;
+  final double strokeTimelineUnits;
+  final bool isPlaying;
+
+  const _KanjiAnimatedStrokePainter({
+    required this.data,
+    required this.localTimeline,
+    required this.strokeTimelineUnits,
+    required this.isPlaying,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final viewBox = _parseViewBox(data.viewBox);
+    final scale = (size.width / viewBox.width) < (size.height / viewBox.height)
+        ? size.width / viewBox.width
+        : size.height / viewBox.height;
+    final drawWidth = viewBox.width * scale;
+    final drawHeight = viewBox.height * scale;
+    final offsetX = (size.width - drawWidth) / 2;
+    final offsetY = (size.height - drawHeight) / 2;
+
+    canvas.save();
+    canvas.translate(offsetX, offsetY);
+    canvas.scale(scale, scale);
+    canvas.translate(-viewBox.left, -viewBox.top);
+
+    final guidePaint = Paint()
+      ..color = GakujiColors.mediumGray.withValues(alpha: 0.22)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final completedPaint = Paint()
+      ..color = GakujiColors.darkGray
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.35
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final activePaint = Paint()
+      ..color = GakujiColors.reading
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.35
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    final activeDotPaint = Paint()
+      ..color = GakujiColors.reading
+      ..style = PaintingStyle.fill;
+
+    final parsedPaths = data.strokes
+        .map((stroke) => _KanjiSvgPathParser.parse(stroke.pathData))
+        .toList(growable: false);
+
+    if (isPlaying) {
+      for (final path in parsedPaths) {
+        canvas.drawPath(path, guidePaint);
+      }
+    }
+
+    Offset? activeDot;
+
+    for (var index = 0; index < parsedPaths.length; index++) {
+      final path = parsedPaths[index];
+      final strokeStart = index * strokeTimelineUnits;
+      final fraction =
+          (localTimeline - strokeStart).clamp(0.0, 1.0).toDouble();
+
+      if (fraction <= 0) continue;
+
+      if (fraction >= 1) {
+        canvas.drawPath(path, completedPaint);
+        continue;
+      }
+
+      final partial = _extractPartialPath(path, fraction);
+      canvas.drawPath(partial.path, activePaint);
+      activeDot = partial.endPoint;
+    }
+
+    if (activeDot != null) {
+      canvas.drawCircle(activeDot, 3.1, activeDotPaint);
+    }
+
+    canvas.restore();
+  }
+
+  _KanjiPartialPath _extractPartialPath(Path path, double fraction) {
+    final metrics = path.computeMetrics(forceClosed: false).toList();
+
+    if (metrics.isEmpty) {
+      return _KanjiPartialPath(path: Path(), endPoint: null);
+    }
+
+    final totalLength = metrics.fold<double>(
+      0,
+      (sum, metric) => sum + metric.length,
+    );
+    var remaining = totalLength * fraction;
+    final partial = Path();
+    Offset? endPoint;
+
+    for (final metric in metrics) {
+      if (remaining <= 0) break;
+
+      final take = remaining.clamp(0.0, metric.length).toDouble();
+      partial.addPath(metric.extractPath(0, take), Offset.zero);
+
+      if (take > 0) {
+        endPoint = metric.getTangentForOffset(take)?.position;
+      }
+
+      remaining -= take;
+    }
+
+    return _KanjiPartialPath(path: partial, endPoint: endPoint);
+  }
+
+  Rect _parseViewBox(String rawViewBox) {
+    final values = rawViewBox
+        .trim()
+        .split(RegExp(r'[ ,]+'))
+        .map(double.tryParse)
+        .whereType<double>()
+        .toList(growable: false);
+
+    if (values.length != 4 || values[2] <= 0 || values[3] <= 0) {
+      return const Rect.fromLTWH(0, 0, 109, 109);
+    }
+
+    return Rect.fromLTWH(values[0], values[1], values[2], values[3]);
+  }
+
+  @override
+  bool shouldRepaint(covariant _KanjiAnimatedStrokePainter oldDelegate) {
+    return oldDelegate.data != data ||
+        oldDelegate.localTimeline != localTimeline ||
+        oldDelegate.strokeTimelineUnits != strokeTimelineUnits ||
+        oldDelegate.isPlaying != isPlaying;
+  }
+}
+
+class _KanjiPartialPath {
+  final Path path;
+  final Offset? endPoint;
+
+  const _KanjiPartialPath({
+    required this.path,
+    required this.endPoint,
+  });
+}
+
+class _KanjiSvgPathParser {
+  static final RegExp _tokenPattern = RegExp(
+    r'[AaCcHhLlMmQqSsTtVvZz]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?',
+  );
+
+  static Path parse(String pathData) {
+    final tokens = _tokenPattern
+        .allMatches(pathData)
+        .map((match) => match.group(0)!)
+        .toList(growable: false);
+
+    final path = Path();
+    var index = 0;
+    var command = '';
+    var current = Offset.zero;
+    var subPathStart = Offset.zero;
+    Offset? lastCubicControl;
+    Offset? lastQuadraticControl;
+    String? previousCommand;
+
+    bool isCommand(String token) {
+      return token.length == 1 && RegExp(r'[A-Za-z]').hasMatch(token);
+    }
+
+    double nextNumber() {
+      if (index >= tokens.length || isCommand(tokens[index])) return 0;
+      return double.tryParse(tokens[index++]) ?? 0;
+    }
+
+    Offset point(double x, double y, bool relative) {
+      return relative ? current + Offset(x, y) : Offset(x, y);
+    }
+
+    while (index < tokens.length) {
+      if (isCommand(tokens[index])) {
+        command = tokens[index++];
+      } else if (command.isEmpty) {
+        index++;
+        continue;
+      }
+
+      final relative = command == command.toLowerCase();
+      final upper = command.toUpperCase();
+
+      switch (upper) {
+        case 'M':
+          if (index + 1 >= tokens.length) break;
+          final next = point(nextNumber(), nextNumber(), relative);
+          path.moveTo(next.dx, next.dy);
+          current = next;
+          subPathStart = next;
+          lastCubicControl = null;
+          lastQuadraticControl = null;
+          previousCommand = command;
+          command = relative ? 'l' : 'L';
+          break;
+        case 'L':
+          if (index + 1 >= tokens.length) break;
+          final next = point(nextNumber(), nextNumber(), relative);
+          path.lineTo(next.dx, next.dy);
+          current = next;
+          lastCubicControl = null;
+          lastQuadraticControl = null;
+          previousCommand = command;
+          break;
+        case 'H':
+          final x = nextNumber();
+          current = Offset(relative ? current.dx + x : x, current.dy);
+          path.lineTo(current.dx, current.dy);
+          lastCubicControl = null;
+          lastQuadraticControl = null;
+          previousCommand = command;
+          break;
+        case 'V':
+          final y = nextNumber();
+          current = Offset(current.dx, relative ? current.dy + y : y);
+          path.lineTo(current.dx, current.dy);
+          lastCubicControl = null;
+          lastQuadraticControl = null;
+          previousCommand = command;
+          break;
+        case 'C':
+          final control1 = point(nextNumber(), nextNumber(), relative);
+          final control2 = point(nextNumber(), nextNumber(), relative);
+          final next = point(nextNumber(), nextNumber(), relative);
+          path.cubicTo(
+            control1.dx,
+            control1.dy,
+            control2.dx,
+            control2.dy,
+            next.dx,
+            next.dy,
+          );
+          current = next;
+          lastCubicControl = control2;
+          lastQuadraticControl = null;
+          previousCommand = command;
+          break;
+        case 'S':
+          final hasPreviousCubic = previousCommand != null &&
+              const {'C', 'c', 'S', 's'}.contains(previousCommand);
+          final reflectedControl = hasPreviousCubic && lastCubicControl != null
+              ? (current * 2) - lastCubicControl
+              : current;
+          final control2 = point(nextNumber(), nextNumber(), relative);
+          final next = point(nextNumber(), nextNumber(), relative);
+          path.cubicTo(
+            reflectedControl.dx,
+            reflectedControl.dy,
+            control2.dx,
+            control2.dy,
+            next.dx,
+            next.dy,
+          );
+          current = next;
+          lastCubicControl = control2;
+          lastQuadraticControl = null;
+          previousCommand = command;
+          break;
+        case 'Q':
+          final control = point(nextNumber(), nextNumber(), relative);
+          final next = point(nextNumber(), nextNumber(), relative);
+          path.quadraticBezierTo(control.dx, control.dy, next.dx, next.dy);
+          current = next;
+          lastQuadraticControl = control;
+          lastCubicControl = null;
+          previousCommand = command;
+          break;
+        case 'T':
+          final hasPreviousQuadratic = previousCommand != null &&
+              const {'Q', 'q', 'T', 't'}.contains(previousCommand);
+          final control = hasPreviousQuadratic && lastQuadraticControl != null
+              ? (current * 2) - lastQuadraticControl
+              : current;
+          final next = point(nextNumber(), nextNumber(), relative);
+          path.quadraticBezierTo(control.dx, control.dy, next.dx, next.dy);
+          current = next;
+          lastQuadraticControl = control;
+          lastCubicControl = null;
+          previousCommand = command;
+          break;
+        case 'A':
+          nextNumber();
+          nextNumber();
+          nextNumber();
+          nextNumber();
+          nextNumber();
+          final next = point(nextNumber(), nextNumber(), relative);
+          path.lineTo(next.dx, next.dy);
+          current = next;
+          lastCubicControl = null;
+          lastQuadraticControl = null;
+          previousCommand = command;
+          break;
+        case 'Z':
+          path.close();
+          current = subPathStart;
+          lastCubicControl = null;
+          lastQuadraticControl = null;
+          previousCommand = command;
+          command = '';
+          break;
+        default:
+          command = '';
+          break;
+      }
+    }
+
+    return path;
+  }
 }
 
 

@@ -253,6 +253,17 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
     return readingCardEdits[term.id];
   }
 
+  String _reviewWritingFor(Term term) {
+    final override = _cardEditFor(term)?.preferredWritingOverride?.trim() ?? '';
+    if (override.isNotEmpty) return override;
+
+    final preferred = term.preferredSpelling.trim();
+    if (preferred.isNotEmpty) return preferred;
+
+    if (term.kanji.trim().isNotEmpty) return term.kanji.trim();
+    return term.reading.trim();
+  }
+
   List<String> _defaultReviewGlossesFor(Term term) {
     final sourceTerm = term;
     final glossBySenseIndex = <int, String>{};
@@ -1143,12 +1154,12 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
   }
 
   Widget _definitionCardContent(Term term) {
-    final kanjiText =
-        term.kanji.trim().isNotEmpty ? term.kanji.trim() : term.reading.trim();
+    final kanjiText = _reviewWritingFor(term);
     final readingText = term.reading.trim();
     final showReading = showFurigana &&
         readingText.isNotEmpty &&
-        readingText != kanjiText;
+        readingText != kanjiText &&
+        RegExp(r'[\u4E00-\u9FFF]').hasMatch(kanjiText);
 
     return SizedBox.expand(
       child: Column(
@@ -1220,10 +1231,12 @@ class _ReviewStudyPageState extends State<ReviewStudyPage> {
   }
 
   Widget _termCardContent(Term term) {
-    final kanjiText =
-        term.kanji.trim().isNotEmpty ? term.kanji.trim() : term.reading.trim();
+    final kanjiText = _reviewWritingFor(term);
     final readingText = term.reading.trim();
-    final showReadingAbove = showFurigana && readingText.isNotEmpty;
+    final showReadingAbove = showFurigana &&
+        readingText.isNotEmpty &&
+        readingText != kanjiText &&
+        RegExp(r'[\u4E00-\u9FFF]').hasMatch(kanjiText);
 
     return SizedBox.expand(
       child: Padding(

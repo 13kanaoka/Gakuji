@@ -499,7 +499,7 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
     final restoredAnsweredTerms =
         restoredSessionOrder.take(answeredCount).toList(growable: false);
     final restoredActiveTerms =
-        restoredSessionOrder.skip(answeredCount).toList(growable: false);
+        restoredSessionOrder.skip(answeredCount).toList();
     final restoredHistory = <_StudyHistoryEntry>[];
 
     for (var index = 0; index < historyCorrect.length; index++) {
@@ -722,12 +722,10 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }
 
   Future<void> _loadReadingCardEdits() async {
-    final termsToLoad = List<Term>.from(widget.deck.terms);
     final snapshot = await ReadingCardEditStorage.loadDeck(
       deck: widget.deck,
-      terms: termsToLoad,
+      terms: widget.deck.terms,
     );
-
     if (!mounted) return;
 
     setState(() {
@@ -827,6 +825,17 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
 
   ReadingCardEditData? _cardEditFor(Term term) {
     return readingCardEdits[term.id];
+  }
+
+  String _studyWritingFor(Term term) {
+    final override = _cardEditFor(term)?.preferredWritingOverride?.trim() ?? '';
+    if (override.isNotEmpty) return override;
+
+    final preferred = term.preferredSpelling.trim();
+    if (preferred.isNotEmpty) return preferred;
+
+    if (term.kanji.trim().isNotEmpty) return term.kanji.trim();
+    return term.reading.trim();
   }
 
   List<String> _defaultStudyGlossesFor(Term term) {
@@ -2288,10 +2297,12 @@ class _StudyPageState extends State<StudyPage> with TickerProviderStateMixin {
   }
 
   Widget _termCardContent(Term term) {
-    final kanjiText =
-        term.kanji.trim().isNotEmpty ? term.kanji.trim() : term.reading.trim();
+    final kanjiText = _studyWritingFor(term);
     final readingText = term.reading.trim();
-    final showReadingAbove = showFurigana && readingText.isNotEmpty;
+    final showReadingAbove = showFurigana &&
+        readingText.isNotEmpty &&
+        readingText != kanjiText &&
+        RegExp(r'[\u4E00-\u9FFF]').hasMatch(kanjiText);
 
     return SizedBox.expand(
       child: Padding(

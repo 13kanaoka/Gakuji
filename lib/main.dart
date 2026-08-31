@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +21,15 @@ Future<void> main() async {
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // Gakuji already owns a complete user-scoped SQLite workspace, including its
+  // offline dirty queue. Keeping Firestore's second persistent SQLite cache is
+  // redundant and can make Android decode a large remote-document cache in the
+  // background while study screens are opening. Use Firestore only as the
+  // network synchronization junction and keep its persistence in memory.
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: false,
   );
 
   await GoogleSignIn.instance.initialize();

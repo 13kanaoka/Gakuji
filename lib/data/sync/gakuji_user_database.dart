@@ -7,7 +7,7 @@ import 'package:sqflite/sqflite.dart';
 /// Cloud synchronization is handled separately by GakujiCloudSyncService.
 class GakujiUserDatabase {
   static const String databaseName = 'gakuji_user.db';
-  static const int databaseVersion = 6;
+  static const int databaseVersion = 8;
 
   static const String ownerUidMetadataKey = 'owner_uid';
   static const String pinnedUpdatedAtMetadataKey = 'pinned_updated_at';
@@ -57,6 +57,12 @@ class GakujiUserDatabase {
         if (oldVersion < 6) {
           await _createDirtyEntityTable(database);
         }
+        if (oldVersion < 7) {
+          await _addDeckCreatorColumns(database);
+        }
+        if (oldVersion < 8) {
+          await _addDeckSharingColumns(database);
+        }
       },
     );
   }
@@ -67,6 +73,11 @@ class GakujiUserDatabase {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         type TEXT NOT NULL,
+        creator_uid TEXT,
+        creator_username TEXT,
+        adapter_credits_json TEXT NOT NULL DEFAULT '[]',
+        share_code TEXT,
+        share_snapshot_hash TEXT,
         color_value INTEGER,
         review_enabled INTEGER NOT NULL DEFAULT 0,
         active_study_mode TEXT NOT NULL DEFAULT 'study',
@@ -178,6 +189,48 @@ class GakujiUserDatabase {
           ON DELETE CASCADE
       )
     ''');
+  }
+
+  static Future<void> _addDeckCreatorColumns(Database database) async {
+    final deckColumns = await database.rawQuery('PRAGMA table_info(decks)');
+    final columnNames = deckColumns
+        .map((column) => column['name']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    if (!columnNames.contains('creator_uid')) {
+      await database.execute('ALTER TABLE decks ADD COLUMN creator_uid TEXT');
+    }
+
+    if (!columnNames.contains('creator_username')) {
+      await database.execute(
+        'ALTER TABLE decks ADD COLUMN creator_username TEXT',
+      );
+    }
+  }
+
+  static Future<void> _addDeckSharingColumns(Database database) async {
+    final deckColumns = await database.rawQuery('PRAGMA table_info(decks)');
+    final columnNames = deckColumns
+        .map((column) => column['name']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    if (!columnNames.contains('adapter_credits_json')) {
+      await database.execute(
+        "ALTER TABLE decks ADD COLUMN adapter_credits_json TEXT NOT NULL DEFAULT '[]'",
+      );
+    }
+
+    if (!columnNames.contains('share_code')) {
+      await database.execute('ALTER TABLE decks ADD COLUMN share_code TEXT');
+    }
+
+    if (!columnNames.contains('share_snapshot_hash')) {
+      await database.execute(
+        'ALTER TABLE decks ADD COLUMN share_snapshot_hash TEXT',
+      );
+    }
   }
 
   static Future<void> _upgradeToVersionThree(Database database) async {

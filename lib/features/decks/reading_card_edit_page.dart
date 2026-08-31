@@ -92,6 +92,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
   String? photoPath;
   String? lastSavedPhotoPath;
+  String? preferredWritingOverride;
   double photoScale = 1.0;
   double photoOffsetX = 0.0;
   double photoOffsetY = 0.0;
@@ -113,6 +114,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
 
     selectedGlosses = <_SenseGlossOption>[];
     cardNote = widget.term.note ?? '';
+    preferredWritingOverride = null;
     selectedExamples = <DictionaryExample>[];
 
     unawaited(_initializeEditor());
@@ -293,17 +295,21 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
     return left.japanese == right.japanese && left.english == right.english;
   }
 
-  String get termTitle {
-    if (sourceTerm.kanjiBracketText.trim().isNotEmpty) {
-      return sourceTerm.kanjiBracketText.trim();
+  String get effectivePreferredWriting {
+    final override = preferredWritingOverride?.trim() ?? '';
+
+    if (override.isNotEmpty && sourceTerm.cardWritingForms.contains(override)) {
+      return override;
     }
 
-    if (sourceTerm.kanji.trim().isNotEmpty) {
-      return sourceTerm.kanji.trim();
-    }
+    final dictionaryDefault = sourceTerm.preferredSpelling.trim();
+    if (dictionaryDefault.isNotEmpty) return dictionaryDefault;
 
+    if (sourceTerm.kanji.trim().isNotEmpty) return sourceTerm.kanji.trim();
     return sourceTerm.reading.trim();
   }
+
+  String get termTitle => effectivePreferredWriting;
 
   ReadingCardEditData get currentEditData {
     return ReadingCardEditData(
@@ -316,6 +322,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
         selectedExamples.take(maxExamples).toList(),
       ),
       note: '',
+      preferredWritingOverride: preferredWritingOverride,
       photoEnabled: photoEnabled,
       photoPath: photoPath,
       photoScale: photoScale,
@@ -351,6 +358,13 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
       selectedExampleKeys: savedData.selectedExampleKeys,
     );
     final dictionaryNote = await DictionaryNoteService.loadForTerm(widget.term);
+    final savedWriting = savedData.preferredWritingOverride?.trim() ?? '';
+    final validSavedWriting = hasSavedEdit &&
+            savedWriting.isNotEmpty &&
+            savedWriting != sourceTerm.preferredSpelling &&
+            sourceTerm.cardWritingForms.contains(savedWriting)
+        ? savedWriting
+        : null;
 
     if (!mounted) return;
 
@@ -358,6 +372,7 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
       selectedGlosses = resolvedGlosses;
 
       cardNote = dictionaryNote;
+      preferredWritingOverride = validSavedWriting;
 
       selectedExamples = hasSavedEdit
           ? savedExamples.take(maxExamples).toList()
@@ -535,6 +550,26 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
           ),
         ),
       );
+  }
+
+  void openPreferredWritingSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return _PreferredWritingPickerSheet(
+          term: sourceTerm,
+          selectedOverride: preferredWritingOverride,
+          onChanged: (newOverride) {
+            setState(() {
+              preferredWritingOverride = newOverride;
+            });
+            markChanged();
+          },
+        );
+      },
+    );
   }
 
   void openGlossSheet() {
@@ -978,6 +1013,11 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
           runSpacing: 10,
           children: [
         _previewEditButton(
+          icon: Icons.text_fields_rounded,
+          label: 'Writing',
+          onTap: openPreferredWritingSheet,
+        ),
+        _previewEditButton(
           icon: Icons.translate_rounded,
           label: 'Glosses',
           onTap: openGlossSheet,
@@ -1245,6 +1285,157 @@ class _PhotoAdjustSheetState extends State<_PhotoAdjustSheet> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreferredWritingPickerSheet extends StatelessWidget {
+  final Term term;
+  final String? selectedOverride;
+  final ValueChanged<String?> onChanged;
+
+  const _PreferredWritingPickerSheet({
+    required this.term,
+    required this.selectedOverride,
+    required this.onChanged,
+  });
+
+  String get _effectiveSelection {
+    final override = selectedOverride?.trim() ?? '';
+    if (override.isNotEmpty) return override;
+    return term.preferredSpelling.trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final defaultWriting = term.preferredSpelling.trim().isNotEmpty
+        ? term.preferredSpelling.trim()
+        : term.kanji.trim().isNotEmpty
+            ? term.kanji.trim()
+            : term.reading.trim();
+    final forms = term.cardWritingForms
+        .where((form) => form.trim().isNotEmpty)
+        .toList(growable: false);
+
+    return _CardEditBottomSheet(
+      title: 'Preferred Writing',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Choose the form shown on this card. The dictionary default stays unchanged.',
+            textAlign: TextAlign.center,
+            textScaler: TextScaler.noScaling,
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.3,
+              color: GakujiColors.mediumGray,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: forms.length,
+              separatorBuilder: (context, index) => Divider(
+                height: 1,
+                color: GakujiColors.lightDivider,
+              ),
+              itemBuilder: (context, index) {
+                final form = forms[index];
+                final isDefault = form == defaultWriting;
+                final isSelected = form == _effectiveSelection;
+                final metadata = term.spellingMetadataFor(form);
+                final infoLabel = metadata?.shortInfoLabel;
+
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      onChanged(isDefault ? null : form);
+                      Navigator.of(context).pop();
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 12,
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 72,
+                            child: Text(
+                              form,
+                              textScaler: TextScaler.noScaling,
+                              style: TextStyle(
+                                fontSize: 22,
+                                height: 1,
+                                color: GakujiColors.darkGray,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Wrap(
+                              spacing: 7,
+                              runSpacing: 5,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                if (isDefault)
+                                  _writingMetadataPill('Dictionary default'),
+                                if (term.usuallyWrittenInKana && isDefault)
+                                  _writingMetadataPill('Usually kana'),
+                                if (infoLabel != null)
+                                  _writingMetadataPill(infoLabel),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            isSelected
+                                ? Icons.check_circle_rounded
+                                : Icons.circle_outlined,
+                            size: 23,
+                            color: isSelected
+                                ? GakujiColors.reading
+                                : GakujiColors.softGray,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _writingMetadataPill(String label) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(7, 4, 7, 4),
+      decoration: BoxDecoration(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: GakujiColors.softBorder,
+          width: 1,
+        ),
+      ),
+      child: Text(
+        label,
+        textScaler: TextScaler.noScaling,
+        style: TextStyle(
+          fontSize: 11,
+          height: 1,
+          color: GakujiColors.mediumGray,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

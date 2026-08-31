@@ -74,11 +74,8 @@ class ReadingCardEditStorage {
         final savedValue = prefs.getString(key);
 
         if (savedValue == null || savedValue.trim().isEmpty) {
-          editsByTermId[term.id] = ReadingCardEditData.empty(
-            deckId: deck.id,
-            termId: term.id,
-            sourceId: ReadingCardEditData.sourceIdFor(term),
-          );
+          // No customization exists for this card. Leave it absent from the
+          // map so large decks do not allocate one empty edit object per term.
           continue;
         }
 
@@ -95,11 +92,7 @@ class ReadingCardEditStorage {
           migratedAny = true;
         } catch (_) {
           await prefs.remove(key);
-          editsByTermId[term.id] = ReadingCardEditData.empty(
-            deckId: deck.id,
-            termId: term.id,
-            sourceId: ReadingCardEditData.sourceIdFor(term),
-          );
+          // Invalid legacy data is removed and treated as no customization.
         }
       }
 

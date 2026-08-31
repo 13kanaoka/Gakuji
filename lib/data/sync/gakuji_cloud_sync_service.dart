@@ -80,13 +80,14 @@ class GakujiCloudSyncService {
   static const Duration pushDebounce = Duration(seconds: 8);
   static const int _batchLimit = 100;
   static const Duration _deltaWriteBackpressure = Duration(milliseconds: 25);
-  static const int _snapshotBatchLimit = 50;
+  static const int _snapshotBatchLimit = 1;
   static const Duration _snapshotWriteBackpressure = Duration(milliseconds: 75);
   static const int _deckTermStorageVersion = 2;
   static const int _baseTermChunkBuckets = 32;
   static const int _maxTermsPerChunk = 75;
   static const int _maxApproxTermChunkBytes = 300 * 1024;
-  static const int _chunkFetchConcurrency = 4;
+  static const int _chunkFetchConcurrency = 1;
+  static const int _cloudReadPageSize = 1;
 
   static Timer? _pushTimer;
   static bool _syncing = false;
@@ -106,6 +107,39 @@ class GakujiCloudSyncService {
       throw StateError('Cloud sync requires a registered Firebase user.');
     }
     return FirebaseFirestore.instance.collection('users').doc(user.uid);
+  }
+
+  /// Reads large Firestore collections in small pages so Android never has to
+  /// materialize an entire remote collection (and its protobuf backing data) in
+  /// the Java heap at once. Gakuji's own SQLite database remains the durable
+  /// offline store, so these pages can be processed and released immediately.
+  static Future<void> _forEachCloudQueryPage({
+    required Query<Map<String, dynamic>> query,
+    required FutureOr<void> Function(
+      List<QueryDocumentSnapshot<Map<String, dynamic>>> documents,
+    ) onPage,
+  }) async {
+    QueryDocumentSnapshot<Map<String, dynamic>>? cursor;
+
+    while (true) {
+      var pageQuery = query;
+      if (cursor != null) {
+        pageQuery = pageQuery.startAfterDocument(cursor);
+      }
+
+      final snapshot = await pageQuery.limit(_cloudReadPageSize).get();
+      final documents = snapshot.docs;
+      if (documents.isEmpty) return;
+
+      await onPage(documents);
+
+      if (documents.length < _cloudReadPageSize) return;
+      cursor = documents.last;
+
+      // Let the previous QuerySnapshot and its decoded native objects become
+      // collectible before asking Firestore for the next page.
+      await Future<void>.delayed(Duration.zero);
+    }
   }
 
   /// Schedules a conservative delta push after a local save.
@@ -947,6 +981,11 @@ class GakujiCloudSyncService {
       id: id,
       name: data['name']?.toString() ?? '',
       type: type,
+      creatorUid: _nullableTrimmedString(data['creatorUid']),
+      creatorUsername: _nullableTrimmedString(data['creatorUsername']),
+      adaptedBy: _adapterCreditsFromCloud(data['adaptedBy']),
+      shareCode: _nullableTrimmedString(data['shareCode']),
+      shareSnapshotHash: _nullableTrimmedString(data['shareSnapshotHash']),
       colorValue: _nullableInt(data['colorValue']),
       terms: terms,
       hybridCardModes: hybridModes,
@@ -994,27 +1033,31 @@ class GakujiCloudSyncService {
   static Future<List<Deck>> _loadCloudDecks({
     required List<Deck> localDecks,
   }) async {
-    final snapshot = await _userDoc.collection('decks').orderBy('position').get();
     final localById = <String, Deck>{
       for (final deck in localDecks) deck.id: deck,
     };
     final result = <Deck>[];
 
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
-      if (!_usesChunkedTermStorage(data)) {
-        result.add(_deckFromCloudData(doc.id, data));
-        continue;
-      }
+    await _forEachCloudQueryPage(
+      query: _userDoc.collection('decks').orderBy('position'),
+      onPage: (documents) async {
+        for (final doc in documents) {
+          final data = doc.data();
+          if (!_usesChunkedTermStorage(data)) {
+            result.add(_deckFromCloudData(doc.id, data));
+            continue;
+          }
 
-      result.add(
-        await _loadChunkedCloudDeck(
-          deckId: doc.id,
-          data: data,
-          localDeck: localById[doc.id],
-        ),
-      );
-    }
+          result.add(
+            await _loadChunkedCloudDeck(
+              deckId: doc.id,
+              data: data,
+              localDeck: localById[doc.id],
+            ),
+          );
+        }
+      },
+    );
 
     return result;
   }
@@ -1199,67 +1242,90 @@ class GakujiCloudSyncService {
   }
 
   static Future<List<Folder>> _loadCloudFolders() async {
-    final snapshot =
-        await _userDoc.collection('folders').orderBy('position').get();
-    return snapshot.docs.map((doc) {
-      final data = doc.data();
-      return Folder(
-        id: doc.id,
-        name: data['name']?.toString() ?? '',
-        deckIds: _stringList(data['deckIds']),
-      );
-    }).toList();
+    final result = <Folder>[];
+    await _forEachCloudQueryPage(
+      query: _userDoc.collection('folders').orderBy('position'),
+      onPage: (documents) {
+        for (final doc in documents) {
+          final data = doc.data();
+          result.add(
+            Folder(
+              id: doc.id,
+              name: data['name']?.toString() ?? '',
+              deckIds: _stringList(data['deckIds']),
+            ),
+          );
+        }
+      },
+    );
+    return result;
   }
 
   static Future<List<ReviewCard>> _loadCloudReviewCards() async {
-    final snapshot = await _userDoc.collection('reviewCards').get();
     final result = <ReviewCard>[];
-    for (final doc in snapshot.docs) {
-      try {
-        result.add(ReviewCard.fromJson(doc.data()));
-      } catch (_) {
-        // Ignore corrupted cloud review rows.
-      }
-    }
+    await _forEachCloudQueryPage(
+      query: _userDoc.collection('reviewCards'),
+      onPage: (documents) {
+        for (final doc in documents) {
+          try {
+            result.add(ReviewCard.fromJson(doc.data()));
+          } catch (_) {
+            // Ignore corrupted cloud review rows.
+          }
+        }
+      },
+    );
     return result;
   }
 
   static Future<List<ReviewLogEntry>> _loadCloudReviewLogs() async {
-    final snapshot = await _userDoc.collection('reviewLogs').get();
     final result = <ReviewLogEntry>[];
-    for (final doc in snapshot.docs) {
-      try {
-        result.add(ReviewLogEntry.fromJson(doc.data()));
-      } catch (_) {
-        // Ignore corrupted cloud review history rows.
-      }
-    }
+    await _forEachCloudQueryPage(
+      query: _userDoc.collection('reviewLogs'),
+      onPage: (documents) {
+        for (final doc in documents) {
+          try {
+            result.add(ReviewLogEntry.fromJson(doc.data()));
+          } catch (_) {
+            // Ignore corrupted cloud review history rows.
+          }
+        }
+      },
+    );
     result.sort((a, b) => a.reviewedAt.compareTo(b.reviewedAt));
     return result;
   }
 
   static Future<Map<String, String>> _loadCloudDictionaryNotes() async {
-    final snapshot = await _userDoc.collection('dictionaryNotes').get();
     final result = <String, String>{};
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
-      final sourceId = data['sourceId']?.toString() ?? doc.id;
-      final note = data['note']?.toString();
-      if (sourceId.isNotEmpty && note != null) result[sourceId] = note;
-    }
+    await _forEachCloudQueryPage(
+      query: _userDoc.collection('dictionaryNotes'),
+      onPage: (documents) {
+        for (final doc in documents) {
+          final data = doc.data();
+          final sourceId = data['sourceId']?.toString() ?? doc.id;
+          final note = data['note']?.toString();
+          if (sourceId.isNotEmpty && note != null) result[sourceId] = note;
+        }
+      },
+    );
     return result;
   }
 
   static Future<List<ReadingCardEditData>> _loadCloudReadingCardEdits() async {
-    final snapshot = await _userDoc.collection('readingCardEdits').get();
     final result = <ReadingCardEditData>[];
-    for (final doc in snapshot.docs) {
-      try {
-        result.add(ReadingCardEditData.fromJson(doc.data()));
-      } catch (_) {
-        // Ignore a malformed cloud edit.
-      }
-    }
+    await _forEachCloudQueryPage(
+      query: _userDoc.collection('readingCardEdits'),
+      onPage: (documents) {
+        for (final doc in documents) {
+          try {
+            result.add(ReadingCardEditData.fromJson(doc.data()));
+          } catch (_) {
+            // Ignore a malformed cloud edit.
+          }
+        }
+      },
+    );
     return result;
   }
 
@@ -1267,7 +1333,17 @@ class GakujiCloudSyncService {
     required CollectionReference<Map<String, dynamic>> collection,
     required Map<String, Map<String, dynamic>> documents,
   }) async {
-    final existing = await collection.get();
+    // Retain only document IDs while scanning the remote collection. Keeping a
+    // full QuerySnapshot alive here can be very expensive for long-lived data
+    // such as review logs.
+    final existingIds = <String>[];
+    await _forEachCloudQueryPage(
+      query: collection,
+      onPage: (page) {
+        existingIds.addAll(page.map((doc) => doc.id));
+      },
+    );
+
     final firestore = FirebaseFirestore.instance;
     var batch = firestore.batch();
     var operationCount = 0;
@@ -1281,9 +1357,9 @@ class GakujiCloudSyncService {
     }
 
     final desiredIds = documents.keys.toSet();
-    for (final doc in existing.docs) {
-      if (desiredIds.contains(doc.id)) continue;
-      batch.delete(doc.reference);
+    for (final documentId in existingIds) {
+      if (desiredIds.contains(documentId)) continue;
+      batch.delete(collection.doc(documentId));
       operationCount++;
       if (operationCount >= _snapshotBatchLimit) await flush();
     }
@@ -1527,6 +1603,11 @@ class GakujiCloudSyncService {
     return {
       'name': deck.name,
       'type': deck.type.name,
+      'creatorUid': deck.creatorUid,
+      'creatorUsername': deck.creatorUsername,
+      'adaptedBy': deck.adaptedBy.map((credit) => credit.toJson()).toList(),
+      'shareCode': deck.shareCode,
+      'shareSnapshotHash': deck.shareSnapshotHash,
       'colorValue': deck.colorValue,
       'reviewEnabled': deck.reviewEnabled,
       'activeStudyMode': deck.activeStudyMode.name,
@@ -1672,7 +1753,13 @@ class GakujiCloudSyncService {
     required int now,
   }) async {
     final collection = _userDoc.collection('decks');
-    final existing = await collection.get();
+    final existingIds = <String>[];
+    await _forEachCloudQueryPage(
+      query: collection,
+      onPage: (page) {
+        existingIds.addAll(page.map((doc) => doc.id));
+      },
+    );
     final desiredIds = decks.map((deck) => deck.id).toSet();
 
     for (var index = 0; index < decks.length; index++) {
@@ -1686,9 +1773,9 @@ class GakujiCloudSyncService {
       );
     }
 
-    for (final doc in existing.docs) {
-      if (desiredIds.contains(doc.id)) continue;
-      await _deleteCloudDeck(doc.id);
+    for (final documentId in existingIds) {
+      if (desiredIds.contains(documentId)) continue;
+      await _deleteCloudDeck(documentId);
     }
   }
 
@@ -1988,6 +2075,24 @@ class GakujiCloudSyncService {
     }
   }
 
+
+  static List<DeckAdapterCredit> _adapterCreditsFromCloud(dynamic value) {
+    if (value is! List) return const <DeckAdapterCredit>[];
+
+    final credits = <DeckAdapterCredit>[];
+    final seen = <String>{};
+    for (final rawCredit in value) {
+      if (rawCredit is! Map) continue;
+      final credit = DeckAdapterCredit.fromJson(
+        Map<String, dynamic>.from(rawCredit),
+      );
+      final uid = credit.uid.trim();
+      if (uid.isEmpty || !seen.add(uid)) continue;
+      credits.add(credit);
+    }
+    return credits;
+  }
+
   static List<String> _stringList(dynamic value) {
     if (value is! List) return <String>[];
     return value.map((item) => item.toString()).toList();
@@ -2018,6 +2123,11 @@ class GakujiCloudSyncService {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static String? _nullableTrimmedString(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   static int? _nullableInt(dynamic value) {

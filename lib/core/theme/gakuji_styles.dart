@@ -371,14 +371,14 @@ class GakujiText {
       );
 
   static TextStyle get termRowTitle => TextStyle(
-        fontSize: _scaledSize(small: 22, medium: 24, large: 26),
+        fontSize: _scaledSize(small: 17, medium: 19, large: 21),
         height: 1,
         fontWeight: FontWeight.w700,
         color: GakujiColors.darkGray,
       );
 
   static TextStyle get termRowReading => TextStyle(
-        fontSize: _scaledSize(small: 19, medium: 21, large: 23),
+        fontSize: _scaledSize(small: 17, medium: 19, large: 21),
         height: 1,
         fontWeight: FontWeight.w600,
         color: GakujiColors.reading,

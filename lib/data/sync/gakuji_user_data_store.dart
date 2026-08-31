@@ -187,18 +187,30 @@ class GakujiUserDataStore {
     final loadedDictionaryNotes =
         await GakujiUserRepository.loadDictionaryNotes();
 
-    // Legacy/partial cloud writers can leave a deck term with only an id and
-    // spelling. Repair those records once from the on-device dictionary before
-    // exposing them to study UI. If anything was repaired, persist that complete
-    // deck copy locally first and let the normal delta queue mirror it later.
+    // Repair legacy/partial deck terms and hydrate newly introduced dictionary
+    // spelling metadata before exposing cards to study UI. If anything changed,
+    // persist the complete deck copy locally first and let the normal delta queue
+    // mirror it later.
     final repairedTermCount =
         await GakujiTermPayloadRepair.repairDecks(loadedDecks);
+    final repairedRecentSearchCount =
+        await GakujiTermPayloadRepair.repairRecentSearches(
+      loadedRecentSearches,
+    );
+
     if (repairedTermCount > 0) {
       await GakujiUserRepository.saveAll(
         decks: loadedDecks,
         folders: loadedFolders,
         pinnedDeckIds: loadedPinnedDeckIds,
       );
+    }
+
+    if (repairedRecentSearchCount > 0) {
+      await GakujiUserRepository.saveRecentSearches(loadedRecentSearches);
+    }
+
+    if (repairedTermCount > 0 || repairedRecentSearchCount > 0) {
       GakujiCloudSyncService.schedulePush();
     }
 

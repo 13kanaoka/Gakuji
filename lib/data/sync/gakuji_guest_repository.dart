@@ -131,6 +131,17 @@ class GakujiGuestRepository {
           id: deckId,
           name: deckRow['name']?.toString() ?? '',
           type: deckType,
+          creatorUid: _nullableTrimmedString(deckRow['creator_uid']),
+          creatorUsername: _nullableTrimmedString(
+            deckRow['creator_username'],
+          ),
+          adaptedBy: _adapterCreditsFromDatabaseValue(
+            deckRow['adapter_credits_json'],
+          ),
+          shareCode: _nullableTrimmedString(deckRow['share_code']),
+          shareSnapshotHash: _nullableTrimmedString(
+            deckRow['share_snapshot_hash'],
+          ),
           colorValue: _nullableIntFromDatabaseValue(deckRow['color_value']),
           terms: loadedTerms,
           hybridCardModes: loadedHybridCardModes,
@@ -340,6 +351,11 @@ class GakujiGuestRepository {
         'id': deck.id,
         'name': deck.name,
         'type': _deckTypeToText(deck.type),
+        'creator_uid': deck.creatorUid,
+        'creator_username': deck.creatorUsername,
+        'adapter_credits_json': _adapterCreditsToDatabaseValue(deck.adaptedBy),
+        'share_code': deck.shareCode,
+        'share_snapshot_hash': deck.shareSnapshotHash,
         'color_value': deck.colorValue,
         'review_enabled': _boolToInt(deck.reviewEnabled),
         'active_study_mode': deck.activeStudyMode == StudyMode.review
@@ -361,6 +377,11 @@ class GakujiGuestRepository {
       {
         'name': deck.name,
         'type': _deckTypeToText(deck.type),
+        'creator_uid': deck.creatorUid,
+        'creator_username': deck.creatorUsername,
+        'adapter_credits_json': _adapterCreditsToDatabaseValue(deck.adaptedBy),
+        'share_code': deck.shareCode,
+        'share_snapshot_hash': deck.shareSnapshotHash,
         'color_value': deck.colorValue,
         'review_enabled': _boolToInt(deck.reviewEnabled),
         'active_study_mode': deck.activeStudyMode == StudyMode.review
@@ -886,6 +907,45 @@ class GakujiGuestRepository {
       where: 'id = ?',
       whereArgs: [card.id],
     );
+  }
+
+
+  static String _adapterCreditsToDatabaseValue(
+    List<DeckAdapterCredit> credits,
+  ) {
+    return jsonEncode(credits.map((credit) => credit.toJson()).toList());
+  }
+
+  static List<DeckAdapterCredit> _adapterCreditsFromDatabaseValue(
+    Object? value,
+  ) {
+    final text = value?.toString().trim() ?? '';
+    if (text.isEmpty) return const <DeckAdapterCredit>[];
+
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is! List) return const <DeckAdapterCredit>[];
+
+      final credits = <DeckAdapterCredit>[];
+      final seen = <String>{};
+      for (final rawCredit in decoded) {
+        if (rawCredit is! Map) continue;
+        final credit = DeckAdapterCredit.fromJson(
+          Map<String, dynamic>.from(rawCredit),
+        );
+        final uid = credit.uid.trim();
+        if (uid.isEmpty || !seen.add(uid)) continue;
+        credits.add(credit);
+      }
+      return credits;
+    } catch (_) {
+      return const <DeckAdapterCredit>[];
+    }
+  }
+
+  static String? _nullableTrimmedString(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   static int _intFromDatabaseValue(dynamic value, {int fallback = 0}) {

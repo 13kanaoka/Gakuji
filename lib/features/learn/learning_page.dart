@@ -24,13 +24,13 @@ class LearningPage extends StatelessWidget {
                 color: GakujiColors.darkGray,
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 20),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(
-                  22,
+                  18,
                   0,
-                  22,
+                  18,
                   GakujiSpacing.pageBottom,
                 ),
                 child: Column(

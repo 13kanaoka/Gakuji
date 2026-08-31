@@ -335,7 +335,7 @@ class _LoginPageState extends State<LoginPage>
                     icon: Icon(
                       Icons.arrow_back_ios_new_rounded,
                       color: context.gakujiColors.darkGray,
-                      size: 27,
+                      size: 24,
                     ),
                   ),
                 ),

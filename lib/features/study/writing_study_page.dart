@@ -15,6 +15,7 @@ import 'package:gakuji/features/study/services/writing_answer_checker.dart';
 import 'package:gakuji/core/services/writing_recognition_service.dart';
 import 'package:gakuji/core/theme/gakuji_styles.dart';
 import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/core/widgets/gakuji_page_route.dart';
 import 'package:gakuji/features/study/widgets/writing_study_card.dart';
 import 'package:gakuji/features/decks/deck_edit_page.dart';
 import 'package:gakuji/core/widgets/gakuji_options_sheet.dart';
@@ -858,7 +859,7 @@ class _WritingStudyPageState extends State<WritingStudyPage>
 
     await Navigator.push(
       context,
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (context) => DeckEditPage(deck: widget.deck),
       ),
     );

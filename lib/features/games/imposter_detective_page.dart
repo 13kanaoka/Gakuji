@@ -1102,7 +1102,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           height: 44,
           child: Icon(
             icon,
-            size: 28,
+            size: icon == Icons.arrow_back_ios_new_rounded ? 25 : 28,
             color: GakujiColors.darkGray,
           ),
         ),

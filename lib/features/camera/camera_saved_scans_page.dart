@@ -132,7 +132,7 @@ class _CameraSavedScansPageState extends State<CameraSavedScansPage> {
                   child: Icon(
                     Icons.arrow_back_ios_new_rounded,
                     color: Colors.white,
-                    size: 27,
+                    size: 24,
                   ),
                 ),
               ),

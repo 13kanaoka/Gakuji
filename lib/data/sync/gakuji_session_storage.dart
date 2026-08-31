@@ -14,6 +14,8 @@ import 'package:gakuji/data/sync/gakuji_user_database.dart';
 class GakujiSessionStorage {
   static const String _keyPrefix = 'gakuji_runtime_session_v1';
 
+  static const int _maxRuntimeCacheEntries = 12;
+
   static final Map<String, Map<String, dynamic>?> _runtimeCache =
       <String, Map<String, dynamic>?>{};
   static final Map<String, Map<String, dynamic>?> _pendingSnapshots =
@@ -41,12 +43,52 @@ class GakujiSessionStorage {
     return '$uid:$signInMarker:${_key(sessionType: sessionType, deckId: deckId)}';
   }
 
+  // Full Fusion round blueprints can be large. They stay persisted in SQLite,
+  // but are deliberately not retained in the process-wide RAM cache. The game
+  // page turns a blueprint into its typed round objects and then lets the JSON
+  // snapshot be collected.
+  static bool _shouldCacheSessionType(String sessionType) {
+    return !sessionType.endsWith('_rounds');
+  }
+
+  static void _purgeUncacheableRuntimeEntries() {
+    final marker = '$_keyPrefix:';
+    _runtimeCache.removeWhere((runtimeKey, _) {
+      final markerIndex = runtimeKey.indexOf(marker);
+      if (markerIndex == -1) return false;
+
+      final remainder = runtimeKey.substring(markerIndex + marker.length);
+      final separatorIndex = remainder.indexOf(':');
+      if (separatorIndex == -1) return false;
+
+      final sessionType = remainder.substring(0, separatorIndex);
+      return !_shouldCacheSessionType(sessionType);
+    });
+  }
+
+  static void _cacheRuntimeValue(
+    String runtimeKey,
+    Map<String, dynamic>? value,
+  ) {
+    // Reinsert existing keys so frequently-used sessions stay near the end of
+    // the insertion-ordered map and older deck sessions are evicted first.
+    _runtimeCache.remove(runtimeKey);
+    _runtimeCache[runtimeKey] = value;
+
+    while (_runtimeCache.length > _maxRuntimeCacheEntries) {
+      _runtimeCache.remove(_runtimeCache.keys.first);
+    }
+  }
+
   /// Whether this session has already been resolved during the current app
   /// process. A cached null means we already know there is no saved session.
   static bool hasCached({
     required String sessionType,
     required String deckId,
   }) {
+    _purgeUncacheableRuntimeEntries();
+    if (!_shouldCacheSessionType(sessionType)) return false;
+
     return _runtimeCache.containsKey(
       _runtimeKey(sessionType: sessionType, deckId: deckId),
     );
@@ -58,10 +100,17 @@ class GakujiSessionStorage {
     required String sessionType,
     required String deckId,
   }) {
-    final cached = _runtimeCache[
-      _runtimeKey(sessionType: sessionType, deckId: deckId)
-    ];
+    _purgeUncacheableRuntimeEntries();
+    if (!_shouldCacheSessionType(sessionType)) return null;
+
+    final runtimeKey = _runtimeKey(
+      sessionType: sessionType,
+      deckId: deckId,
+    );
+    final cached = _runtimeCache[runtimeKey];
     if (cached == null) return null;
+
+    _cacheRuntimeValue(runtimeKey, cached);
     return Map<String, dynamic>.from(cached);
   }
 
@@ -85,6 +134,7 @@ class GakujiSessionStorage {
     required List<String> sessionTypes,
     required String deckId,
   }) async {
+    _purgeUncacheableRuntimeEntries();
     final result = <String, Map<String, dynamic>?>{};
     final uncachedTypes = <String>[];
 
@@ -93,8 +143,10 @@ class GakujiSessionStorage {
         sessionType: sessionType,
         deckId: deckId,
       );
-      if (_runtimeCache.containsKey(runtimeKey)) {
+      if (_shouldCacheSessionType(sessionType) &&
+          _runtimeCache.containsKey(runtimeKey)) {
         final cached = _runtimeCache[runtimeKey];
+        _cacheRuntimeValue(runtimeKey, cached);
         result[sessionType] =
             cached == null ? null : Map<String, dynamic>.from(cached);
       } else {
@@ -128,7 +180,11 @@ class GakujiSessionStorage {
         sessionType: sessionType,
         deckId: deckId,
       );
-      _runtimeCache[runtimeKey] = snapshot;
+      if (_shouldCacheSessionType(sessionType)) {
+        _cacheRuntimeValue(runtimeKey, snapshot);
+      } else {
+        _runtimeCache.remove(runtimeKey);
+      }
       result[sessionType] =
           snapshot == null ? null : Map<String, dynamic>.from(snapshot);
     }
@@ -140,13 +196,16 @@ class GakujiSessionStorage {
     required String sessionType,
     required String deckId,
   }) async {
+    _purgeUncacheableRuntimeEntries();
     final runtimeKey = _runtimeKey(
       sessionType: sessionType,
       deckId: deckId,
     );
 
-    if (_runtimeCache.containsKey(runtimeKey)) {
+    if (_shouldCacheSessionType(sessionType) &&
+        _runtimeCache.containsKey(runtimeKey)) {
       final cached = _runtimeCache[runtimeKey];
+      _cacheRuntimeValue(runtimeKey, cached);
       return cached == null ? null : Map<String, dynamic>.from(cached);
     }
 
@@ -154,7 +213,11 @@ class GakujiSessionStorage {
     final raw = await GakujiUserDatabase.readMetadata(key);
 
     final snapshot = _decodeSnapshot(raw);
-    _runtimeCache[runtimeKey] = snapshot;
+    if (_shouldCacheSessionType(sessionType)) {
+      _cacheRuntimeValue(runtimeKey, snapshot);
+    } else {
+      _runtimeCache.remove(runtimeKey);
+    }
     return snapshot == null ? null : Map<String, dynamic>.from(snapshot);
   }
 
@@ -163,12 +226,21 @@ class GakujiSessionStorage {
     required String deckId,
     required Map<String, dynamic> snapshot,
   }) {
+    _purgeUncacheableRuntimeEntries();
     final runtimeKey = _runtimeKey(
       sessionType: sessionType,
       deckId: deckId,
     );
-    final storedSnapshot = _copySnapshot(snapshot);
-    _runtimeCache[runtimeKey] = storedSnapshot;
+    final shouldCache = _shouldCacheSessionType(sessionType);
+    final storedSnapshot = shouldCache ? _copySnapshot(snapshot) : snapshot;
+
+    if (shouldCache) {
+      _cacheRuntimeValue(runtimeKey, storedSnapshot);
+    } else {
+      // Avoid keeping a second deep-copied representation of a potentially
+      // large round blueprint alive for the rest of the app process.
+      _runtimeCache.remove(runtimeKey);
+    }
 
     return _queueWrite(
       key: _key(sessionType: sessionType, deckId: deckId),
@@ -180,9 +252,16 @@ class GakujiSessionStorage {
     required String sessionType,
     required String deckId,
   }) {
-    _runtimeCache[
-      _runtimeKey(sessionType: sessionType, deckId: deckId)
-    ] = null;
+    _purgeUncacheableRuntimeEntries();
+    final runtimeKey = _runtimeKey(
+      sessionType: sessionType,
+      deckId: deckId,
+    );
+    if (_shouldCacheSessionType(sessionType)) {
+      _cacheRuntimeValue(runtimeKey, null);
+    } else {
+      _runtimeCache.remove(runtimeKey);
+    }
 
     return _queueWrite(
       key: _key(sessionType: sessionType, deckId: deckId),

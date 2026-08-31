@@ -60,6 +60,11 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
   Offset? _cameraFocusIndicatorPosition;
   bool _showCameraFocusIndicator = false;
   Timer? _cameraFocusIndicatorTimer;
+  Timer? _cameraFocusModeResetTimer;
+  final Set<int> _activeCameraPointers = <int>{};
+  int? _cameraTapPointer;
+  Offset? _cameraTapDownPosition;
+  bool _cameraTapCancelled = false;
   String? _savedScanId;
   String? _transientMessage;
   Timer? _transientMessageTimer;
@@ -96,6 +101,7 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
     unawaited(_recognitionService.dispose());
     _photoTransformationController.dispose();
     _cameraFocusIndicatorTimer?.cancel();
+    _cameraFocusModeResetTimer?.cancel();
     _transientMessageTimer?.cancel();
     unawaited(_deleteCapturedPhoto());
     super.dispose();
@@ -289,7 +295,60 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
     }
   }
 
-  Future<void> _focusCameraAtTap(TapUpDetails details) async {
+  void _handleCameraPointerDown(PointerDownEvent event) {
+    _activeCameraPointers.add(event.pointer);
+
+    if (_activeCameraPointers.length == 1) {
+      _cameraTapPointer = event.pointer;
+      _cameraTapDownPosition = event.localPosition;
+      _cameraTapCancelled = false;
+      return;
+    }
+
+    // Any multi-touch interaction is a pinch/zoom gesture, not tap-to-focus.
+    _cameraTapCancelled = true;
+  }
+
+  void _handleCameraPointerMove(PointerMoveEvent event) {
+    if (event.pointer != _cameraTapPointer || _cameraTapCancelled) return;
+
+    final start = _cameraTapDownPosition;
+    if (start == null) return;
+
+    if ((event.localPosition - start).distance > 12) {
+      _cameraTapCancelled = true;
+    }
+  }
+
+  void _handleCameraPointerUp(PointerUpEvent event) {
+    final shouldFocus = event.pointer == _cameraTapPointer &&
+        !_cameraTapCancelled &&
+        _activeCameraPointers.length == 1;
+
+    _activeCameraPointers.remove(event.pointer);
+
+    if (shouldFocus) {
+      unawaited(_focusCameraAtPosition(event.localPosition));
+    }
+
+    if (event.pointer == _cameraTapPointer) {
+      _cameraTapPointer = null;
+      _cameraTapDownPosition = null;
+      _cameraTapCancelled = false;
+    }
+  }
+
+  void _handleCameraPointerCancel(PointerCancelEvent event) {
+    _activeCameraPointers.remove(event.pointer);
+
+    if (event.pointer == _cameraTapPointer) {
+      _cameraTapPointer = null;
+      _cameraTapDownPosition = null;
+      _cameraTapCancelled = false;
+    }
+  }
+
+  Future<void> _focusCameraAtPosition(Offset localPosition) async {
     final controller = _cameraController;
     final previewContext = _cameraPreviewKey.currentContext;
 
@@ -306,13 +365,13 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
     final size = renderObject.size;
     if (size.width <= 0 || size.height <= 0) return;
 
-    final localPosition = details.localPosition;
     final normalizedPoint = Offset(
       (localPosition.dx / size.width).clamp(0.0, 1.0).toDouble(),
       (localPosition.dy / size.height).clamp(0.0, 1.0).toDouble(),
     );
 
     _cameraFocusIndicatorTimer?.cancel();
+    _cameraFocusModeResetTimer?.cancel();
 
     if (mounted) {
       setState(() {
@@ -334,11 +393,22 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
       },
     );
 
+    var focusPointApplied = false;
+
     if (controller.value.focusPointSupported) {
+      if (controller.value.focusMode == FocusMode.locked) {
+        try {
+          await controller.setFocusMode(FocusMode.auto);
+        } on CameraException {
+          // Still try the new focus point if this device cannot unlock first.
+        }
+      }
+
       try {
         await controller.setFocusPoint(normalizedPoint);
+        focusPointApplied = true;
       } on CameraException {
-        // Tap focus is best-effort; continuous auto focus remains enabled.
+        // Tap focus is best-effort on camera implementations that support it.
       }
     }
 
@@ -348,6 +418,48 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
       } on CameraException {
         // Match iPhone-style tap metering when the platform supports it.
       }
+    }
+
+    if (focusPointApplied &&
+        _cameraController == controller &&
+        controller.value.isInitialized) {
+      var focusLocked = false;
+
+      try {
+        // Some physical devices do not visibly refocus from setFocusPoint()
+        // alone. Briefly locking the selected point makes the tap request take
+        // effect, then we return to continuous auto focus below.
+        await controller.setFocusMode(FocusMode.locked);
+        focusLocked = true;
+      } on CameraException {
+        // Keep the platform's automatic focus behavior when locking is absent.
+      }
+
+      if (focusLocked) {
+        _cameraFocusModeResetTimer = Timer(
+          const Duration(milliseconds: 1200),
+          () {
+            final activeController = _cameraController;
+            if (activeController != controller ||
+                !controller.value.isInitialized) {
+              return;
+            }
+            unawaited(_restoreCameraAutoFocus(controller));
+          },
+        );
+      }
+    }
+  }
+
+  Future<void> _restoreCameraAutoFocus(CameraController controller) async {
+    if (_cameraController != controller || !controller.value.isInitialized) {
+      return;
+    }
+
+    try {
+      await controller.setFocusMode(FocusMode.auto);
+    } on CameraException {
+      // Keep the last supported focus mode if auto focus cannot be restored.
     }
   }
 
@@ -423,6 +535,13 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
   }
 
   Future<void> _disposeCameraController() async {
+    _cameraFocusModeResetTimer?.cancel();
+    _cameraFocusModeResetTimer = null;
+    _activeCameraPointers.clear();
+    _cameraTapPointer = null;
+    _cameraTapDownPosition = null;
+    _cameraTapCancelled = false;
+
     final controller = _cameraController;
     _cameraController = null;
 
@@ -901,7 +1020,7 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
 
       if (example != null) {
         await Navigator.of(context).push(
-          MaterialPageRoute(
+          GakujiPageRoute(
             builder: (context) => CameraSentenceDetailPage(
               example: example,
               senseLabel: '',
@@ -938,7 +1057,7 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
     if (!sentenceContext.mounted) return;
 
     await Navigator.of(sentenceContext).push(
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (context) => DictionaryDetailPage(word: term),
       ),
     );
@@ -970,7 +1089,7 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
     if (!mounted) return;
 
     await Navigator.of(context).push(
-      MaterialPageRoute(
+      GakujiPageRoute(
         builder: (context) => DictionaryDetailPage(word: term),
       ),
     );
@@ -1179,18 +1298,24 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
     return Container(
       color: Colors.black,
       alignment: Alignment.center,
-      child: GestureDetector(
+      child: Listener(
         key: _cameraPreviewKey,
         behavior: HitTestBehavior.opaque,
-        onTapUp: _focusCameraAtTap,
-        onScaleStart: _handleCameraScaleStart,
-        onScaleUpdate: _handleCameraScaleUpdate,
-        child: Stack(
-          fit: StackFit.passthrough,
-          children: [
-            CameraPreview(controller),
-            _cameraFocusIndicator(),
-          ],
+        onPointerDown: _handleCameraPointerDown,
+        onPointerMove: _handleCameraPointerMove,
+        onPointerUp: _handleCameraPointerUp,
+        onPointerCancel: _handleCameraPointerCancel,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onScaleStart: _handleCameraScaleStart,
+          onScaleUpdate: _handleCameraScaleUpdate,
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: [
+              CameraPreview(controller),
+              _cameraFocusIndicator(),
+            ],
+          ),
         ),
       ),
     );
