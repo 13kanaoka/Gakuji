@@ -16,6 +16,7 @@ class GakujiTermRow extends StatelessWidget {
   final String? readingText;
   final bool showKanjiBadge;
   final bool showChevron;
+  final bool allowSecondaryForKanaTitle;
   final bool isSelected;
   final int meaningMaxLines;
   final EdgeInsetsGeometry padding;
@@ -31,6 +32,7 @@ class GakujiTermRow extends StatelessWidget {
     this.readingText,
     this.showKanjiBadge = false,
     this.showChevron = false,
+    this.allowSecondaryForKanaTitle = false,
     this.isSelected = false,
     this.meaningMaxLines = 1,
     this.padding = const EdgeInsets.fromLTRB(0, 4, 0, 5),
@@ -44,8 +46,8 @@ class GakujiTermRow extends StatelessWidget {
       return suppliedTitle;
     }
 
-    if (term.kanjiBracketText.trim().isNotEmpty) {
-      return term.kanjiBracketText.trim();
+    if (term.preferredSpelling.trim().isNotEmpty) {
+      return term.preferredSpelling.trim();
     }
 
     if (term.kanji.trim().isNotEmpty) {
@@ -60,6 +62,11 @@ class GakujiTermRow extends StatelessWidget {
         readingText != null ? readingText!.trim() : term.reading.trim();
 
     if (resolvedReading.isEmpty || resolvedReading == _resolvedTitleText) {
+      return '';
+    }
+
+    if (!allowSecondaryForKanaTitle &&
+        !RegExp(r'[\u4E00-\u9FFF]').hasMatch(_resolvedTitleText)) {
       return '';
     }
 

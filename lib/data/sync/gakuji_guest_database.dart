@@ -8,7 +8,7 @@ import 'package:sqflite/sqflite.dart';
 /// to a real sign-in method.
 class GakujiGuestDatabase {
   static const String databaseName = 'gakuji_guest.db';
-  static const int databaseVersion = 1;
+  static const int databaseVersion = 3;
 
   static Database? _database;
 
@@ -37,6 +37,11 @@ class GakujiGuestDatabase {
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             type TEXT NOT NULL,
+            creator_uid TEXT,
+            creator_username TEXT,
+            adapter_credits_json TEXT NOT NULL DEFAULT '[]',
+            share_code TEXT,
+            share_snapshot_hash TEXT,
             color_value INTEGER,
             review_enabled INTEGER NOT NULL DEFAULT 0,
             active_study_mode TEXT NOT NULL DEFAULT 'study',
@@ -167,7 +172,57 @@ class GakujiGuestDatabase {
           'CREATE INDEX review_logs_reviewed_at_index ON review_logs(reviewed_at)',
         );
       },
+      onUpgrade: (database, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _addDeckCreatorColumns(database);
+        }
+        if (oldVersion < 3) {
+          await _addDeckSharingColumns(database);
+        }
+      },
     );
+  }
+
+  static Future<void> _addDeckSharingColumns(Database database) async {
+    final deckColumns = await database.rawQuery('PRAGMA table_info(decks)');
+    final columnNames = deckColumns
+        .map((column) => column['name']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    if (!columnNames.contains('adapter_credits_json')) {
+      await database.execute(
+        "ALTER TABLE decks ADD COLUMN adapter_credits_json TEXT NOT NULL DEFAULT '[]'",
+      );
+    }
+
+    if (!columnNames.contains('share_code')) {
+      await database.execute('ALTER TABLE decks ADD COLUMN share_code TEXT');
+    }
+
+    if (!columnNames.contains('share_snapshot_hash')) {
+      await database.execute(
+        'ALTER TABLE decks ADD COLUMN share_snapshot_hash TEXT',
+      );
+    }
+  }
+
+  static Future<void> _addDeckCreatorColumns(Database database) async {
+    final deckColumns = await database.rawQuery('PRAGMA table_info(decks)');
+    final columnNames = deckColumns
+        .map((column) => column['name']?.toString())
+        .whereType<String>()
+        .toSet();
+
+    if (!columnNames.contains('creator_uid')) {
+      await database.execute('ALTER TABLE decks ADD COLUMN creator_uid TEXT');
+    }
+
+    if (!columnNames.contains('creator_username')) {
+      await database.execute(
+        'ALTER TABLE decks ADD COLUMN creator_username TEXT',
+      );
+    }
   }
 
   static Future<void> clearUserData() async {

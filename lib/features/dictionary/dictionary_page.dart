@@ -9,6 +9,7 @@ import 'package:gakuji/domain/writing_point.dart';
 import 'package:gakuji/data/dictionary/dictionary_service.dart';
 import 'package:gakuji/data/sync/gakuji_cloud_sync_service.dart';
 import 'package:gakuji/data/sync/gakuji_user_repository.dart';
+import 'package:gakuji/data/sync/gakuji_term_payload_repair.dart';
 import 'package:gakuji/core/services/writing_recognition_service.dart';
 import 'package:gakuji/core/theme/gakuji_styles.dart';
 import 'package:gakuji/core/widgets/gakuji_term_row.dart';
@@ -39,12 +40,14 @@ class DictionaryPage extends StatefulWidget {
 
 class _DictionaryPageState extends State<DictionaryPage> {
   static const Color accentBlue = Color(0xFF4D7EF7);
-  static const Color panelGray = Color(0xFFF0F2F5);
-  static const Color panelBorderGray = Color(0xFFD6D8DC);
+  static Color get panelGray => GakujiColors.warmCard;
+  static Color get panelBorderGray => GakujiColors.warmDivider;
 
   final TextEditingController searchController = TextEditingController();
   final FocusNode searchFocusNode = FocusNode();
   final ScrollController recentSearchScrollController = ScrollController();
+  final GlobalKey _inputStackKey = GlobalKey();
+  final GlobalKey _inputAccessoryBarKey = GlobalKey();
 
   Timer? searchDebounce;
   Timer? handwritingRecognitionDebounce;
@@ -67,6 +70,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
   bool recentSearchHasScrolled = false;
 
   double _lastKeyboardHeight = 0;
+  double _lastAccessoryBottomOffset = 0;
 
   int searchRequestNumber = 0;
   int handwritingRecognitionRequestNumber = 0;
@@ -105,6 +109,21 @@ class _DictionaryPageState extends State<DictionaryPage> {
   Future<void> loadDictionary() async {
     await DictionaryService.loadDictionary();
 
+    // Recent-search rows are persisted Term snapshots. Refresh their
+    // dictionary-owned preferred writing whenever this page opens so an
+    // already-running app does not keep showing an old kanji-first snapshot
+    // after the bundled dictionary changes.
+    final repairedRecentSearchCount =
+        await GakujiTermPayloadRepair.repairRecentSearches(recentSearches);
+
+    if (repairedRecentSearchCount > 0) {
+      await GakujiUserRepository.saveRecentSearches(
+        recentSearches,
+        updatedAtByTermId: recentSearchTimestamps,
+      );
+      GakujiCloudSyncService.schedulePush();
+    }
+
     if (!mounted) return;
 
     setState(() {
@@ -129,9 +148,13 @@ class _DictionaryPageState extends State<DictionaryPage> {
     BuildContext context, {
     required double keyboardHeight,
   }) {
-    // Once the real system keyboard height has been captured, keep that exact
-    // footprint while switching input modes. Do not follow the transient
-    // viewInsets values while iOS animates the keyboard in or out.
+    // Once the real accessory-bar position has been captured, derive the
+    // writing panel from that screen position instead of assuming the system
+    // keyboard and the Flutter panel share the same height coordinate system.
+    if (_lastAccessoryBottomOffset > 8.0) {
+      return _lastAccessoryBottomOffset - 8.0;
+    }
+
     if (_lastKeyboardHeight > 0) {
       return _lastKeyboardHeight;
     }
@@ -141,9 +164,35 @@ class _DictionaryPageState extends State<DictionaryPage> {
     }
 
     // This is only a pre-keyboard fallback. In normal use the writing button is
-    // reached from the open keyboard, so the real height is captured first.
+    // reached from the open keyboard, so the real position is captured first.
     final rawHeight = MediaQuery.sizeOf(context).height * 0.42;
     return rawHeight.clamp(300.0, 410.0).toDouble();
+  }
+
+  void _captureInputAccessoryAnchor() {
+    final stackRenderObject =
+        _inputStackKey.currentContext?.findRenderObject();
+    final accessoryRenderObject =
+        _inputAccessoryBarKey.currentContext?.findRenderObject();
+
+    if (stackRenderObject is! RenderBox ||
+        accessoryRenderObject is! RenderBox ||
+        !stackRenderObject.hasSize ||
+        !accessoryRenderObject.hasSize) {
+      return;
+    }
+
+    final stackBottom = stackRenderObject
+        .localToGlobal(Offset(0, stackRenderObject.size.height))
+        .dy;
+    final accessoryBottom = accessoryRenderObject
+        .localToGlobal(Offset(0, accessoryRenderObject.size.height))
+        .dy;
+    final bottomOffset = stackBottom - accessoryBottom;
+
+    if (bottomOffset.isFinite && bottomOffset > 0) {
+      _lastAccessoryBottomOffset = bottomOffset;
+    }
   }
 
   void _handleSearchFocusChange() {
@@ -370,6 +419,11 @@ class _DictionaryPageState extends State<DictionaryPage> {
         _lastKeyboardHeight = keyboardHeight;
       }
 
+      // Preserve the accessory row's actual laid-out screen position before
+      // the OS keyboard disappears. The custom handwriting panel is then
+      // positioned underneath that anchor, so switching input modes cannot
+      // make the buttons jump vertically.
+      _captureInputAccessoryAnchor();
       FocusScope.of(context).unfocus();
     }
 
@@ -579,15 +633,11 @@ class _DictionaryPageState extends State<DictionaryPage> {
       resizeToAvoidBottomInset: false,
       backgroundColor: GakujiColors.warmBackground,
       body: Stack(
+        key: _inputStackKey,
         children: [
           GestureDetector(
             behavior: HitTestBehavior.translucent,
             onTap: () {
-              if (isInputActive) {
-                exitDictionaryInputMode();
-              }
-            },
-            onPanDown: (_) {
               if (isInputActive) {
                 exitDictionaryInputMode();
               }
@@ -604,9 +654,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
                         bottomResultsPadding: bottomResultsPadding,
                       ),
                       Positioned(
-                        top: 10,
-                        left: 18,
-                        right: 18,
+                        top: 8,
+                        left: 14,
+                        right: 14,
                         child: _keyboardSearchBar(),
                       ),
                     ],
@@ -631,8 +681,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
     return Container(
       color: GakujiColors.warmBackground,
       padding: EdgeInsets.only(
-        top: topInset + 10,
-        bottom: 10,
+        top: topInset + 4,
+        bottom: 4,
       ),
       child: GakujiTopBar(
         leftIcon: Icons.settings,
@@ -745,8 +795,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 74, 18, 0),
+      padding: const EdgeInsets.fromLTRB(14, 70, 14, 0),
       child: _dictionaryResultList(
+        query: query,
         wordsToShow: wordsToShow,
         topPadding: 14,
         bottomResultsPadding: bottomResultsPadding,
@@ -777,7 +828,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
         final word = entry.value[index];
         children.add(
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             child: _dictionaryTermRow(word),
           ),
         );
@@ -787,8 +838,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
             Divider(
               height: 1,
               thickness: 1,
-              indent: 18,
-              endIndent: 18,
+              indent: 14,
+              endIndent: 14,
               color: GakujiColors.softBorder,
             ),
           );
@@ -849,7 +900,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
   Widget _recentSearchDateHeader(String title) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
       decoration: BoxDecoration(
         color: GakujiColors.sectionHeader,
         border: Border(
@@ -907,21 +958,108 @@ class _DictionaryPageState extends State<DictionaryPage> {
     return '${monthNames[date.month - 1]} ${date.day}, ${date.year}';
   }
 
-  Widget _dictionaryTermRow(Term word) {
-    final titleText = word.kanjiBracketText.isNotEmpty
-        ? word.kanjiBracketText
-        : word.reading;
-    final readingText = word.kanjiBracketText.isNotEmpty ? word.reading : '';
+  Widget _dictionaryTermRow(
+    Term word, {
+    String searchQuery = '',
+  }) {
+    final queryWriting = _exactSearchWritingFor(word, searchQuery);
+    final titleText = queryWriting ?? _preferredListWriting(word);
+    final secondaryText = _dictionaryRowSecondaryText(
+      word,
+      titleText: titleText,
+    );
 
     return GakujiTermRow(
       term: word,
       titleText: titleText,
-      readingText: readingText,
+      readingText: secondaryText,
+      allowSecondaryForKanaTitle: true,
       onTap: () => openDictionaryDetail(word),
     );
   }
 
+  String _preferredListWriting(Term word) {
+    final preferred = word.preferredSpelling.trim();
+    if (preferred.isNotEmpty) return preferred;
+
+    if (word.kanji.trim().isNotEmpty) return word.kanji.trim();
+    return word.reading.trim();
+  }
+
+  String? _exactSearchWritingFor(Term word, String rawQuery) {
+    final query = _normalizedDictionaryLookup(rawQuery);
+    if (query.isEmpty) return null;
+
+    for (final form in word.allWrittenForms) {
+      if (_normalizedDictionaryLookup(form) == query) {
+        return form.trim();
+      }
+    }
+
+    return null;
+  }
+
+  String _dictionaryRowSecondaryText(
+    Term word, {
+    required String titleText,
+  }) {
+    final title = titleText.trim();
+    if (title.isEmpty) return '';
+
+    if (_isDictionaryWrittenForm(word, title)) {
+      final reading = word.reading.trim();
+      return reading == title ? '' : reading;
+    }
+
+    return _writtenFormsForPrimaryReading(
+      word,
+      excluding: title,
+    ).join('・');
+  }
+
+  bool _isDictionaryWrittenForm(Term word, String value) {
+    final metadata = word.spellingMetadataFor(value);
+    if (metadata != null) return metadata.isKanji;
+
+    if (word.kanji.trim() == value) return true;
+    if (word.alternativeKanji.any((form) => form.trim() == value)) return true;
+
+    return RegExp(r'[\u4E00-\u9FFF]').hasMatch(value);
+  }
+
+  List<String> _writtenFormsForPrimaryReading(
+    Term word, {
+    String excluding = '',
+  }) {
+    final compatible = word.cardWritingForms.toSet();
+    final forms = <String>[];
+    final seen = <String>{};
+
+    void add(String value) {
+      final cleaned = value.trim();
+      if (cleaned.isEmpty || cleaned == excluding || !seen.add(cleaned)) return;
+      forms.add(cleaned);
+    }
+
+    for (final spelling in word.spellings) {
+      if (!spelling.isKanji || !compatible.contains(spelling.text)) continue;
+      add(spelling.text);
+    }
+
+    if (compatible.contains(word.kanji)) add(word.kanji);
+    for (final form in word.alternativeKanji) {
+      if (compatible.contains(form)) add(form);
+    }
+
+    return forms;
+  }
+
+  String _normalizedDictionaryLookup(String value) {
+    return value.replaceAll(RegExp(r'\s+'), '').trim();
+  }
+
   Widget _dictionaryResultList({
+    required String query,
     required List<Term> wordsToShow,
     required double topPadding,
     required double bottomResultsPadding,
@@ -969,7 +1107,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
             );
           },
           itemBuilder: (context, index) {
-            return _dictionaryTermRow(wordsToShow[index]);
+            return _dictionaryTermRow(
+              wordsToShow[index],
+              searchQuery: query,
+            );
           },
         ),
       ),
@@ -997,17 +1138,20 @@ class _DictionaryPageState extends State<DictionaryPage> {
     required double writingPanelHeight,
     required double keyboardHeight,
   }) {
-    // After the first keyboard -> writing swap, both input surfaces use the
-    // same cached footprint. This keeps the mode buttons fixed in place while
-    // iOS animates its keyboard instead of making them chase viewInsets.
-    final effectiveKeyboardHeight = keyboardHeight > _lastKeyboardHeight
-        ? keyboardHeight
-        : _lastKeyboardHeight;
+    // The native keyboard can report a height that does not map one-to-one to
+    // the bottom coordinate used by this Flutter Stack. In writing mode, use
+    // the actual accessory-row position captured before the keyboard closed.
     final double bottomOffset = inputMode == DictionaryInputMode.writing
-        ? writingPanelHeight + 8.0
-        : effectiveKeyboardHeight > 0
-            ? effectiveKeyboardHeight + 8.0
-            : 18.0;
+        ? _lastAccessoryBottomOffset > 0
+            ? _lastAccessoryBottomOffset
+            : writingPanelHeight + 8.0
+        : keyboardHeight > 0
+            ? keyboardHeight + 8.0
+            : _lastAccessoryBottomOffset > 0
+                ? _lastAccessoryBottomOffset
+                : _lastKeyboardHeight > 0
+                    ? _lastKeyboardHeight + 8.0
+                    : 18.0;
 
     return Positioned(
       left: 18,
@@ -1026,6 +1170,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
             duration: const Duration(milliseconds: 170),
             curve: Curves.easeOut,
             child: Row(
+              key: _inputAccessoryBarKey,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 if (inputMode == DictionaryInputMode.writing)
@@ -1177,12 +1322,12 @@ class _DictionaryPageState extends State<DictionaryPage> {
           _setInputActive(true);
         },
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: panelGray,
-            borderRadius: BorderRadius.vertical(
+            borderRadius: const BorderRadius.vertical(
               top: Radius.circular(24),
             ),
-            boxShadow: [
+            boxShadow: const [
               BoxShadow(
                 color: Color(0x26000000),
                 blurRadius: 18,
@@ -1197,7 +1342,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
             child: Column(
               children: [
                 _handwritingCandidateRow(),
-                const Divider(
+                Divider(
                   height: 1,
                   thickness: 1,
                   color: panelBorderGray,
@@ -1225,10 +1370,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
                     : 'Keep writing'
                 : 'Write a character',
             textScaler: TextScaler.noScaling,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               height: 1,
-              color: Colors.black45,
+              color: GakujiColors.mediumGray,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1240,10 +1385,10 @@ class _DictionaryPageState extends State<DictionaryPage> {
       height: 48,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         itemCount: handwritingCandidates.length,
         separatorBuilder: (context, index) {
-          return const VerticalDivider(
+          return VerticalDivider(
             width: 1,
             thickness: 1,
             color: panelBorderGray,
@@ -1255,15 +1400,15 @@ class _DictionaryPageState extends State<DictionaryPage> {
           return InkWell(
             onTap: () => selectHandwritingCandidate(candidate),
             child: Container(
-              width: 56,
+              width: 46,
               alignment: Alignment.center,
               child: Text(
                 candidate,
                 textScaler: TextScaler.noScaling,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 22,
                   height: 1,
-                  color: Colors.black,
+                  color: GakujiColors.darkGray,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1278,9 +1423,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
     return GakujiLowLatencyWritingCanvas(
       strokes: handwritingStrokes,
       showGrid: false,
-      penColor: Colors.black87,
-      gridColor: const Color(0xFFE3E3E3),
-      borderColor: const Color(0xFFD8D8D8),
+      penColor: GakujiColors.darkGray,
+      gridColor: GakujiColors.warmDivider,
+      borderColor: GakujiColors.warmDivider,
       strokeWidth: 5,
       onStrokeStart: (point) {
         _setInputActive(true);
@@ -1299,12 +1444,12 @@ class _DictionaryPageState extends State<DictionaryPage> {
       onStrokeEnd: scheduleHandwritingCandidateRecognition,
       child: Center(
         child: handwritingStrokes.isEmpty
-            ? const Text(
+            ? Text(
                 'Write here',
                 textScaler: TextScaler.noScaling,
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.black38,
+                  color: GakujiColors.mediumGray,
                   fontWeight: FontWeight.w500,
                 ),
               )

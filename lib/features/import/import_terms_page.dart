@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:gakuji/core/widgets/gakuji_page_route.dart';
 
 import 'package:gakuji/features/import/models/deck_import_row.dart';
+import 'package:gakuji/domain/deck.dart';
 import 'package:gakuji/domain/term.dart';
 import 'package:gakuji/features/import/services/term_import_service.dart';
 import 'package:gakuji/core/widgets/gakuji_faded_scroll.dart';
 import 'package:gakuji/core/theme/gakuji_styles.dart';
 import 'package:gakuji/core/widgets/gakuji_term_row.dart';
 import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/features/import/import_deck_code_page.dart';
 import 'package:gakuji/features/import/import_terms_preview_page.dart';
 
 class ImportTermsPage extends StatefulWidget {
@@ -123,6 +125,25 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
       columnRoles[columnIndex] = role;
       errorMessage = null;
     });
+  }
+
+  Future<void> _openDeckCodePage() async {
+    Deck? importedDeck;
+
+    await Navigator.push<Deck>(
+      context,
+      GakujiPageRoute<Deck>(
+        builder: (context) => ImportDeckCodePage(
+          onImported: (deck) {
+            importedDeck = deck;
+          },
+        ),
+      ),
+    );
+
+    if (!mounted || importedDeck == null) return;
+
+    Navigator.pop(context, true);
   }
 
   Future<void> _continueToPreview() async {
@@ -246,6 +267,8 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
             const SizedBox(height: 16),
           ],
           _chooseFileButton(),
+          const SizedBox(height: 12),
+          _enterDeckCodeButton(),
         ],
       ),
     );
@@ -295,10 +318,43 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
             child: Text(
               isPickingFile ? 'Opening Files...' : 'Choose File',
               textScaler: TextScaler.noScaling,
-              style: GakujiText.medium.copyWith(
+              style: GakujiText.actionLabel.copyWith(
                 color: isPickingFile
                     ? GakujiColors.mediumGray
                     : Colors.white,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _enterDeckCodeButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: Material(
+        color: GakujiColors.warmCard,
+        borderRadius: BorderRadius.circular(GakujiRadius.pill),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _openDeckCodePage,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(GakujiRadius.pill),
+              border: Border.all(
+                color: GakujiColors.reading,
+                width: 2,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                'Enter Deck Code',
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.actionLabel.copyWith(
+                  color: GakujiColors.reading,
+                ),
               ),
             ),
           ),

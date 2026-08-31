@@ -37,12 +37,64 @@ HybridCardMode hybridCardModeFromStorage(String? value) {
   }
 }
 
+
+class DeckAdapterCredit {
+  final String uid;
+  final String? username;
+
+  const DeckAdapterCredit({
+    required this.uid,
+    this.username,
+  });
+
+  factory DeckAdapterCredit.fromJson(Map<String, dynamic> json) {
+    final rawUsername = json['username']?.toString().trim();
+
+    return DeckAdapterCredit(
+      uid: json['uid']?.toString().trim() ?? '',
+      username: rawUsername == null || rawUsername.isEmpty
+          ? null
+          : rawUsername,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'uid': uid,
+      if (username != null && username!.trim().isNotEmpty)
+        'username': username!.trim(),
+    };
+  }
+}
+
 /// Deck = container of copied deck-owned Terms.
 class Deck {
   final String id;
   final String name;
 
   final DeckType type;
+
+  /// Original creator attribution for shared/imported decks.
+  ///
+  /// Local decks created before attribution was added leave these null and are
+  /// treated as belonging to the current user. Imported decks preserve the
+  /// original creator so attribution survives independent copies and re-shares.
+  final String? creatorUid;
+  final String? creatorUsername;
+
+  /// Ordered, de-duplicated attribution for users who published modified
+  /// versions of a shared deck after the original creator.
+  final List<DeckAdapterCredit> adaptedBy;
+
+  /// Share code for the exact snapshot this local deck most recently matched.
+  ///
+  /// The code remains attached while the local deck is edited so the next
+  /// share can compare [shareSnapshotHash] and decide whether to reuse the
+  /// immutable snapshot or publish a new version.
+  String? shareCode;
+
+  /// Stable hash of the shareable deck content represented by [shareCode].
+  String? shareSnapshotHash;
 
   /// Optional user-selected ARGB color for this deck.
   ///
@@ -92,6 +144,11 @@ class Deck {
     required this.id,
     required this.name,
     required this.type,
+    this.creatorUid,
+    this.creatorUsername,
+    List<DeckAdapterCredit>? adaptedBy,
+    this.shareCode,
+    this.shareSnapshotHash,
     this.colorValue,
     required this.terms,
     Map<String, HybridCardMode>? hybridCardModes,
@@ -100,7 +157,10 @@ class Deck {
     this.reviewEnabledAt,
     this.lastStudyIndex = 0,
     this.isShuffled = false,
-  }) : hybridCardModes = Map<String, HybridCardMode>.from(
+  })  : adaptedBy = List<DeckAdapterCredit>.from(
+          adaptedBy ?? const <DeckAdapterCredit>[],
+        ),
+        hybridCardModes = Map<String, HybridCardMode>.from(
           hybridCardModes ?? const {},
         );
 
@@ -184,6 +244,11 @@ class Deck {
     String? id,
     String? name,
     DeckType? type,
+    String? creatorUid,
+    String? creatorUsername,
+    List<DeckAdapterCredit>? adaptedBy,
+    String? shareCode,
+    String? shareSnapshotHash,
     int? colorValue,
     List<Term>? terms,
     Map<String, HybridCardMode>? hybridCardModes,
@@ -197,6 +262,11 @@ class Deck {
       id: id ?? this.id,
       name: name ?? this.name,
       type: type ?? this.type,
+      creatorUid: creatorUid ?? this.creatorUid,
+      creatorUsername: creatorUsername ?? this.creatorUsername,
+      adaptedBy: adaptedBy ?? this.adaptedBy,
+      shareCode: shareCode ?? this.shareCode,
+      shareSnapshotHash: shareSnapshotHash ?? this.shareSnapshotHash,
       colorValue: colorValue ?? this.colorValue,
       terms: terms ?? this.terms,
       hybridCardModes: hybridCardModes ?? this.hybridCardModes,

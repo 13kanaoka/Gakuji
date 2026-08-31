@@ -921,32 +921,113 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   }
 
   Widget _wordTitleLine(Term word) {
+    final reading = word.reading.trim();
+    final preferredWriting = _preferredWritingText(word);
+    final headword = reading.isNotEmpty ? reading : preferredWriting;
+    final primaryReadingSpelling = _kanaSpellingForText(word, headword);
+    final writtenForms = _writtenFormsForReading(
+      word,
+      readingSpelling: primaryReadingSpelling,
+      excluding: headword,
+    );
+    final alternateKana = _alternateKanaSpellings(
+      word,
+      excluding: headword,
+    );
+
     return Container(
       key: entryTitleKey,
-      child: Wrap(
-        crossAxisAlignment: WrapCrossAlignment.end,
-        spacing: 8,
-        runSpacing: 3,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            word.reading,
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.dictionaryTerm.copyWith(
-              fontSize: (GakujiText.dictionaryTerm.fontSize ?? 22) + 2,
-              color: darkText,
-            ),
+          _readingHeadwordLine(
+            headword,
+            writtenForms,
+            preferredWriting: preferredWriting,
           ),
-          if (word.hasKanjiBracketText)
-            Text(
-              '【${word.kanjiBracketText}】',
-              textScaler: TextScaler.noScaling,
-              style: GakujiText.dictionaryTerm.copyWith(
-                fontSize: (GakujiText.dictionaryTerm.fontSize ?? 22) + 2,
-                color: darkText,
+          ...alternateKana.map((spelling) {
+            final alternateWrittenForms = _writtenFormsForReading(
+              word,
+              readingSpelling: spelling,
+              excluding: spelling.text,
+            );
+
+            return Padding(
+              padding: const EdgeInsets.only(top: 7),
+              child: _readingHeadwordLine(
+                spelling.text,
+                alternateWrittenForms,
+                preferredWriting: preferredWriting,
+                infoLabel: spelling.shortInfoLabel,
               ),
-            ),
+            );
+          }),
         ],
       ),
+    );
+  }
+
+  Widget _readingHeadwordLine(
+    String kana,
+    List<String> writtenForms, {
+    required String preferredWriting,
+    String? infoLabel,
+  }) {
+    final bracketStyle = GakujiText.dictionaryTerm.copyWith(
+      fontSize: (GakujiText.dictionaryTerm.fontSize ?? 22) + 2,
+      color: accentBlue.withValues(alpha: 0.60),
+      fontWeight: FontWeight.w600,
+    );
+    final preferredBracketStyle = bracketStyle.copyWith(color: accentBlue);
+
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.end,
+      spacing: 8,
+      runSpacing: 3,
+      children: [
+        Text(
+          kana,
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.dictionaryTerm.copyWith(
+            fontSize: (GakujiText.dictionaryTerm.fontSize ?? 22) + 2,
+            color: darkText,
+          ),
+        ),
+        if (infoLabel != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              infoLabel,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 10.5,
+                height: 1,
+                color: softTextGray,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        if (writtenForms.isNotEmpty)
+          Text.rich(
+            TextSpan(
+              style: bracketStyle,
+              children: [
+                const TextSpan(text: '【'),
+                for (var index = 0; index < writtenForms.length; index++) ...[
+                  if (index > 0) const TextSpan(text: '・'),
+                  TextSpan(
+                    text: writtenForms[index],
+                    style: writtenForms[index].trim() == preferredWriting.trim()
+                        ? preferredBracketStyle
+                        : bracketStyle,
+                  ),
+                ],
+                const TextSpan(text: '】'),
+              ],
+            ),
+            textScaler: TextScaler.noScaling,
+          ),
+      ],
     );
   }
 
@@ -1810,6 +1891,11 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       if (fallback.isNotEmpty) tags.add(fallback);
     }
 
+    if (word.usuallyWrittenInKana) {
+      const kanaUsage = 'usually written using kana';
+      if (seen.add(kanaUsage)) tags.add(kanaUsage);
+    }
+
     return tags.join(', ');
   }
 
@@ -1821,12 +1907,89 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     return '•';
   }
 
-  String _topBarTitle(Term word) {
-    final primaryKanji = _primaryKanjiText(word);
+  String _topBarTitle(Term word) => _preferredWritingText(word);
 
-    if (primaryKanji.isNotEmpty) return primaryKanji;
+  String _preferredWritingText(Term word) {
+    final preferred = word.preferredSpelling.trim();
+    if (preferred.isNotEmpty) return preferred;
 
-    return word.reading;
+    if (word.kanji.trim().isNotEmpty) return word.kanji.trim();
+    return word.reading.trim();
+  }
+
+  DictionarySpelling? _kanaSpellingForText(Term word, String text) {
+    final target = text.trim();
+    if (target.isEmpty) return null;
+
+    for (final spelling in word.spellings) {
+      if (spelling.isKana && spelling.text.trim() == target) {
+        return spelling;
+      }
+    }
+
+    return null;
+  }
+
+  List<String> _writtenFormsForReading(
+    Term word, {
+    DictionarySpelling? readingSpelling,
+    String excluding = '',
+  }) {
+    final restrictedKanji =
+        readingSpelling?.restrictions.toSet() ?? const <String>{};
+    final result = <String>[];
+    final seen = <String>{};
+
+    bool isAllowed(String value) {
+      return restrictedKanji.isEmpty || restrictedKanji.contains(value);
+    }
+
+    void add(String value) {
+      final text = value.trim();
+      if (text.isEmpty ||
+          text == excluding ||
+          !isAllowed(text) ||
+          !seen.add(text)) {
+        return;
+      }
+      result.add(text);
+    }
+
+    for (final spelling in word.spellings) {
+      if (!spelling.isKanji) continue;
+      add(spelling.text);
+    }
+
+    add(word.kanji);
+    for (final spelling in word.alternativeKanji) {
+      add(spelling);
+    }
+
+    return result;
+  }
+
+  List<DictionarySpelling> _alternateKanaSpellings(
+    Term word, {
+    required String excluding,
+  }) {
+    final compatibleForms = word.cardWritingForms.toSet();
+    final result = <DictionarySpelling>[];
+    final seen = <String>{};
+
+    for (final spelling in word.spellings) {
+      final text = spelling.text.trim();
+      if (!spelling.isKana ||
+          text.isEmpty ||
+          text == excluding ||
+          !compatibleForms.contains(text) ||
+          !seen.add(text)) {
+        continue;
+      }
+
+      result.add(spelling);
+    }
+
+    return result;
   }
 
   String _primaryKanjiText(Term word) {

@@ -20,6 +20,10 @@ class ReadingCardEditData {
   /// Card-specific note. This is separate from dictionary notes.
   final String note;
 
+  /// Optional deck/card-level override for the written form shown on reading
+  /// flashcards. Null means follow the dictionary's preferred spelling.
+  final String? preferredWritingOverride;
+
   /// Photo is optional. The slot can be enabled before a real photo is picked.
   final bool photoEnabled;
   final String? photoPath;
@@ -39,6 +43,7 @@ class ReadingCardEditData {
     required this.selectedGlosses,
     required this.selectedExampleKeys,
     required this.note,
+    this.preferredWritingOverride,
     required this.photoEnabled,
     required this.photoPath,
     this.photoScale = 1.0,
@@ -58,6 +63,7 @@ class ReadingCardEditData {
       selectedGlosses: const [],
       selectedExampleKeys: const [],
       note: '',
+      preferredWritingOverride: null,
       photoEnabled: false,
       photoPath: null,
       photoScale: 1.0,
@@ -74,6 +80,9 @@ class ReadingCardEditData {
       selectedGlosses: _stringListFromJson(json['selectedGlosses']),
       selectedExampleKeys: _stringListFromJson(json['selectedExampleKeys']),
       note: json['note'] as String? ?? '',
+      preferredWritingOverride: _nullableTrimmedString(
+        json['preferredWritingOverride'],
+      ),
       photoEnabled: json['photoEnabled'] as bool? ?? false,
       photoPath: json['photoPath'] as String?,
       photoScale: _doubleFromJson(json['photoScale'], fallback: 1.0)
@@ -95,6 +104,8 @@ class ReadingCardEditData {
     List<String>? selectedGlosses,
     List<String>? selectedExampleKeys,
     String? note,
+    String? preferredWritingOverride,
+    bool clearPreferredWritingOverride = false,
     bool? photoEnabled,
     String? photoPath,
     double? photoScale,
@@ -109,6 +120,9 @@ class ReadingCardEditData {
       selectedGlosses: selectedGlosses ?? this.selectedGlosses,
       selectedExampleKeys: selectedExampleKeys ?? this.selectedExampleKeys,
       note: note ?? this.note,
+      preferredWritingOverride: clearPreferredWritingOverride
+          ? null
+          : preferredWritingOverride ?? this.preferredWritingOverride,
       photoEnabled: photoEnabled ?? this.photoEnabled,
       photoPath: clearPhotoPath ? null : photoPath ?? this.photoPath,
       photoScale: (photoScale ?? this.photoScale).clamp(0.75, 3.0).toDouble(),
@@ -127,6 +141,8 @@ class ReadingCardEditData {
       'selectedGlosses': selectedGlosses,
       'selectedExampleKeys': selectedExampleKeys,
       'note': note,
+      if (preferredWritingOverride != null)
+        'preferredWritingOverride': preferredWritingOverride,
       'photoEnabled': photoEnabled,
       'photoPath': photoPath,
       'photoScale': photoScale,
@@ -185,6 +201,12 @@ class ReadingCardEditData {
 
   static List<String> keysFromExamples(List<DictionaryExample> examples) {
     return examples.map(exampleKeyFor).toList();
+  }
+
+  static String? _nullableTrimmedString(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text;
   }
 
   static double _doubleFromJson(

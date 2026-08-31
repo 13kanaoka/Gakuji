@@ -1180,9 +1180,11 @@ class _DeckEditPageState extends State<DeckEditPage> {
     final offset = rowOffsetFor(term);
     final duration = rowAnimationDurationFor(term);
     final isDeleting = deletingTermIds.contains(term.id);
-    final titleText = term.kanjiBracketText.isNotEmpty
-        ? term.kanjiBracketText
-        : term.kanji;
+    final titleText = term.preferredSpelling.trim().isNotEmpty
+        ? term.preferredSpelling.trim()
+        : term.kanji.trim().isNotEmpty
+            ? term.kanji.trim()
+            : term.reading.trim();
 
     return AnimatedOpacity(
       key: ValueKey(term.id),

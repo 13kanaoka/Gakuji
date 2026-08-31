@@ -270,6 +270,80 @@ class KanjiCompound {
   }
 }
 
+enum DictionarySpellingKind {
+  kanji,
+  kana,
+}
+
+class DictionarySpelling {
+  final String text;
+  final DictionarySpellingKind kind;
+  final List<String> infoTags;
+  final List<String> priorityTags;
+
+  /// For kana readings, JMdict `re_restr` values identify the kanji spellings
+  /// this reading can accompany. An empty list means the reading is valid for
+  /// every kanji spelling in the entry.
+  final List<String> restrictions;
+  final bool isPreferred;
+
+  DictionarySpelling({
+    required this.text,
+    required this.kind,
+    List<String>? infoTags,
+    List<String>? priorityTags,
+    List<String>? restrictions,
+    this.isPreferred = false,
+  })  : infoTags = _cleanStringList(infoTags ?? const []),
+        priorityTags = _cleanStringList(priorityTags ?? const []),
+        restrictions = _cleanStringList(restrictions ?? const []);
+
+  factory DictionarySpelling.fromJson(Map<String, dynamic> json) {
+    final kindText = json['kind']?.toString().trim().toLowerCase() ?? '';
+
+    return DictionarySpelling(
+      text: json['text']?.toString() ?? '',
+      kind: kindText == 'kana'
+          ? DictionarySpellingKind.kana
+          : DictionarySpellingKind.kanji,
+      infoTags: _stringList(json['infoTags']),
+      priorityTags: _stringList(json['priorityTags']),
+      restrictions: _stringList(json['restrictions']),
+      isPreferred: json['isPreferred'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'text': text,
+      'kind': kind.name,
+      if (infoTags.isNotEmpty) 'infoTags': infoTags,
+      if (priorityTags.isNotEmpty) 'priorityTags': priorityTags,
+      if (restrictions.isNotEmpty) 'restrictions': restrictions,
+      if (isPreferred) 'isPreferred': true,
+    };
+  }
+
+  bool get isKanji => kind == DictionarySpellingKind.kanji;
+
+  bool get isKana => kind == DictionarySpellingKind.kana;
+
+  String? get shortInfoLabel {
+    for (final tag in infoTags) {
+      final normalized = tag.toLowerCase();
+
+      if (normalized.contains('rare')) return 'rare';
+      if (normalized.contains('obsolete') || normalized.contains('out-dated')) {
+        return 'obsolete';
+      }
+      if (normalized.contains('irregular')) return 'irregular';
+      if (normalized.contains('ateji')) return 'ateji';
+    }
+
+    return null;
+  }
+}
+
 class Term {
   /// Unique ID for this specific term/card.
   ///
@@ -283,10 +357,27 @@ class Term {
   /// the original dictionary entry through this ID.
   final String? sourceId;
 
-  /// Main kanji/spelling shown for this word.
+  /// Dictionary primary kanji/spelling retained for kanji-focused features.
   final String kanji;
   final String reading;
   final String meaning;
+
+  /// Learner-facing default written form. This is independent from [kanji],
+  /// which remains the dictionary's primary kanji form for kanji-focused
+  /// features such as Fusion.
+  final String preferredSpelling;
+
+  /// Ordered written forms preserved from the dictionary source.
+  final List<DictionarySpelling> spellings;
+
+  /// True when JMdict marks the primary sense as usually written in kana.
+  final bool usuallyWrittenInKana;
+
+  /// True when this term has been hydrated with the dictionary's preferred
+  /// writing metadata. Canonical dictionary terms may also carry the full
+  /// [spellings] list; deck-owned copies intentionally keep that list empty to
+  /// avoid bloating local/cloud term payloads.
+  final bool hasDictionarySpellingMetadata;
 
   /// Alternative kanji/spellings from the dictionary source.
   final List<String> alternativeKanji;
@@ -341,6 +432,10 @@ class Term {
     required String kanji,
     required String reading,
     required String meaning,
+    String? preferredSpelling,
+    List<DictionarySpelling>? spellings,
+    bool usuallyWrittenInKana = false,
+    bool? hasDictionarySpellingMetadata,
     List<String>? alternativeKanji,
     String partOfSpeech = 'noun',
     List<DictionarySense>? senses,
@@ -381,17 +476,41 @@ class Term {
             resolvedSenses,
           );
 
+    final suppliedSpellings = _cleanDictionarySpellings(spellings ?? const []);
+    final resolvedHasDictionarySpellingMetadata =
+        hasDictionarySpellingMetadata ?? suppliedSpellings.isNotEmpty;
+    final metadataPreferred = _preferredSpellingFromMetadata(suppliedSpellings);
+    final resolvedPreferredSpelling = _resolvePreferredSpelling(
+      preferredSpelling: preferredSpelling ?? metadataPreferred,
+      kanji: kanji,
+      reading: reading,
+    );
+    final resolvedSpellings = _resolveDictionarySpellings(
+      suppliedSpellings: suppliedSpellings,
+      preferredSpelling: resolvedPreferredSpelling,
+    );
+    final resolvedAlternativeKanji = _cleanSpellingList(
+      [
+        ...?alternativeKanji,
+        ...resolvedSpellings
+            .where((spelling) => spelling.isKanji)
+            .map((spelling) => spelling.text),
+      ],
+      primarySpelling: kanji,
+      reading: reading,
+    );
+
     return Term._internal(
       id: id,
       sourceId: sourceId,
       kanji: kanji,
       reading: reading,
       meaning: meaning,
-      alternativeKanji: _cleanSpellingList(
-        alternativeKanji ?? const [],
-        primarySpelling: kanji,
-        reading: reading,
-      ),
+      preferredSpelling: resolvedPreferredSpelling,
+      spellings: resolvedSpellings,
+      usuallyWrittenInKana: usuallyWrittenInKana,
+      hasDictionarySpellingMetadata: resolvedHasDictionarySpellingMetadata,
+      alternativeKanji: resolvedAlternativeKanji,
       partOfSpeech: partOfSpeech,
       senses: resolvedSenses,
       selectedGlosses: resolvedSelections,
@@ -419,6 +538,10 @@ class Term {
     required this.kanji,
     required this.reading,
     required this.meaning,
+    required this.preferredSpelling,
+    required this.spellings,
+    required this.usuallyWrittenInKana,
+    required this.hasDictionarySpellingMetadata,
     required this.alternativeKanji,
     required this.partOfSpeech,
     required this.senses,
@@ -460,6 +583,7 @@ class Term {
 
     final storedSenses = _dictionarySenses(json['senses']);
     final storedSelections = _glossSelections(json['selectedGlosses']);
+    final storedSpellings = _dictionarySpellings(json['spellings']);
 
     return Term(
       id: json['id']?.toString() ?? '',
@@ -467,6 +591,14 @@ class Term {
       kanji: kanji,
       reading: reading,
       meaning: json['meaning']?.toString() ?? '',
+      preferredSpelling: _nullableString(json['preferredSpelling']),
+      spellings: storedSpellings,
+      usuallyWrittenInKana: json['usuallyWrittenInKana'] == true,
+      // Only the explicit marker proves this saved term has already received
+      // the dictionary preferred-writing migration. Deck copies deliberately
+      // do not persist the full spelling metadata array.
+      hasDictionarySpellingMetadata:
+          json['hasDictionarySpellingMetadata'] == true,
       alternativeKanji: alternativeKanji,
       partOfSpeech: json['partOfSpeech']?.toString() ?? 'noun',
       senses: storedSenses.isEmpty ? null : storedSenses,
@@ -501,6 +633,12 @@ class Term {
       'kanji': kanji,
       'reading': reading,
       'meaning': meaning,
+      'preferredSpelling': preferredSpelling,
+      if (spellings.isNotEmpty)
+        'spellings': spellings.map((spelling) => spelling.toJson()).toList(),
+      if (usuallyWrittenInKana) 'usuallyWrittenInKana': true,
+      if (hasDictionarySpellingMetadata)
+        'hasDictionarySpellingMetadata': true,
       if (alternativeKanji.isNotEmpty) 'alternativeKanji': alternativeKanji,
       'partOfSpeech': partOfSpeech,
       'senses': senses.map((sense) => sense.toJson()).toList(),
@@ -539,6 +677,14 @@ class Term {
       kanji: dictionaryTerm.kanji,
       reading: dictionaryTerm.reading,
       meaning: dictionaryTerm.meaning,
+      preferredSpelling: dictionaryTerm.preferredSpelling,
+      // Full JMdict spelling metadata stays on the canonical dictionary term.
+      // A deck card only needs its default display writing; Card Edit resolves
+      // the source dictionary term when the user opens the writing selector.
+      spellings: const [],
+      usuallyWrittenInKana: dictionaryTerm.usuallyWrittenInKana,
+      hasDictionarySpellingMetadata:
+          dictionaryTerm.hasDictionarySpellingMetadata,
       alternativeKanji: dictionaryTerm.alternativeKanji,
       partOfSpeech: dictionaryTerm.partOfSpeech,
       senses: dictionaryTerm.senses,
@@ -608,16 +754,121 @@ class Term {
     return indexes;
   }
 
-  /// Main + alternative kanji spellings for display.
+  /// Main + alternative kanji spellings retained for kanji-focused features.
   List<String> get kanjiSpellings {
     return _cleanSpellingList(
       [
         kanji,
         ...alternativeKanji,
+        ...spellings
+            .where((spelling) => spelling.isKanji)
+            .map((spelling) => spelling.text),
       ],
       primarySpelling: '',
       reading: reading,
     );
+  }
+
+  /// Every written/reading form preserved from the dictionary source, with the
+  /// preferred form first. Use [cardWritingForms] when the form must remain
+  /// compatible with this term's primary reading.
+  List<String> get allWrittenForms {
+    final forms = <String>[];
+    final seen = <String>{};
+
+    void add(String value) {
+      final cleaned = value.replaceAll(RegExp(r'\s+'), '').trim();
+      if (cleaned.isEmpty || !seen.add(cleaned)) return;
+      forms.add(cleaned);
+    }
+
+    add(preferredSpelling);
+    for (final spelling in spellings) {
+      add(spelling.text);
+    }
+    add(kanji);
+    for (final spelling in alternativeKanji) {
+      add(spelling);
+    }
+    add(reading);
+
+    return List.unmodifiable(forms);
+  }
+
+  /// Written forms that can safely replace the front of this card without
+  /// changing its reading. All compatible kanji spellings are included, along
+  /// with kana variants that are phonetic script variants of [reading].
+  List<String> get cardWritingForms {
+    final forms = <String>[];
+    final seen = <String>{};
+
+    void add(String value) {
+      final cleaned = value.replaceAll(RegExp(r'\s+'), '').trim();
+      if (cleaned.isEmpty || !seen.add(cleaned)) return;
+      forms.add(cleaned);
+    }
+
+    add(preferredSpelling);
+
+    final primaryReading = reading.replaceAll(RegExp(r'\s+'), '').trim();
+    DictionarySpelling? primaryReadingMetadata;
+    for (final spelling in spellings) {
+      if (!spelling.isKana || spelling.text != primaryReading) continue;
+      primaryReadingMetadata = spelling;
+      break;
+    }
+
+    final restrictedKanji = primaryReadingMetadata?.restrictions ?? const <String>[];
+    final allowedKanji = restrictedKanji.toSet();
+
+    for (final spelling in spellings) {
+      if (spelling.isKanji) {
+        if (allowedKanji.isEmpty || allowedKanji.contains(spelling.text)) {
+          add(spelling.text);
+        }
+        continue;
+      }
+
+      if (_canonicalKana(spelling.text) == _canonicalKana(primaryReading)) {
+        add(spelling.text);
+      }
+    }
+
+    if (allowedKanji.isEmpty || allowedKanji.contains(kanji)) {
+      add(kanji);
+    }
+    for (final spelling in alternativeKanji) {
+      if (allowedKanji.isEmpty || allowedKanji.contains(spelling)) {
+        add(spelling);
+      }
+    }
+    add(reading);
+
+    return List.unmodifiable(forms);
+  }
+
+  List<DictionarySpelling> get alternativeDictionarySpellings {
+    final preferred = preferredSpelling.trim();
+
+    return spellings
+        .where((spelling) => spelling.text.trim() != preferred)
+        .toList(growable: false);
+  }
+
+  List<String> get alternativeWrittenForms {
+    return allWrittenForms
+        .where((spelling) => spelling != preferredSpelling)
+        .toList(growable: false);
+  }
+
+  DictionarySpelling? spellingMetadataFor(String value) {
+    final cleaned = value.trim();
+
+    for (final spelling in spellings) {
+      if (spelling.text == cleaned) return spelling;
+    }
+
+    return null;
   }
 
   String get kanjiBracketText => kanjiSpellings.join('・');
@@ -786,6 +1037,10 @@ class Term {
     String? kanji,
     String? reading,
     String? meaning,
+    String? preferredSpelling,
+    List<DictionarySpelling>? spellings,
+    bool? usuallyWrittenInKana,
+    bool? hasDictionarySpellingMetadata,
     List<String>? alternativeKanji,
     String? partOfSpeech,
     List<DictionarySense>? senses,
@@ -821,6 +1076,12 @@ class Term {
       kanji: kanji ?? this.kanji,
       reading: reading ?? this.reading,
       meaning: meaning ?? this.meaning,
+      preferredSpelling: preferredSpelling ?? this.preferredSpelling,
+      spellings: spellings ?? this.spellings,
+      usuallyWrittenInKana:
+          usuallyWrittenInKana ?? this.usuallyWrittenInKana,
+      hasDictionarySpellingMetadata: hasDictionarySpellingMetadata ??
+          this.hasDictionarySpellingMetadata,
       alternativeKanji: alternativeKanji ?? this.alternativeKanji,
       partOfSpeech: partOfSpeech ?? this.partOfSpeech,
       senses: isUsingLegacySenseReplacement ? null : (senses ?? this.senses),
@@ -911,6 +1172,20 @@ List<DictionarySense> _dictionarySenses(dynamic value) {
       .map((item) => DictionarySense.fromJson(
             Map<String, dynamic>.from(item),
           ))
+      .toList();
+}
+
+List<DictionarySpelling> _dictionarySpellings(dynamic value) {
+  if (value is! List) return const [];
+
+  return value
+      .whereType<Map>()
+      .map(
+        (item) => DictionarySpelling.fromJson(
+          Map<String, dynamic>.from(item),
+        ),
+      )
+      .where((spelling) => spelling.text.trim().isNotEmpty)
       .toList();
 }
 
@@ -1044,6 +1319,111 @@ List<GlossSelection> _legacyIndexesToSelections(
   return List.unmodifiable(selections);
 }
 
+List<DictionarySpelling> _cleanDictionarySpellings(
+  Iterable<DictionarySpelling> values,
+) {
+  final cleaned = <DictionarySpelling>[];
+  final seen = <String>{};
+
+  for (final value in values) {
+    final text = value.text.replaceAll(RegExp(r'\s+'), '').trim();
+    if (text.isEmpty) continue;
+
+    final key = '${value.kind.name}:$text';
+    if (!seen.add(key)) continue;
+
+    cleaned.add(
+      DictionarySpelling(
+        text: text,
+        kind: value.kind,
+        infoTags: value.infoTags,
+        priorityTags: value.priorityTags,
+        restrictions: value.restrictions,
+        isPreferred: value.isPreferred,
+      ),
+    );
+  }
+
+  return List.unmodifiable(cleaned);
+}
+
+String? _preferredSpellingFromMetadata(
+  Iterable<DictionarySpelling> spellings,
+) {
+  for (final spelling in spellings) {
+    if (spelling.isPreferred && spelling.text.trim().isNotEmpty) {
+      return spelling.text.trim();
+    }
+  }
+
+  return null;
+}
+
+String _resolvePreferredSpelling({
+  required String? preferredSpelling,
+  required String kanji,
+  required String reading,
+}) {
+  final supplied = preferredSpelling?.replaceAll(RegExp(r'\s+'), '').trim() ?? '';
+  if (supplied.isNotEmpty) return supplied;
+
+  final primaryKanji = kanji.replaceAll(RegExp(r'\s+'), '').trim();
+  if (primaryKanji.isNotEmpty) return primaryKanji;
+
+  return reading.replaceAll(RegExp(r'\s+'), '').trim();
+}
+
+List<DictionarySpelling> _resolveDictionarySpellings({
+  required List<DictionarySpelling> suppliedSpellings,
+  required String preferredSpelling,
+}) {
+  // `spellings` is reserved for real dictionary metadata. Do not synthesize a
+  // copy from kanji/reading/alternativeKanji for deck-owned terms: those fields
+  // already provide the compatibility fallback used by getters, while keeping
+  // the persisted deck/cloud payload small.
+  if (suppliedSpellings.isEmpty) return const <DictionarySpelling>[];
+
+  final resolved = <DictionarySpelling>[];
+  final seen = <String>{};
+
+  for (final spelling in suppliedSpellings) {
+    final cleaned = spelling.text.replaceAll(RegExp(r'\s+'), '').trim();
+    if (cleaned.isEmpty) continue;
+
+    final key = '${spelling.kind.name}:$cleaned';
+    if (!seen.add(key)) continue;
+
+    resolved.add(
+      DictionarySpelling(
+        text: cleaned,
+        kind: spelling.kind,
+        infoTags: spelling.infoTags,
+        priorityTags: spelling.priorityTags,
+        restrictions: spelling.restrictions,
+        isPreferred: spelling.isPreferred || cleaned == preferredSpelling,
+      ),
+    );
+  }
+
+  return List.unmodifiable(resolved);
+}
+
+String _canonicalKana(String value) {
+  final buffer = StringBuffer();
+
+  for (final rune in value.replaceAll(RegExp(r'\s+'), '').trim().runes) {
+    // Standard katakana letters map to hiragana by subtracting 0x60. Leave
+    // punctuation and the prolonged sound mark untouched.
+    if (rune >= 0x30A1 && rune <= 0x30F6) {
+      buffer.writeCharCode(rune - 0x60);
+    } else {
+      buffer.writeCharCode(rune);
+    }
+  }
+
+  return buffer.toString();
+}
+
 List<String> _cleanDefinitionList(Iterable<dynamic> values) {
   final cleaned = <String>[];
   final seen = <String>{};
@@ -1097,7 +1477,7 @@ List<String> _cleanSpellingList(
     final spelling = value.toString().replaceAll(RegExp(r'\s+'), '').trim();
 
     if (spelling.isEmpty) continue;
-    if (spelling == normalizedPrimary && cleaned.isNotEmpty) continue;
+    if (normalizedPrimary.isNotEmpty && spelling == normalizedPrimary) continue;
     if (spelling == normalizedReading) continue;
     if (!_containsKanji(spelling)) continue;
 

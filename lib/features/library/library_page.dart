@@ -161,7 +161,7 @@ class _LibraryPageState extends State<LibraryPage> {
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(18, 74, 18, 190),
+            padding: const EdgeInsets.fromLTRB(14, 70, 14, 190),
             sliver: SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
@@ -600,9 +600,9 @@ class _LibraryPageState extends State<LibraryPage> {
                           ? _deckContent(visibleDecks)
                           : _folderContent(visibleFolders),
                       Positioned(
-                        top: 10,
-                        left: 18,
-                        right: 18,
+                        top: 8,
+                        left: 14,
+                        right: 14,
                         child: GakujiSearchBar(
                           controller: searchController,
                           focusNode: searchFocusNode,
@@ -640,8 +640,8 @@ class _LibraryPageState extends State<LibraryPage> {
     return Container(
       color: GakujiColors.warmBackground,
       padding: EdgeInsets.only(
-        top: topInset + 10,
-        bottom: 10,
+        top: topInset + 4,
+        bottom: 4,
       ),
       child: GakujiTopBar(
         title: 'Decks',
@@ -659,6 +659,7 @@ class _LibraryPageState extends State<LibraryPage> {
     final created = await Navigator.push<bool>(
       context,
       PageRouteBuilder(
+        opaque: false,
         transitionDuration: const Duration(milliseconds: 320),
         reverseTransitionDuration: const Duration(milliseconds: 260),
         pageBuilder: (context, animation, secondaryAnimation) {
@@ -716,7 +717,7 @@ class _LibraryPageState extends State<LibraryPage> {
       child: _libraryRefreshIndicator(
         child: ListView.separated(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(18, 74, 18, 190),
+          padding: const EdgeInsets.fromLTRB(14, 70, 14, 190),
           itemCount: visibleDecks.length,
           separatorBuilder: (context, index) {
             return const SizedBox(height: 18);
@@ -841,7 +842,7 @@ class _LibraryPageState extends State<LibraryPage> {
           child: _libraryRefreshIndicator(
             child: GridView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(18, 74, 18, 190),
+              padding: const EdgeInsets.fromLTRB(14, 70, 14, 190),
               itemCount: visibleFolders.length,
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: crossAxisCount,

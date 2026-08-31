@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:gakuji/core/theme/gakuji_styles.dart';
 
 class GakujiTopBar extends StatelessWidget {
-  static const double horizontalPadding = 18;
-  static const double topPadding = 16;
+  static const double horizontalPadding = 14;
+  static const double topPadding = 8;
   static const double buttonSize = 44;
   static const double actionGap = 8;
   static const IconData backIcon = Icons.arrow_back_ios_new_rounded;
   static const double iconSize = 28;
-  static const double backIconSize = 30;
+  static const double backIconSize = 27;
   static const double backIconHorizontalOffset = -3;
 
   final IconData? leftIcon;

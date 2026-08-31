@@ -748,7 +748,7 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'Import Terms From File',
+                  'Import Terms/Deck',
                   textScaler: TextScaler.noScaling,
                   style: GakujiText.actionLabel.copyWith(
                     color: GakujiColors.reading,

@@ -1263,6 +1263,18 @@ class _HybridStudyPageState extends State<HybridStudyPage>
     return readingCardEdits[term.id];
   }
 
+  String _readingWritingFor(Term term) {
+    final override =
+        _readingCardEditFor(term)?.preferredWritingOverride?.trim() ?? '';
+    if (override.isNotEmpty) return override;
+
+    final preferred = term.preferredSpelling.trim();
+    if (preferred.isNotEmpty) return preferred;
+
+    if (term.kanji.trim().isNotEmpty) return term.kanji.trim();
+    return term.reading.trim();
+  }
+
   List<String> _defaultReadingGlossesFor(Term term) {
     final sourceTerm = term;
     final glossBySenseIndex = <int, String>{};
@@ -1756,10 +1768,12 @@ class _HybridStudyPageState extends State<HybridStudyPage>
   }
 
   Widget _readingTermContent(Term term) {
-    final kanjiText =
-        term.kanji.trim().isNotEmpty ? term.kanji.trim() : term.reading.trim();
+    final kanjiText = _readingWritingFor(term);
     final readingText = term.reading.trim();
-    final showReadingAbove = showFurigana && readingText.isNotEmpty;
+    final showReadingAbove = showFurigana &&
+        readingText.isNotEmpty &&
+        readingText != kanjiText &&
+        RegExp(r'[\u4E00-\u9FFF]').hasMatch(kanjiText);
 
     return SizedBox.expand(
       child: Padding(

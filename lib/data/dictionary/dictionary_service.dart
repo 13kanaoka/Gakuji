@@ -10,23 +10,88 @@ import 'package:sqflite/sqflite.dart';
 import 'package:gakuji/data/seed/dictionary_seed.dart' as fallback_dictionary;
 import 'package:gakuji/domain/term.dart';
 
+class DictionaryTermSpellingMetadata {
+  final String preferredSpelling;
+  final bool usuallyWrittenInKana;
+  final List<DictionarySpelling> spellings;
+
+  const DictionaryTermSpellingMetadata({
+    required this.preferredSpelling,
+    required this.usuallyWrittenInKana,
+    required this.spellings,
+  });
+}
+
+class KanjiComponentNode {
+  final String element;
+  final String? original;
+  final String? position;
+  final String? radicalType;
+  final List<KanjiComponentNode> children;
+
+  const KanjiComponentNode({
+    required this.element,
+    this.original,
+    this.position,
+    this.radicalType,
+    this.children = const [],
+  });
+
+  String get lookupCharacter {
+    final canonical = original?.trim() ?? '';
+    return canonical.isNotEmpty ? canonical : element;
+  }
+
+  factory KanjiComponentNode.fromJson(Map<String, dynamic> json) {
+    final rawChildren = json['children'];
+    final children = rawChildren is List
+        ? rawChildren
+            .whereType<Map>()
+            .map(
+              (child) => KanjiComponentNode.fromJson(
+                Map<String, dynamic>.from(child),
+              ),
+            )
+            .where((child) => child.element.isNotEmpty)
+            .toList(growable: false)
+        : const <KanjiComponentNode>[];
+
+    String? optionalText(Object? value) {
+      final text = value?.toString().trim() ?? '';
+      return text.isEmpty ? null : text;
+    }
+
+    return KanjiComponentNode(
+      element: json['element']?.toString().trim() ?? '',
+      original: optionalText(json['original']),
+      position: optionalText(json['position']),
+      radicalType: optionalText(json['radical']),
+      children: List.unmodifiable(children),
+    );
+  }
+}
+
 class DictionaryService {
   static const String dictionaryAssetPath = 'assets/dictionary/dictionary.db';
 
   /// Increase this whenever you regenerate assets/dictionary/dictionary.db.
   /// This forces the app to copy the fresh database into app storage.
-  static const String dictionaryDatabaseFileName = 'dictionary_v18.db';
+  static const String dictionaryDatabaseFileName = 'dictionary_v22.db';
 
   static const String _kanjiIdPrefix = 'kanji_';
   static const String _storedListSeparator = ';';
 
   // JLPT vocabulary levels are supplemental metadata keyed to dictionary terms.
   static const String _wordJlptLevelsTable = 'term_jlpt_levels';
+  static const String _termSpellingsTable = 'term_spellings';
+  static const String _kanjiComponentTreesTable = 'kanji_component_trees';
 
   static Database? _database;
   static Future<void>? _loadFuture;
   static bool _usingFallbackDictionary = false;
   static bool? _hasWordJlptLevelsTable;
+  static bool? _hasTermSpellingsTable;
+  static bool? _hasKanjiComponentTreesTable;
 
   static Future<void> loadDictionary() {
     if (_database != null || _usingFallbackDictionary) {
@@ -55,15 +120,43 @@ class DictionaryService {
 
     await _copyAssetDatabaseIfNeeded(databasePath);
 
-    final database = await openDatabase(
+    var database = await openDatabase(
       databasePath,
       readOnly: true,
     );
+
+    // Preferred-writing and KanjiVG component metadata are part of the v21
+    // dictionary contract. If this filename was created while an older asset
+    // was still bundled, replace that stale extracted copy automatically.
+    final hasPreferredWriting =
+        await _databaseContainsTable(database, _termSpellingsTable);
+    final hasComponentTrees =
+        await _databaseContainsTable(database, _kanjiComponentTreesTable);
+
+    if (!hasPreferredWriting || !hasComponentTrees) {
+      debugPrint(
+        'Dictionary metadata missing from extracted DB; refreshing bundled asset.',
+      );
+      await database.close();
+
+      final databaseFile = File(databasePath);
+      if (await databaseFile.exists()) {
+        await databaseFile.delete();
+      }
+
+      await _copyAssetDatabaseIfNeeded(databasePath);
+      database = await openDatabase(
+        databasePath,
+        readOnly: true,
+      );
+    }
 
     await database.rawQuery('SELECT COUNT(*) FROM terms LIMIT 1');
     await database.rawQuery('SELECT COUNT(*) FROM kanji_entries LIMIT 1');
 
     _hasWordJlptLevelsTable = null;
+    _hasTermSpellingsTable = null;
+    _hasKanjiComponentTreesTable = null;
     _database = database;
   }
 
@@ -83,6 +176,23 @@ class DictionaryService {
       assetBytes,
       flush: true,
     );
+  }
+
+  static Future<bool> _databaseContainsTable(
+    Database database,
+    String tableName,
+  ) async {
+    final rows = await database.rawQuery(
+      '''
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name = ?
+      LIMIT 1
+      ''',
+      [tableName],
+    );
+
+    return rows.isNotEmpty;
   }
 
   static Future<List<Term>> search(
@@ -566,7 +676,52 @@ class DictionaryService {
       ],
     );
 
-    return _termsFromRows(database, rows);
+    final directTerms = await _termsFromRows(database, rows);
+
+    // Alternative JMdict spellings/readings already live in search_keywords.
+    // Pull exact aliases as well so forms such as たばこ, 莨, and 此処 can
+    // resolve to their canonical dictionary entry without scanning the full
+    // spelling metadata table on every keystroke.
+    final aliasRows = await database.rawQuery(
+      """
+      SELECT
+        t.id,
+        t.kanji,
+        t.reading,
+        t.meaning,
+        t.part_of_speech,
+        t.is_common,
+        t.common_score,
+        MAX(sk.weight) AS alias_weight
+      FROM search_keywords sk
+      JOIN terms t ON t.id = sk.term_id
+      WHERE sk.keyword = ?
+      GROUP BY t.id
+      ORDER BY
+        alias_weight DESC,
+        t.is_common DESC,
+        t.common_score DESC,
+        LENGTH(t.kanji) ASC
+      LIMIT ?
+      """,
+      [
+        query.toLowerCase(),
+        limit,
+      ],
+    );
+
+    if (aliasRows.isEmpty) return directTerms;
+
+    final aliasTerms = await _termsFromRows(database, aliasRows);
+
+    // An exact known spelling/reading should outrank fuzzy prefix/contains
+    // matches. This keeps searches such as たばこ anchored on the タバコ entry
+    // instead of placing it below words that merely contain たばこ.
+    return _mergeSearchResults(
+      primary: aliasTerms,
+      secondary: directTerms,
+      limit: limit,
+    );
   }
 
   static Future<List<Term>> _searchKanjiByEnglish({
@@ -720,6 +875,128 @@ class DictionaryService {
     if (rows.isEmpty) return null;
 
     return _kanjiTermFromRow(rows.first);
+  }
+
+
+  static Future<List<KanjiComponentNode>> getKanjiComponentTree(
+    String rawCharacter,
+  ) async {
+    final character = rawCharacter.trim();
+
+    if (character.runes.length != 1) return const [];
+
+    await loadDictionary();
+    final database = _database;
+
+    if (database == null || !await _hasKanjiComponentMetadata(database)) {
+      return const [];
+    }
+
+    try {
+      final rows = await database.query(
+        _kanjiComponentTreesTable,
+        columns: const ['tree_json'],
+        where: 'character = ?',
+        whereArgs: [character],
+        limit: 1,
+      );
+
+      if (rows.isEmpty) return const [];
+
+      final decoded = jsonDecode(rows.first['tree_json']?.toString() ?? '[]');
+      if (decoded is! List) return const [];
+
+      final nodes = decoded
+          .whereType<Map>()
+          .map(
+            (item) => KanjiComponentNode.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .where((node) => node.element.isNotEmpty)
+          .toList(growable: false);
+
+      return List.unmodifiable(nodes);
+    } on DatabaseException catch (error) {
+      debugPrint('Kanji component data unavailable for $character: $error');
+      return const [];
+    } on FormatException catch (error) {
+      debugPrint('Kanji component JSON is invalid for $character: $error');
+      return const [];
+    }
+  }
+
+  static Future<Map<String, Term>> getKanjiEntriesByCharacters(
+    Iterable<String> rawCharacters,
+  ) async {
+    final characters = <String>[];
+    final seen = <String>{};
+
+    for (final rawCharacter in rawCharacters) {
+      final character = rawCharacter.trim();
+      if (character.runes.length != 1 || !seen.add(character)) continue;
+      characters.add(character);
+    }
+
+    if (characters.isEmpty) return const {};
+
+    await loadDictionary();
+    final database = _database;
+    if (database == null) return const {};
+
+    final entriesByCharacter = <String, Term>{};
+    const chunkSize = 350;
+
+    for (var offset = 0; offset < characters.length; offset += chunkSize) {
+      final end = offset + chunkSize < characters.length
+          ? offset + chunkSize
+          : characters.length;
+      final chunk = characters.sublist(offset, end);
+      final placeholders = List.filled(chunk.length, '?').join(', ');
+      final rows = await database.rawQuery(
+        '''
+        SELECT
+          character,
+          meaning,
+          onyomi,
+          kunyomi,
+          nanori,
+          stroke_count,
+          grade,
+          jlpt_level,
+          frequency,
+          radical,
+          has_word_entry
+        FROM kanji_entries
+        WHERE character IN ($placeholders)
+        ''',
+        chunk,
+      );
+
+      for (final row in rows) {
+        final term = _kanjiTermFromRow(row);
+        entriesByCharacter[term.kanji] = term;
+      }
+    }
+
+    return entriesByCharacter;
+  }
+
+  static String? radicalGlyphForNumber(String? rawRadical) {
+    final number = int.tryParse(rawRadical?.trim() ?? '');
+    if (number == null || number < 1 || number >= _kangxiRadicals.length) {
+      return null;
+    }
+
+    return _kangxiRadicals[number];
+  }
+
+  static String? formatRadical(String? rawRadical) {
+    final value = rawRadical?.trim() ?? '';
+    if (value.isEmpty) return null;
+
+    final glyph = radicalGlyphForNumber(value);
+    return glyph == null ? value : '$glyph ($value)';
   }
 
   /// Finds extra kanji suggestions related to handwriting recognition results.
@@ -1038,6 +1315,132 @@ class DictionaryService {
         .toList();
   }
 
+  /// Loads only preferred/alternative spelling metadata for existing deck
+  /// copies. This intentionally avoids materializing definitions, examples, or
+  /// full dictionary terms during one-time payload migration.
+  static Future<Map<String, DictionaryTermSpellingMetadata>>
+      spellingMetadataForTermIds(Iterable<String> rawTermIds) async {
+    final termIds = rawTermIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty && !id.startsWith(_kanjiIdPrefix))
+        .toSet()
+        .toList(growable: false);
+
+    if (termIds.isEmpty) return const {};
+
+    await loadDictionary();
+    final database = _database;
+    if (database == null) return const {};
+
+    return _spellingMetadataByTermId(
+      database: database,
+      termIds: termIds,
+    );
+  }
+
+  /// Resolves preferred-writing metadata by the lexical kanji/reading pair.
+  ///
+  /// This is a compatibility fallback for older saved cards whose sourceId is
+  /// missing or no longer points at the canonical JMdict id. It intentionally
+  /// fetches only term ids plus spelling metadata; it does not materialize
+  /// senses/examples for every saved card.
+  static Future<Map<String, DictionaryTermSpellingMetadata>>
+      spellingMetadataForTerms(Iterable<Term> rawTerms) async {
+    final pairs = <String, ({String kanji, String reading})>{};
+
+    for (final term in rawTerms) {
+      final kanji = term.kanji.trim();
+      final reading = term.reading.trim();
+      if (kanji.isEmpty && reading.isEmpty) continue;
+
+      pairs.putIfAbsent(
+        _spellingMetadataLexicalKey(kanji, reading),
+        () => (kanji: kanji, reading: reading),
+      );
+    }
+
+    if (pairs.isEmpty) return const {};
+
+    await loadDictionary();
+    final database = _database;
+    if (database == null || !await _hasTermSpellingMetadata(database)) {
+      return const {};
+    }
+
+    final termIdByLexicalKey = <String, String>{};
+    final values = pairs.values.toList(growable: false);
+    const chunkSize = 120;
+
+    try {
+      for (var start = 0; start < values.length; start += chunkSize) {
+        final end = (start + chunkSize).clamp(0, values.length).toInt();
+        final chunk = values.sublist(start, end);
+        final conditions = List.filled(
+          chunk.length,
+          '(kanji = ? AND reading = ?)',
+        ).join(' OR ');
+        final arguments = <Object?>[];
+
+        for (final pair in chunk) {
+          arguments
+            ..add(pair.kanji)
+            ..add(pair.reading);
+        }
+
+        final rows = await database.rawQuery(
+          '''
+          SELECT id, kanji, reading
+          FROM terms
+          WHERE $conditions
+          ORDER BY is_common DESC, common_score DESC
+          ''',
+          arguments,
+        );
+
+        for (final row in rows) {
+          final id = row['id']?.toString().trim() ?? '';
+          final kanji = row['kanji']?.toString().trim() ?? '';
+          final reading = row['reading']?.toString().trim() ?? '';
+          if (id.isEmpty) continue;
+
+          termIdByLexicalKey.putIfAbsent(
+            _spellingMetadataLexicalKey(kanji, reading),
+            () => id,
+          );
+        }
+      }
+    } on DatabaseException catch (error) {
+      debugPrint('Dictionary lexical spelling lookup failed: $error');
+      return const {};
+    }
+
+    if (termIdByLexicalKey.isEmpty) return const {};
+
+    final metadataById = await _spellingMetadataByTermId(
+      database: database,
+      termIds: termIdByLexicalKey.values.toSet().toList(growable: false),
+    );
+    final result = <String, DictionaryTermSpellingMetadata>{};
+
+    for (final entry in termIdByLexicalKey.entries) {
+      final metadata = metadataById[entry.value];
+      if (metadata != null) result[entry.key] = metadata;
+    }
+
+    return result;
+  }
+
+  static String spellingMetadataLexicalKey(Term term) {
+    return _spellingMetadataLexicalKey(
+      term.kanji.trim(),
+      term.reading.trim(),
+    );
+  }
+
+  static String _spellingMetadataLexicalKey(String kanji, String reading) {
+    return '$kanji\u0000$reading';
+  }
+
   static Future<Term> getTermByIdAsync(String id) async {
     if (id.startsWith(_kanjiIdPrefix)) {
       final character = id.substring(_kanjiIdPrefix.length);
@@ -1091,15 +1494,24 @@ class DictionaryService {
       database: database,
       termIds: ids,
     );
+    final spellingMetadataByTermId = await _spellingMetadataByTermId(
+      database: database,
+      termIds: ids,
+    );
 
     return rows.map((row) {
       final id = row['id'].toString();
+      final spellingMetadata = spellingMetadataByTermId[id];
 
       return Term(
         id: id,
         kanji: row['kanji']?.toString() ?? '',
         reading: row['reading']?.toString() ?? '',
         meaning: row['meaning']?.toString() ?? '',
+        preferredSpelling: spellingMetadata?.preferredSpelling,
+        spellings: spellingMetadata?.spellings,
+        usuallyWrittenInKana:
+            spellingMetadata?.usuallyWrittenInKana ?? false,
         partOfSpeech: row['part_of_speech']?.toString() ?? 'word',
         senses: sensesByTermId[id] ?? const [],
         isCommon: row['is_common'] == 1,
@@ -1108,6 +1520,163 @@ class DictionaryService {
         frequency: _nullableInt(row['frequency']),
       );
     }).toList();
+  }
+
+  static Future<Map<String, DictionaryTermSpellingMetadata>> _spellingMetadataByTermId({
+    required Database database,
+    required List<String> termIds,
+  }) async {
+    if (termIds.isEmpty || !await _hasTermSpellingMetadata(database)) {
+      return const {};
+    }
+
+    final metadataByTermId = <String, DictionaryTermSpellingMetadata>{};
+    const chunkSize = 300;
+
+    try {
+      for (var start = 0; start < termIds.length; start += chunkSize) {
+        final end = (start + chunkSize).clamp(0, termIds.length).toInt();
+        final chunk = termIds.sublist(start, end);
+        final placeholders = List.filled(chunk.length, '?').join(', ');
+
+        final rows = await database.rawQuery(
+          '''
+          SELECT
+            term_id,
+            spelling,
+            kind,
+            position,
+            is_preferred,
+            usually_written_kana,
+            info_tags_json,
+            priority_tags_json,
+            restrictions_json
+          FROM $_termSpellingsTable
+          WHERE term_id IN ($placeholders)
+          ORDER BY term_id, position
+          ''',
+          chunk,
+        );
+
+        final spellingsByTermId = <String, List<DictionarySpelling>>{};
+        final preferredByTermId = <String, String>{};
+        final usuallyKanaByTermId = <String, bool>{};
+
+        for (final row in rows) {
+          final termId = row['term_id']?.toString().trim() ?? '';
+          final text = row['spelling']?.toString().trim() ?? '';
+          if (termId.isEmpty || text.isEmpty) continue;
+
+          final kind = row['kind']?.toString().trim().toLowerCase() == 'kana'
+              ? DictionarySpellingKind.kana
+              : DictionarySpellingKind.kanji;
+          final isPreferred = _nullableInt(row['is_preferred']) == 1;
+
+          spellingsByTermId.putIfAbsent(
+            termId,
+            () => <DictionarySpelling>[],
+          ).add(
+            DictionarySpelling(
+              text: text,
+              kind: kind,
+              infoTags: _decodeStoredJsonStringList(row['info_tags_json']),
+              priorityTags:
+                  _decodeStoredJsonStringList(row['priority_tags_json']),
+              restrictions:
+                  _decodeStoredJsonStringList(row['restrictions_json']),
+              isPreferred: isPreferred,
+            ),
+          );
+
+          if (isPreferred) {
+            preferredByTermId[termId] = text;
+          }
+
+          if (_nullableInt(row['usually_written_kana']) == 1) {
+            usuallyKanaByTermId[termId] = true;
+          }
+        }
+
+        for (final entry in spellingsByTermId.entries) {
+          final spellings = entry.value;
+          final preferred = preferredByTermId[entry.key] ??
+              spellings.firstWhere(
+                (spelling) => spelling.isPreferred,
+                orElse: () => spellings.first,
+              ).text;
+
+          metadataByTermId[entry.key] = DictionaryTermSpellingMetadata(
+            preferredSpelling: preferred,
+            usuallyWrittenInKana: usuallyKanaByTermId[entry.key] ?? false,
+            spellings: List.unmodifiable(spellings),
+          );
+        }
+      }
+    } on DatabaseException catch (error) {
+      debugPrint('Dictionary spelling metadata lookup failed: $error');
+      return const {};
+    }
+
+    return metadataByTermId;
+  }
+
+  static Future<bool> _hasKanjiComponentMetadata(Database database) async {
+    final cached = _hasKanjiComponentTreesTable;
+    if (cached != null) return cached;
+
+    try {
+      final exists = await _databaseContainsTable(
+        database,
+        _kanjiComponentTreesTable,
+      );
+      _hasKanjiComponentTreesTable = exists;
+      return exists;
+    } on DatabaseException catch (error) {
+      debugPrint('Kanji component metadata unavailable: $error');
+      _hasKanjiComponentTreesTable = false;
+      return false;
+    }
+  }
+
+  static Future<bool> _hasTermSpellingMetadata(Database database) async {
+    final cached = _hasTermSpellingsTable;
+    if (cached != null) return cached;
+
+    try {
+      final rows = await database.rawQuery(
+        '''
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'table' AND name = ?
+        LIMIT 1
+        ''',
+        [_termSpellingsTable],
+      );
+      final exists = rows.isNotEmpty;
+      _hasTermSpellingsTable = exists;
+      return exists;
+    } on DatabaseException catch (error) {
+      debugPrint('Dictionary spelling metadata unavailable: $error');
+      _hasTermSpellingsTable = false;
+      return false;
+    }
+  }
+
+  static List<String> _decodeStoredJsonStringList(Object? rawValue) {
+    final text = rawValue?.toString().trim() ?? '';
+    if (text.isEmpty) return const [];
+
+    try {
+      final decoded = jsonDecode(text);
+      if (decoded is! List) return const [];
+
+      return decoded
+          .map((value) => value.toString().trim())
+          .where((value) => value.isNotEmpty)
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
   }
 
   static Future<Map<String, String>> _wordJlptLevelsByTermId({
@@ -1541,6 +2110,32 @@ class DictionaryService {
     return readings.join('・');
   }
 
+  static const List<String> _kangxiRadicals = <String>[
+    '',
+    '一', '丨', '丶', '丿', '乙', '亅', '二', '亠', '人', '儿',
+    '入', '八', '冂', '冖', '冫', '几', '凵', '刀', '力', '勹',
+    '匕', '匚', '匸', '十', '卜', '卩', '厂', '厶', '又', '口',
+    '囗', '土', '士', '夂', '夊', '夕', '大', '女', '子', '宀',
+    '寸', '小', '尢', '尸', '屮', '山', '巛', '工', '己', '巾',
+    '干', '幺', '广', '廴', '廾', '弋', '弓', '彐', '彡', '彳',
+    '心', '戈', '戶', '手', '支', '攴', '文', '斗', '斤', '方',
+    '无', '日', '曰', '月', '木', '欠', '止', '歹', '殳', '毋',
+    '比', '毛', '氏', '气', '水', '火', '爪', '父', '爻', '爿',
+    '片', '牙', '牛', '犬', '玄', '玉', '瓜', '瓦', '甘', '生',
+    '用', '田', '疋', '疒', '癶', '白', '皮', '皿', '目', '矛',
+    '矢', '石', '示', '禸', '禾', '穴', '立', '竹', '米', '糸',
+    '缶', '网', '羊', '羽', '老', '而', '耒', '耳', '聿', '肉',
+    '臣', '自', '至', '臼', '舌', '舛', '舟', '艮', '色', '艸',
+    '虍', '虫', '血', '行', '衣', '襾', '見', '角', '言', '谷',
+    '豆', '豕', '豸', '貝', '赤', '走', '足', '身', '車', '辛',
+    '辰', '辵', '邑', '酉', '釆', '里', '金', '長', '門', '阜',
+    '隶', '隹', '雨', '靑', '非', '面', '革', '韋', '韭', '音',
+    '頁', '風', '飛', '食', '首', '香', '馬', '骨', '高', '髟',
+    '鬥', '鬯', '鬲', '鬼', '魚', '鳥', '鹵', '鹿', '麥', '麻',
+    '黃', '黍', '黑', '黹', '黽', '鼎', '鼓', '鼠', '鼻', '齊',
+    '齒', '龍', '龜', '龠',
+  ];
+
   static List<String> _uniqueKanjiCharacters(String text) {
     final characters = <String>[];
     final seen = <String>{};
@@ -1631,3 +2226,4 @@ class DictionaryService {
     }.contains(value);
   }
 }
+

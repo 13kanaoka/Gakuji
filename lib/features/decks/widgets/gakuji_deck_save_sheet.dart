@@ -639,7 +639,7 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
                 onTap: onBack,
                 child: Icon(
                   Icons.arrow_back_ios_new,
-                  size: 19,
+                  size: 17,
                   color: GakujiColors.darkGray,
                 ),
               ),

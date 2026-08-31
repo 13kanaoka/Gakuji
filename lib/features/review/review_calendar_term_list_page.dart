@@ -224,9 +224,11 @@ class ReviewCalendarTermListPage extends StatelessWidget {
           child: Column(
             children: List.generate(visibleTerms.length, (index) {
               final term = visibleTerms[index];
-              final titleText = term.kanjiBracketText.isNotEmpty
-                  ? term.kanjiBracketText
-                  : term.kanji;
+              final titleText = term.preferredSpelling.trim().isNotEmpty
+                  ? term.preferredSpelling.trim()
+                  : term.kanji.trim().isNotEmpty
+                      ? term.kanji.trim()
+                      : term.reading.trim();
 
               return Column(
                 children: [

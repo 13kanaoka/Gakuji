@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:gakuji/core/widgets/gakuji_page_route.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,6 +17,8 @@ import 'package:gakuji/data/sync/gakuji_cloud_sync_service.dart';
 import 'package:gakuji/data/sync/gakuji_local_preferences.dart';
 import 'package:gakuji/data/sync/gakuji_user_data_store.dart';
 import 'package:gakuji/data/sync/gakuji_user_repository.dart';
+import 'package:gakuji/data/sync/gakuji_term_payload_repair.dart';
+import 'package:gakuji/features/import/services/deck_code_service.dart';
 import 'package:gakuji/features/games/services/word_fusion_round_generator.dart';
 import 'package:gakuji/core/widgets/gakuji_deck_transition.dart';
 import 'package:gakuji/core/widgets/gakuji_faded_scroll.dart';
@@ -141,6 +144,54 @@ class _DeckPageState extends State<DeckPage> {
     return count == 1 ? '1 Term' : '$count Terms';
   }
 
+  String get deckCreatorLabel {
+    final creatorUid = widget.deck.creatorUid?.trim();
+    final currentUserUid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (creatorUid == null ||
+        creatorUid.isEmpty ||
+        creatorUid == currentUserUid) {
+      return 'You';
+    }
+
+    final creatorUsername = widget.deck.creatorUsername?.trim();
+    if (creatorUsername != null && creatorUsername.isNotEmpty) {
+      return creatorUsername;
+    }
+
+    return 'Gakuji User';
+  }
+
+  List<String> get deckAdapterLabels {
+    final currentUserUid = FirebaseAuth.instance.currentUser?.uid;
+    final labels = <String>[];
+    final seen = <String>{};
+
+    for (final credit in widget.deck.adaptedBy) {
+      final uid = credit.uid.trim();
+      if (uid.isEmpty || !seen.add(uid)) continue;
+
+      if (uid == currentUserUid) {
+        labels.add('You');
+        continue;
+      }
+
+      final username = credit.username?.trim();
+      labels.add(
+        username != null && username.isNotEmpty ? username : 'Gakuji User',
+      );
+    }
+
+    return labels;
+  }
+
+  String get deckAdaptersSummary {
+    final labels = deckAdapterLabels;
+    if (labels.isEmpty) return '';
+    if (labels.length == 1) return labels.first;
+    return '${labels.first} +${labels.length - 1}';
+  }
+
   String get studyButtonLabel {
     if (isReviewMode) {
       if (!reviewEnabled) return 'Enable Review';
@@ -171,6 +222,7 @@ class _DeckPageState extends State<DeckPage> {
     });
 
     scheduleUserDataSave();
+    unawaited(DeckCodeService.touchDeckActivity(widget.deck));
   }
 
   Future<void> refreshReviewAvailability() async {
@@ -209,6 +261,8 @@ class _DeckPageState extends State<DeckPage> {
     pageScrollController.addListener(_handlePageScroll);
     markDeckOpenedRecently(widget.deck.id);
     loadState();
+    unawaited(DeckCodeService.touchDeckActivity(widget.deck));
+    unawaited(_refreshLiveDeckPreferredWriting());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         unawaited(_prefetchResumeSessions());
@@ -216,9 +270,22 @@ class _DeckPageState extends State<DeckPage> {
     });
   }
 
+  Future<void> _refreshLiveDeckPreferredWriting() async {
+    final repairedCount = await GakujiTermPayloadRepair.repairDecks(
+      <Deck>[widget.deck],
+    );
+
+    if (repairedCount <= 0) return;
+
+    scheduleUserDataSave();
+    if (mounted) setState(() {});
+  }
+
   Future<void> _prefetchResumeSessions() async {
     try {
-      final states = await GakujiSessionStorage.loadMany(
+      // Only warm the compact progress records. Fusion round blueprints can be
+      // much larger, so they are loaded on demand only when that game opens.
+      await GakujiSessionStorage.loadMany(
         sessionTypes: const [
           'flashcards',
           'kanji_fusion',
@@ -226,21 +293,6 @@ class _DeckPageState extends State<DeckPage> {
         ],
         deckId: widget.deck.id,
       );
-
-      final roundTypes = <String>[];
-      if (states['kanji_fusion'] != null) {
-        roundTypes.add('kanji_fusion_rounds');
-      }
-      if (states['word_fusion'] != null) {
-        roundTypes.add('word_fusion_rounds');
-      }
-
-      if (roundTypes.isNotEmpty) {
-        await GakujiSessionStorage.loadMany(
-          sessionTypes: roundTypes,
-          deckId: widget.deck.id,
-        );
-      }
     } catch (_) {
       // Prefetch is only a latency optimization; normal page loading remains
       // the fallback if the database is temporarily unavailable.
@@ -398,6 +450,7 @@ class _DeckPageState extends State<DeckPage> {
   }
 
   Future<void> openFocusStudy(_FocusStudyType type) async {
+    await _refreshLiveDeckPreferredWriting();
     await createReviewCardsForDeck(widget.deck);
 
     if (!mounted) return;
@@ -684,6 +737,11 @@ class _DeckPageState extends State<DeckPage> {
   }
 
   Future<void> openStudy() async {
+    // Study pages render only deck-owned Term data. Refresh dictionary-owned
+    // preferred writing first so an old saved card cannot carry a stale
+    // kanji-first header into Flashcards/Review.
+    await _refreshLiveDeckPreferredWriting();
+
     if (isReviewMode) {
       if (!reviewEnabled) {
         await enableReviewForDeck();
@@ -762,6 +820,8 @@ class _DeckPageState extends State<DeckPage> {
       _showFloatingMessage('No terms to study');
       return;
     }
+
+    if (!mounted) return;
 
     switch (widget.deck.type) {
       case DeckType.writing:
@@ -1179,7 +1239,13 @@ class _DeckPageState extends State<DeckPage> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 9),
+                    const SizedBox(height: 7),
+                    _headerMetaText('By: $deckCreatorLabel'),
+                    if (deckAdapterLabels.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      _adaptedByHeaderMeta(),
+                    ],
+                    const SizedBox(height: 4),
                     _headerMetaText(_deckTypeLabel(widget.deck.type)),
                   ],
                 ),
@@ -1233,6 +1299,60 @@ class _DeckPageState extends State<DeckPage> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _adaptedByHeaderMeta() {
+    final labels = deckAdapterLabels;
+
+    return PopupMenuButton<void>(
+      tooltip: 'View adaptation credits',
+      position: PopupMenuPosition.under,
+      color: GakujiColors.warmCard,
+      elevation: 4,
+      itemBuilder: (context) {
+        return labels
+            .map(
+              (label) => PopupMenuItem<void>(
+                enabled: false,
+                height: 38,
+                child: Text(
+                  label,
+                  textScaler: TextScaler.noScaling,
+                  style: GakujiText.deckMeta.copyWith(
+                    color: GakujiColors.darkGray,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            )
+            .toList();
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 280),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                'Adapted by: $deckAdaptersSummary',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textScaler: TextScaler.noScaling,
+                style: GakujiText.deckMeta.copyWith(
+                  color: GakujiColors.mediumGray,
+                ),
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              size: 16,
+              color: GakujiColors.mediumGray,
+            ),
+          ],
+        ),
       ),
     );
   }

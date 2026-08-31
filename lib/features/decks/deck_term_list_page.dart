@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gakuji/core/widgets/gakuji_page_route.dart';
 
 import 'package:gakuji/domain/deck.dart';
@@ -8,6 +9,8 @@ import 'package:gakuji/core/theme/gakuji_styles.dart';
 import 'package:gakuji/core/widgets/gakuji_term_row.dart';
 import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
 import 'package:gakuji/features/dictionary/dictionary_detail_page.dart';
+import 'package:gakuji/features/auth/widgets/gakuji_action_dialog.dart';
+import 'package:gakuji/features/import/services/deck_code_service.dart';
 
 class DeckTermListPage extends StatefulWidget {
   final Deck deck;
@@ -29,6 +32,7 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
 
   String searchQuery = '';
   bool deckInfoCollapsed = false;
+  bool isPreparingDeckCode = false;
 
   @override
   void initState() {
@@ -55,6 +59,77 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
     setState(() {
       deckInfoCollapsed = shouldCollapse;
     });
+  }
+
+  Future<void> _showDeckCodeDialog() async {
+    if (isPreparingDeckCode) return;
+
+    setState(() {
+      isPreparingDeckCode = true;
+    });
+
+    try {
+      final deckCode = await DeckCodeService.publishDeck(widget.deck);
+      if (!mounted) return;
+
+      final shouldCopy = await showGakujiActionDialog(
+        context: context,
+        title: 'Deck Code',
+        message: deckCode,
+        primaryLabel: 'Copy Code',
+        secondaryLabel: 'Close',
+        primaryColor: GakujiColors.reading,
+        messageStyle: GakujiText.medium.copyWith(
+          color: GakujiColors.darkGray,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+        ),
+      );
+
+      if (!mounted || shouldCopy != true) return;
+
+      await Clipboard.setData(ClipboardData(text: deckCode));
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(milliseconds: 1500),
+            backgroundColor: Colors.black.withValues(alpha: 0.86),
+            content: Text(
+              'Deck code copied',
+              textScaler: TextScaler.noScaling,
+              style: GakujiText.snackBar,
+            ),
+          ),
+        );
+    } on DeckCodeException catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(milliseconds: 2200),
+            backgroundColor: Colors.black.withValues(alpha: 0.86),
+            content: Text(
+              error.message,
+              textScaler: TextScaler.noScaling,
+              style: GakujiText.snackBar,
+            ),
+          ),
+        );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isPreparingDeckCode = false;
+        });
+      }
+    }
   }
 
   List<Term> get visibleTerms {
@@ -93,12 +168,20 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
             children: [
               GakujiTopBar(
                 leftIcon: Icons.arrow_back_ios_new,
+                leftIconSize: 25,
                 leftIconColor: GakujiColors.darkGray,
                 onLeftTap: () => Navigator.pop(context),
                 title: 'Term List',
                 titleStyle: GakujiText.pageTitle.copyWith(
                   color: GakujiColors.darkGray,
                 ),
+                rightIcon: Icons.ios_share_rounded,
+                rightIconColor: isPreparingDeckCode
+                    ? GakujiColors.softGray
+                    : GakujiColors.darkGray,
+                rightIconSize: 25,
+                onRightTap:
+                    isPreparingDeckCode ? null : _showDeckCodeDialog,
                 showOptionsButton: false,
               ),
               Expanded(
@@ -258,9 +341,11 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
         itemBuilder: (context, index) {
           final term = terms[index];
 
-          final titleText = term.kanjiBracketText.isNotEmpty
-              ? term.kanjiBracketText
-              : term.kanji;
+          final titleText = term.preferredSpelling.trim().isNotEmpty
+              ? term.preferredSpelling.trim()
+              : term.kanji.trim().isNotEmpty
+                  ? term.kanji.trim()
+                  : term.reading.trim();
 
           return GakujiTermRow(
             term: term,
