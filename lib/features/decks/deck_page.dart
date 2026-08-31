@@ -821,6 +821,8 @@ class _DeckPageState extends State<DeckPage> {
       return;
     }
 
+    if (!mounted) return;
+
     switch (widget.deck.type) {
       case DeckType.writing:
         final studyTerms = isShuffled
