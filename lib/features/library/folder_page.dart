@@ -159,7 +159,12 @@ class _FolderPageState extends State<FolderPage> {
                   const SizedBox(height: 28),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 0, 22, 0),
+                      padding: const EdgeInsets.fromLTRB(
+                        GakujiSpacing.contentHorizontal,
+                        0,
+                        GakujiSpacing.contentHorizontal,
+                        0,
+                      ),
                       child: Column(
                         children: [
                           GakujiSearchBar(
@@ -255,6 +260,7 @@ class _FolderPageState extends State<FolderPage> {
           await Navigator.push(
             context,
             GakujiPageRoute(
+              enableSwipeBack: false,
               builder: (context) => DeckPage(deck: deck),
             ),
           );

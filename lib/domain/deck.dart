@@ -167,8 +167,8 @@ class Deck {
   /// Returns the effective card mode for [term].
   ///
   /// Normal reading and writing decks always return their single fixed mode.
-  /// Hybrid decks use the saved per-term choice and default older terms to
-  /// both card types.
+  /// Hybrid decks use the saved per-term choice and default older dictionary
+  /// terms to both card types. User-authored custom terms are reading-only.
   HybridCardMode cardModeFor(Term term) {
     switch (type) {
       case DeckType.reading:
@@ -176,6 +176,7 @@ class Deck {
       case DeckType.writing:
         return HybridCardMode.writing;
       case DeckType.hybrid:
+        if (term.isCustom) return HybridCardMode.reading;
         return hybridCardModes[term.id] ?? HybridCardMode.both;
     }
   }
@@ -201,6 +202,11 @@ class Deck {
     HybridCardMode mode,
   ) {
     if (type != DeckType.hybrid) return;
+
+    if (term.isCustom) {
+      hybridCardModes[term.id] = HybridCardMode.reading;
+      return;
+    }
 
     hybridCardModes[term.id] = mode;
   }

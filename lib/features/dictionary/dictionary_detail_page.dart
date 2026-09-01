@@ -708,7 +708,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
                         textAlign: TextAlign.center,
                         textScaler: TextScaler.noScaling,
                         style: TextStyle(
-                          fontSize: 23,
+                          fontSize: 19,
                           fontWeight: FontWeight.w500,
                           color: GakujiColors.darkGray,
                         ),
@@ -821,7 +821,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
     final senses = _definitionSenses(word);
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 19),
+      padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 18, GakujiSpacing.contentHorizontal, 19),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -878,7 +878,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       children: [
         _sectionHeader('Info'),
         Padding(
-          padding: const EdgeInsets.fromLTRB(22, 11, 22, 15),
+          padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 11, GakujiSpacing.contentHorizontal, 15),
           child: Column(
             children: items.map((item) {
               return Padding(
@@ -1258,7 +1258,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
       children: [
         _sectionHeader('Note'),
         Padding(
-          padding: const EdgeInsets.fromLTRB(22, 12, 22, 16),
+          padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 12, GakujiSpacing.contentHorizontal, 16),
           child: noteLoaded ? _noteBody() : _loadingNoteBody(),
         ),
       ],
@@ -1430,7 +1430,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
         _sectionHeader('Kanji'),
         if (!kanjiEntriesLoaded)
            Padding(
-            padding: EdgeInsets.fromLTRB(22, 15, 22, 16),
+            padding: EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 15, GakujiSpacing.contentHorizontal, 16),
             child: Text(
               'Loading kanji...',
               textScaler: TextScaler.noScaling,
@@ -1441,7 +1441,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           )
         else if (kanjiEntries.isEmpty)
            Padding(
-            padding: EdgeInsets.fromLTRB(22, 15, 22, 16),
+            padding: EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 15, GakujiSpacing.contentHorizontal, 16),
             child: Text(
               'No kanji details found',
               textScaler: TextScaler.noScaling,
@@ -1475,7 +1475,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           ? () => openKanjiDetail(kanjiEntry)
           : null,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 11, 22, 0),
+        padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 11, GakujiSpacing.contentHorizontal, 0),
         child: Column(
           children: [
             Row(
@@ -1602,7 +1602,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
           badgeLabel: _definitionLabel(labelIndex),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
+          padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 8, GakujiSpacing.contentHorizontal, 0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1760,7 +1760,7 @@ class _DictionaryDetailPageState extends State<DictionaryDetailPage> {
   Widget _sectionHeader(String title, {String? badgeLabel}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+      padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 8, GakujiSpacing.contentHorizontal, 8),
       decoration: BoxDecoration(
         color: GakujiColors.sectionHeader,
         border: Border(

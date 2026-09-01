@@ -394,7 +394,12 @@ class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
           _header(context),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(28, 0, 28, 0),
+              padding: const EdgeInsets.fromLTRB(
+                GakujiSpacing.roomyContentHorizontal,
+                0,
+                GakujiSpacing.roomyContentHorizontal,
+                0,
+              ),
               child: Column(
                 children: [
                   const SizedBox(height: 24),

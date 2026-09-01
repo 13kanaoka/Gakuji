@@ -133,6 +133,43 @@ class JapaneseConjugationService {
     return candidates;
   }
 
+  /// Produces likely dictionary forms for the continuative / masu stem used
+  /// before constructions such as ～に行く. This is intentionally separate
+  /// from [deinflectionCandidates] so a bare kana such as と is not treated as
+  /// a verb stem during ordinary lookup.
+  static Set<String> conjunctiveStemCandidates(String rawSurface) {
+    final surface = rawSurface.trim();
+    final candidates = <String>{};
+
+    if (surface.isEmpty) return candidates;
+
+    void add(String value) {
+      final cleaned = value.trim();
+      if (cleaned.isEmpty || cleaned == surface) return;
+      candidates.add(cleaned);
+    }
+
+    // Ichidan verbs use the bare stem before に: 食べに行く → 食べる.
+    add('$surfaceる');
+
+    // Godan verbs use the i-stem: 書きに行く → 書く.
+    _addDictionaryFormsFromIStem(surface, add);
+
+    if (surface.endsWith('し')) {
+      add('${surface.substring(0, surface.length - 1)}する');
+    }
+
+    if (surface.endsWith('き')) {
+      add('${surface.substring(0, surface.length - 1)}くる');
+    }
+
+    if (surface.endsWith('来')) {
+      add('$surfaceる');
+    }
+
+    return candidates;
+  }
+
   /// Confirms that [surface] is a plausible form of [term]. This prevents the
   /// reverse rules from accepting an unrelated homographic dictionary entry.
   static bool surfaceMatchesTerm(Term term, String rawSurface) {
@@ -149,6 +186,26 @@ class JapaneseConjugationService {
       );
 
       if (forms.contains(surface)) return true;
+    }
+
+    return false;
+  }
+
+  /// Confirms that [surface] is the continuative / masu stem of [term].
+  /// Used by sentence tokenization for grammar such as 見に行く without making
+  /// bare stems globally compete with ordinary dictionary entries.
+  static bool conjunctiveStemMatchesTerm(Term term, String rawSurface) {
+    final surface = rawSurface.trim();
+
+    if (surface.isEmpty || !isInflectableTerm(term)) return false;
+
+    for (final spelling in _candidateSpellings(term)) {
+      final stem = _conjunctiveStemForSpelling(
+        term: term,
+        spelling: spelling,
+      );
+
+      if (stem != null && stem == surface) return true;
     }
 
     return false;
@@ -193,6 +250,37 @@ class JapaneseConjugationService {
     }
 
     return forms;
+  }
+
+  static String? _conjunctiveStemForSpelling({
+    required Term term,
+    required String spelling,
+  }) {
+    final inflectionClass = _classForTerm(term);
+
+    if (inflectionClass == null || spelling.isEmpty) return null;
+
+    switch (inflectionClass) {
+      case _JapaneseInflectionClass.ichidan:
+        if (!spelling.endsWith('る') || spelling.length < 2) return null;
+        return spelling.substring(0, spelling.length - 1);
+      case _JapaneseInflectionClass.godan:
+        final ending = _godanEnding(spelling);
+        if (ending == null) return null;
+        final row = _godanRows[ending]!;
+        return '${spelling.substring(0, spelling.length - 1)}${row.i}';
+      case _JapaneseInflectionClass.suru:
+        if (!spelling.endsWith('する')) return null;
+        return '${spelling.substring(0, spelling.length - 2)}し';
+      case _JapaneseInflectionClass.kuru:
+        if (spelling.endsWith('来る')) {
+          return spelling.substring(0, spelling.length - 1);
+        }
+        if (!spelling.endsWith('くる')) return null;
+        return '${spelling.substring(0, spelling.length - 2)}き';
+      case _JapaneseInflectionClass.iAdjective:
+        return null;
+    }
   }
 
   static String? _formValue(
@@ -721,8 +809,11 @@ class JapaneseConjugationService {
       }
     }
 
-    replaceSuffix('って', const ['う', 'つ', 'る', 'く']);
-    replaceSuffix('った', const ['う', 'つ', 'る', 'く']);
+    // 行く is the major irregular って / った exception. Try く first so
+    // 行った resolves to 行く before the equally spellable 行う candidate.
+    // Other verbs still fall through to their normal う / つ / る endings.
+    replaceSuffix('って', const ['く', 'う', 'つ', 'る']);
+    replaceSuffix('った', const ['く', 'う', 'つ', 'る']);
     replaceSuffix('いて', const ['く']);
     replaceSuffix('いた', const ['く']);
     replaceSuffix('いで', const ['ぐ']);

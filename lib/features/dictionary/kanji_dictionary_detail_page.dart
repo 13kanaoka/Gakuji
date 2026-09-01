@@ -626,6 +626,7 @@ class _KanjiDictionaryDetailPageState
                         textAlign: TextAlign.center,
                         textScaler: TextScaler.noScaling,
                         style: GakujiText.dictionaryTopBarTitle.copyWith(
+                          fontSize: 19,
                           color: darkText,
                         ),
                       ),
@@ -1510,6 +1511,7 @@ class _KanjiStrokeDetailSheet extends StatefulWidget {
 
 class _KanjiStrokeDetailSheetState extends State<_KanjiStrokeDetailSheet>
     with SingleTickerProviderStateMixin {
+  static const double _strokeTimelineUnits = 1.15;
   static const int _strokeDrawMilliseconds = 820;
   static const int _strokePauseMilliseconds = 120;
   static const String _animationSpeedPreferenceKey =

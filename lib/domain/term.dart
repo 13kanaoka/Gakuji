@@ -353,9 +353,15 @@ class Term {
 
   /// Original dictionary term ID.
   ///
-  /// This stays null for dictionary terms. A copied deck term points back to
-  /// the original dictionary entry through this ID.
+  /// This stays null for dictionary terms and custom deck-owned terms. A copied
+  /// dictionary term points back to the original dictionary entry through this
+  /// ID.
   final String? sourceId;
+
+  /// True when this term was authored by the user inside a deck rather than
+  /// copied from Gakuji's bundled dictionary. Custom terms keep a local deck ID
+  /// but intentionally have no dictionary [sourceId].
+  final bool isCustom;
 
   /// Dictionary primary kanji/spelling retained for kanji-focused features.
   final String kanji;
@@ -429,6 +435,7 @@ class Term {
   factory Term({
     required String id,
     String? sourceId,
+    bool isCustom = false,
     required String kanji,
     required String reading,
     required String meaning,
@@ -503,6 +510,7 @@ class Term {
     return Term._internal(
       id: id,
       sourceId: sourceId,
+      isCustom: isCustom,
       kanji: kanji,
       reading: reading,
       meaning: meaning,
@@ -535,6 +543,7 @@ class Term {
   Term._internal({
     required this.id,
     required this.sourceId,
+    required this.isCustom,
     required this.kanji,
     required this.reading,
     required this.meaning,
@@ -588,6 +597,7 @@ class Term {
     return Term(
       id: json['id']?.toString() ?? '',
       sourceId: _nullableString(json['sourceId']),
+      isCustom: json['isCustom'] == true,
       kanji: kanji,
       reading: reading,
       meaning: json['meaning']?.toString() ?? '',
@@ -630,6 +640,7 @@ class Term {
     return {
       'id': id,
       if (sourceId != null) 'sourceId': sourceId,
+      if (isCustom) 'isCustom': true,
       'kanji': kanji,
       'reading': reading,
       'meaning': meaning,
@@ -674,6 +685,7 @@ class Term {
       id: id ??
           '${dictionaryTerm.sourceId ?? dictionaryTerm.id}_${DateTime.now().microsecondsSinceEpoch}',
       sourceId: dictionaryTerm.sourceId ?? dictionaryTerm.id,
+      isCustom: false,
       kanji: dictionaryTerm.kanji,
       reading: dictionaryTerm.reading,
       meaning: dictionaryTerm.meaning,
@@ -1024,16 +1036,17 @@ class Term {
 
   bool get isWordDictionaryEntry => !isKanjiDictionaryEntry;
 
-  bool get isDeckCopy => sourceId != null;
+  bool get isDeckCopy => sourceId != null || isCustom;
 
   @override
   String toString() {
-    return 'Term(id: $id, sourceId: $sourceId, kanji: $kanji, reading: $reading, meaning: $meaning, senses: ${senses.length}, marked: $marked)';
+    return 'Term(id: $id, sourceId: $sourceId, isCustom: $isCustom, kanji: $kanji, reading: $reading, meaning: $meaning, senses: ${senses.length}, marked: $marked)';
   }
 
   Term copyWith({
     String? id,
     String? sourceId,
+    bool? isCustom,
     String? kanji,
     String? reading,
     String? meaning,
@@ -1073,6 +1086,7 @@ class Term {
     return Term(
       id: id ?? this.id,
       sourceId: sourceId ?? this.sourceId,
+      isCustom: isCustom ?? this.isCustom,
       kanji: kanji ?? this.kanji,
       reading: reading ?? this.reading,
       meaning: meaning ?? this.meaning,

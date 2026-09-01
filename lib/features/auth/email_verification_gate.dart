@@ -194,7 +194,7 @@ class _EmailVerificationGateState extends State<EmailVerificationGate>
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 36, 28, 36),
+            padding: const EdgeInsets.fromLTRB(GakujiSpacing.roomyContentHorizontal, 36, GakujiSpacing.roomyContentHorizontal, 36),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 430),
               child: Column(

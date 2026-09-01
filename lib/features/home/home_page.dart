@@ -67,7 +67,12 @@ class _HomePageState extends State<HomePage> {
                 ? GakujiFadedScroll.withBottomNavigation(
                     child: SingleChildScrollView(
                       clipBehavior: Clip.none,
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+                      padding: const EdgeInsets.fromLTRB(
+                        GakujiSpacing.contentHorizontal,
+                        16,
+                        GakujiSpacing.contentHorizontal,
+                        100,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -282,6 +287,7 @@ class _HomePageState extends State<HomePage> {
         await Navigator.push(
           context,
           GakujiPageRoute(
+            enableSwipeBack: false,
             builder: (context) => DeckPage(deck: deck),
           ),
         );
@@ -312,6 +318,7 @@ class _HomePageState extends State<HomePage> {
         await Navigator.push(
           context,
           GakujiPageRoute(
+            enableSwipeBack: false,
             builder: (context) => DeckPage(deck: deck),
           ),
         );

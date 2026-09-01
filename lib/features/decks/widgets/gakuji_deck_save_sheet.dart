@@ -315,12 +315,21 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
           ],
         ).createShader(bounds);
       },
-      child: ListView.builder(
+      child: ListView.separated(
         controller: scrollController,
         primary: false,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.only(bottom: 28),
         itemCount: orderedDecks.length + 1,
+        separatorBuilder: (context, index) {
+          if (index == 0) return const SizedBox.shrink();
+
+          return Divider(
+            height: 1,
+            thickness: 1,
+            color: GakujiColors.warmDivider,
+          );
+        },
         itemBuilder: (context, index) {
           if (index == 0) {
             return Column(
@@ -343,30 +352,13 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
 
           return _deckRow(
             deck: deck,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (isDirectSaveDeck)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(
-                      'Direct',
-                      textScaler: TextScaler.noScaling,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        height: 1,
-                        color: GakujiColors.mediumGray,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                if (isSaved)
-                  const Icon(
+            isDirectSaveDeck: isDirectSaveDeck,
+            trailing: isSaved
+                ? const Icon(
                     Icons.check_circle,
                     color: GakujiColors.reading,
-                  ),
-              ],
-            ),
+                  )
+                : const SizedBox.shrink(),
             onTap: () {
               Navigator.pop(
                 context,
@@ -510,12 +502,21 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
           ],
         ).createShader(bounds);
       },
-      child: ListView.builder(
+      child: ListView.separated(
         controller: scrollController,
         primary: false,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.only(bottom: 28),
         itemCount: orderedDecks.length + 1,
+        separatorBuilder: (context, index) {
+          if (index == 0) return const SizedBox.shrink();
+
+          return Divider(
+            height: 1,
+            thickness: 1,
+            color: GakujiColors.warmDivider,
+          );
+        },
         itemBuilder: (context, index) {
           if (index == 0) {
             return Column(
@@ -1255,22 +1256,39 @@ class _GakujiDeckSaveSheetState extends State<_GakujiDeckSaveSheet> {
     required Deck deck,
     required Widget trailing,
     required VoidCallback onTap,
+    bool isDirectSaveDeck = false,
   }) {
     return ListTile(
       isThreeLine: true,
       minVerticalPadding: 8,
       contentPadding: const EdgeInsets.symmetric(horizontal: 22),
-      title: Text(
-        deck.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          fontSize: 16,
-          height: 1.05,
-          fontWeight: FontWeight.w600,
-          color: GakujiColors.darkGray,
-        ),
+      titleAlignment: ListTileTitleAlignment.center,
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isDirectSaveDeck) ...[
+            const Icon(
+              Icons.bookmark_rounded,
+              size: 17,
+              color: GakujiColors.reading,
+            ),
+            const SizedBox(width: 7),
+          ],
+          Flexible(
+            child: Text(
+              deck.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 16,
+                height: 1.05,
+                fontWeight: FontWeight.w600,
+                color: GakujiColors.darkGray,
+              ),
+            ),
+          ),
+        ],
       ),
       subtitle: Padding(
         padding: const EdgeInsets.only(top: 4),

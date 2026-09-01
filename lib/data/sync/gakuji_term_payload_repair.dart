@@ -56,6 +56,7 @@ class GakujiTermPayloadRepair {
     final spellingCandidateIds = <String>{};
     for (final deck in decks) {
       for (final term in deck.terms) {
+        if (term.isCustom) continue;
         spellingCandidateIds.addAll(_candidateDictionaryIds(term));
       }
     }
@@ -78,6 +79,7 @@ class GakujiTermPayloadRepair {
     final unresolvedSpellingTerms = <Term>[];
     for (final deck in decks) {
       for (final term in deck.terms) {
+        if (term.isCustom) continue;
         final hasIdMetadata = _candidateDictionaryIds(term).any(
           spellingMetadataByTermId.containsKey,
         );
@@ -106,6 +108,7 @@ class GakujiTermPayloadRepair {
 
       for (var index = 0; index < deck.terms.length; index++) {
         final original = deck.terms[index];
+        if (original.isCustom) continue;
         final candidateSourceIds = _candidateDictionaryIds(original);
         if (candidateSourceIds.isEmpty) continue;
 

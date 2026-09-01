@@ -20,6 +20,7 @@ import 'package:gakuji/core/widgets/gakuji_search_bar.dart';
 import 'package:gakuji/core/theme/gakuji_styles.dart';
 import 'package:gakuji/features/library/widgets/gakuji_todo_deck_card.dart';
 import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
+import 'package:gakuji/core/widgets/gakuji_compact_menu.dart';
 import 'package:gakuji/features/decks/create_deck_page.dart';
 import 'package:gakuji/features/decks/deck_page.dart';
 import 'package:gakuji/features/library/folder_page.dart';
@@ -36,6 +37,12 @@ class LibraryPage extends StatefulWidget {
   State<LibraryPage> createState() => _LibraryPageState();
 }
 
+enum _DeckSortMode {
+  alphabetical,
+  created,
+  recent,
+}
+
 class _LibraryPageState extends State<LibraryPage> {
   static const Color dividerGray = Color(0xFFE1E1E1);
   static const Color textGray = Color(0xFF6F6F6F);
@@ -45,8 +52,8 @@ class _LibraryPageState extends State<LibraryPage> {
   static const Duration deleteAnimationDuration = Duration(milliseconds: 260);
 
   bool showDecks = true;
-  bool showMenu = false;
   bool isDeletingItems = false;
+  _DeckSortMode deckSortMode = _DeckSortMode.recent;
 
   final Set<String> selectedDeckIds = <String>{};
   final Set<String> selectedFolderIds = <String>{};
@@ -109,12 +116,6 @@ class _LibraryPageState extends State<LibraryPage> {
     if (isDeletingItems) return;
 
     FocusScope.of(context).unfocus();
-
-    if (showMenu) {
-      setState(() {
-        showMenu = false;
-      });
-    }
 
     try {
       await GakujiUserDataStore.refreshFromCloud();
@@ -196,10 +197,6 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Future<void> openNewDeckPopup() async {
-    setState(() {
-      showMenu = false;
-    });
-
     FocusScope.of(context).unfocus();
     deckNameController.clear();
 
@@ -313,10 +310,6 @@ class _LibraryPageState extends State<LibraryPage> {
   }
 
   Future<void> openNewFolderPopup() async {
-    setState(() {
-      showMenu = false;
-    });
-
     FocusScope.of(context).unfocus();
     folderNameController.clear();
 
@@ -414,20 +407,14 @@ class _LibraryPageState extends State<LibraryPage> {
     }
   }
 
-  void closeMenu() {
+  void _selectDeckSortMode(_DeckSortMode mode) {
     setState(() {
-      showMenu = false;
+      deckSortMode = mode;
     });
   }
 
   void exitSearchAndCloseMenu() {
     FocusScope.of(context).unfocus();
-
-    if (!showMenu) return;
-
-    setState(() {
-      showMenu = false;
-    });
   }
 
   void toggleLibraryView() {
@@ -438,7 +425,6 @@ class _LibraryPageState extends State<LibraryPage> {
 
   void startDeleteMode() {
     setState(() {
-      showMenu = false;
       isDeletingItems = true;
       selectedDeckIds.clear();
       selectedFolderIds.clear();
@@ -538,6 +524,8 @@ class _LibraryPageState extends State<LibraryPage> {
 
     final orderedDecks = <Deck>[];
 
+    // Pinned decks stay at the top in the user's existing pin order. The
+    // selected presentation mode applies to the remaining decks.
     for (final pinnedDeckId in pinnedDeckIds) {
       final pinnedDeck = deckById.remove(pinnedDeckId);
       if (pinnedDeck != null) {
@@ -546,19 +534,41 @@ class _LibraryPageState extends State<LibraryPage> {
     }
 
     final unpinnedDecks = deckById.values.toList();
-    unpinnedDecks.sort((first, second) {
-      final firstRecentIndex = recentIndex[first.id];
-      final secondRecentIndex = recentIndex[second.id];
 
-      if (firstRecentIndex != null && secondRecentIndex != null) {
-        return firstRecentIndex.compareTo(secondRecentIndex);
-      }
+    switch (deckSortMode) {
+      case _DeckSortMode.alphabetical:
+        unpinnedDecks.sort((first, second) {
+          final nameComparison = first.name
+              .toLowerCase()
+              .compareTo(second.name.toLowerCase());
+          if (nameComparison != 0) return nameComparison;
 
-      if (firstRecentIndex != null) return -1;
-      if (secondRecentIndex != null) return 1;
+          return originalIndex[first.id]!.compareTo(originalIndex[second.id]!);
+        });
+        break;
+      case _DeckSortMode.created:
+        // Decks are appended to the library when created/imported, so reverse
+        // source order presents the newest deck first.
+        unpinnedDecks.sort((first, second) {
+          return originalIndex[second.id]!.compareTo(originalIndex[first.id]!);
+        });
+        break;
+      case _DeckSortMode.recent:
+        unpinnedDecks.sort((first, second) {
+          final firstRecentIndex = recentIndex[first.id];
+          final secondRecentIndex = recentIndex[second.id];
 
-      return originalIndex[first.id]!.compareTo(originalIndex[second.id]!);
-    });
+          if (firstRecentIndex != null && secondRecentIndex != null) {
+            return firstRecentIndex.compareTo(secondRecentIndex);
+          }
+
+          if (firstRecentIndex != null) return -1;
+          if (secondRecentIndex != null) return 1;
+
+          return originalIndex[first.id]!.compareTo(originalIndex[second.id]!);
+        });
+        break;
+    }
 
     return <Deck>[
       ...orderedDecks,
@@ -628,7 +638,6 @@ class _LibraryPageState extends State<LibraryPage> {
             ),
           ),
           _deleteModeControls(),
-          if (showMenu) _menuOverlay(),
         ],
       ),
     );
@@ -644,6 +653,34 @@ class _LibraryPageState extends State<LibraryPage> {
         bottom: 4,
       ),
       child: GakujiTopBar(
+        leftWidget: isDeletingItems
+            ? null
+            : GakujiCompactMenuButton(
+                icon: Icons.sort_rounded,
+                iconSize: 29,
+                iconColor: GakujiColors.darkGray,
+                alignment: GakujiCompactMenuAlignment.topLeft,
+                horizontalOffset: -6,
+                onBeforeOpen: () => FocusScope.of(context).unfocus(),
+                items: [
+                  GakujiCompactMenuItem(
+                    label: 'Alphabetically',
+                    selected: deckSortMode == _DeckSortMode.alphabetical,
+                    onTap: () =>
+                        _selectDeckSortMode(_DeckSortMode.alphabetical),
+                  ),
+                  GakujiCompactMenuItem(
+                    label: 'Created',
+                    selected: deckSortMode == _DeckSortMode.created,
+                    onTap: () => _selectDeckSortMode(_DeckSortMode.created),
+                  ),
+                  GakujiCompactMenuItem(
+                    label: 'Recent',
+                    selected: deckSortMode == _DeckSortMode.recent,
+                    onTap: () => _selectDeckSortMode(_DeckSortMode.recent),
+                  ),
+                ],
+              ),
         title: 'Decks',
         titleStyle: GakujiText.pageTitle.copyWith(
           color: GakujiColors.darkGray,
@@ -903,60 +940,6 @@ class _LibraryPageState extends State<LibraryPage> {
             onTap: () {},
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _menuOverlay() {
-    final topInset = MediaQuery.of(context).padding.top;
-
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          GestureDetector(
-            onTap: closeMenu,
-            child: Container(
-              color: Colors.transparent,
-            ),
-          ),
-          Positioned(
-            top: topInset + 58,
-            right: 28,
-            child: Container(
-              width: 214,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: GakujiColors.warmCard,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x26000000),
-                    blurRadius: 0,
-                    offset: Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _menuItem(
-                    icon: Icons.add,
-                    label: 'New Deck',
-                    onTap: openNewDeckPopup,
-                  ),
-                  const Divider(height: 1, color: dividerGray),
-                  _menuItem(
-                    icon: Icons.delete_outline_rounded,
-                    label: 'Delete',
-                    iconColor: deleteRed,
-                    textColor: deleteRed,
-                    onTap: startDeleteMode,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1422,42 +1405,6 @@ class _LibraryPageState extends State<LibraryPage> {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _menuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    Color iconColor = Colors.black,
-    Color textColor = Colors.black,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 13,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: iconColor,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              textScaler: TextScaler.noScaling,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: textColor,
-              ),
-            ),
-          ],
         ),
       ),
     );

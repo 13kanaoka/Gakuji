@@ -105,7 +105,12 @@ class _KanjiComponentsPageState extends State<KanjiComponentsPage> {
             Expanded(
               child: GakujiFadedScroll(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 90),
+                  padding: const EdgeInsets.fromLTRB(
+                    GakujiSpacing.contentHorizontal,
+                    18,
+                    GakujiSpacing.contentHorizontal,
+                    90,
+                  ),
                   children: [
                     _rootRow(),
                     if (rows.isEmpty)

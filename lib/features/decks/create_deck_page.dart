@@ -172,7 +172,12 @@ class _CreateDeckPageState extends State<CreateDeckPage> {
             _topBar(),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(28, 28, 28, 28),
+                padding: const EdgeInsets.fromLTRB(
+                  GakujiSpacing.roomyContentHorizontal,
+                  28,
+                  GakujiSpacing.roomyContentHorizontal,
+                  28,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

@@ -98,6 +98,11 @@ class KanjiFusionRound {
   }
 
   String get definition {
+    if (term.partOfSpeech == 'kanji') {
+      final kanjiMeaning = term.kanjiMeaning.trim();
+      if (kanjiMeaning.isNotEmpty) return kanjiMeaning;
+    }
+
     final cardMeaning = term.cardMeaning.trim();
     if (cardMeaning.isNotEmpty) return cardMeaning;
     final fallback = term.meaning.trim();

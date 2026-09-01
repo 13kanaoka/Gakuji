@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:gakuji/data/dictionary/dictionary_service.dart';
 import 'package:gakuji/features/games/models/kanji_fusion_round.dart';
 import 'package:gakuji/domain/term.dart';
 
@@ -352,8 +353,18 @@ class KanjiFusionRoundGenerator {
     '早': '⿱日十',
     '交': '⿱亠父',
     '苗': '⿱艹田',
+    '吾': '⿱五口',
   };
 
+  // Some Unicode/KanjiVG component glyphs are only positional renderings of
+  // the same playable component. Fusion canonicalizes these instead of asking
+  // the learner to distinguish two glyphs that are visually the same unit.
+  // This is deliberately narrower than _radicalFormFamilies: forms such as
+  // 心/忄 or 水/氵 remain distinct because their shapes genuinely change.
+  static const Map<String, String> _canonicalComponentAliases = {
+    '訁': '言',
+    '糹': '糸',
+  };
 
   static const Map<String, List<String>> _radicalFormFamilies = {
     '人': ['人', '亻', '𠆢'],
@@ -361,8 +372,8 @@ class KanjiFusionRoundGenerator {
     '水': ['水', '氵'],
     '手': ['手', '扌'],
     '心': ['心', '忄', '⺗'],
-    '糸': ['糸', '糹'],
-    '言': ['言', '訁'],
+    '糸': ['糸'],
+    '言': ['言'],
     '示': ['示', '礻'],
     '衣': ['衣', '衤'],
     '犬': ['犬', '犭'],
@@ -377,6 +388,9 @@ class KanjiFusionRoundGenerator {
     List<Term> terms, {
     KanjiFusionDifficulty difficulty = KanjiFusionDifficulty.easy,
     KanjiFusionRadicalMode radicalMode = KanjiFusionRadicalMode.receive,
+    Map<String, Term> kanjiEntriesByCharacter = const <String, Term>{},
+    Map<String, List<KanjiComponentNode>> componentTreesByCharacter =
+        const <String, List<KanjiComponentNode>>{},
     Random? random,
   }) {
     final rng = random ?? Random();
@@ -386,41 +400,56 @@ class KanjiFusionRoundGenerator {
       return custom ?? _parseStructure(_normalIds[kanji]!);
     }
 
-    int componentCountFor(String kanji) {
-      if (difficulty == KanjiFusionDifficulty.easy) {
-        return _easyRecipes[kanji]!.length;
+    List<String> structuralComponentsFor(String kanji) {
+      return structureFor(kanji)
+          .slots
+          .map((slot) => _canonicalComponent(slot.component))
+          .toList(growable: false);
+    }
+
+    List<String> playableComponentsFor(String kanji) {
+      final structural = structuralComponentsFor(kanji);
+      final fromDictionary = _playableComponentsFromTree(
+        componentTreesByCharacter[kanji],
+      );
+
+      // The downloaded component tree is the source of truth whenever its
+      // recursive leaves line up with the layout Fusion knows how to render.
+      // If an older/fallback dictionary has no component tree, the curated IDS
+      // layout remains a safe fallback rather than removing the round.
+      if (fromDictionary.length >= 2 &&
+          _componentMultisetsMatch(fromDictionary, structural)) {
+        return fromDictionary;
       }
-      return structureFor(kanji).slots.length;
+
+      return structural;
+    }
+
+    bool hasPlayableBreakdown(String kanji) {
+      final tree = componentTreesByCharacter[kanji];
+      if (tree != null) {
+        return _playableComponentsFromTree(tree).length >= 2;
+      }
+
+      return structuralComponentsFor(kanji).length >= 2;
     }
 
     final allSupportedKanji = _normalIds.keys
         .where(_easyRecipes.containsKey)
-        .where((kanji) => componentCountFor(kanji) >= 2)
+        .where(hasPlayableBreakdown)
         .toList(growable: false);
+    final supportedSet = allSupportedKanji.toSet();
 
-    final sourceTerms = <String, Term>{};
     final deckKanji = <String>{};
 
     for (final term in terms) {
-      final spelling = term.kanji.trim();
+      final preferred = term.preferredSpelling.trim();
+      final spelling = preferred.isNotEmpty ? preferred : term.kanji.trim();
       if (spelling.isEmpty) continue;
 
       for (final kanji in _extractKanji(spelling)) {
-        if (!allSupportedKanji.contains(kanji)) continue;
-
+        if (!supportedSet.contains(kanji)) continue;
         deckKanji.add(kanji);
-
-        // An exact single-kanji card has the most specific saved prompt.
-        // Kanji extracted from a larger word use the curated kanji-level
-        // reading and meaning so Fusion remains a single-kanji activity.
-        if (spelling == kanji) {
-          sourceTerms[kanji] = term;
-        } else {
-          sourceTerms.putIfAbsent(
-            kanji,
-            () => _showcaseTerm(kanji, difficulty),
-          );
-        }
       }
     }
 
@@ -428,28 +457,17 @@ class KanjiFusionRoundGenerator {
 
     // Distractors come from the complete supported component library rather
     // than only the current deck. A deck with one eligible kanji can therefore
-    // still receive the full Normal-mode set of ten choices.
-    final componentPool = difficulty == KanjiFusionDifficulty.easy
-        ? allSupportedKanji
-            .expand((kanji) => _easyRecipes[kanji]!)
-            .toSet()
-            .toList()
-        : allSupportedKanji
-            .expand(
-              (kanji) => structureFor(kanji).slots.map(
-                (slot) => slot.component,
-              ),
-            )
-            .toSet()
-            .toList();
+    // still receive a full choice set.
+    final componentPool = allSupportedKanji
+        .expand(playableComponentsFor)
+        .map(_canonicalComponent)
+        .toSet()
+        .toList();
 
     return List.unmodifiable(
       entries.map((kanji) {
         final structure = structureFor(kanji);
-        final slots = structure.slots;
-        final required = difficulty == KanjiFusionDifficulty.easy
-            ? List<String>.from(_easyRecipes[kanji]!)
-            : slots.map((slot) => slot.component).toList(growable: false);
+        final required = playableComponentsFor(kanji);
 
         final choiceSpecs = <_FusionChoiceSpec>[
           for (final component in required)
@@ -482,8 +500,13 @@ class KanjiFusionRoundGenerator {
 
         choiceSpecs.shuffle(rng);
 
+        // Fusion always teaches the individual kanji. The deck term only
+        // decides which kanji enter the pool; its lexical reading/definition
+        // never becomes the prompt for the kanji round.
+        final kanjiEntry = kanjiEntriesByCharacter[kanji];
+
         return KanjiFusionRound(
-          term: sourceTerms[kanji] ?? _showcaseTerm(kanji, difficulty),
+          term: kanjiEntry ?? _showcaseTerm(kanji, difficulty),
           targetKanji: kanji,
           requiredComponents: List<String>.unmodifiable(required),
           componentChoices: List<String>.unmodifiable(
@@ -494,13 +517,68 @@ class KanjiFusionRoundGenerator {
               (choice) => List<String>.unmodifiable(choice.forms),
             ),
           ),
-          structuralSlots: List<KanjiFusionSlot>.unmodifiable(slots),
+          structuralSlots: List<KanjiFusionSlot>.unmodifiable(
+            structure.slots,
+          ),
           structuralGroups: List<KanjiFusionGroup>.unmodifiable(
             structure.groups,
           ),
         );
       }),
     );
+  }
+
+  static List<String> _playableComponentsFromTree(
+    List<KanjiComponentNode>? tree,
+  ) {
+    if (tree == null || tree.isEmpty) return const <String>[];
+
+    final components = <String>[];
+
+    void collect(KanjiComponentNode node) {
+      if (node.children.isNotEmpty) {
+        for (final child in node.children) {
+          collect(child);
+        }
+        return;
+      }
+
+      final element = node.element.trim();
+      if (element.isEmpty) return;
+      components.add(_canonicalComponent(element));
+    }
+
+    for (final node in tree) {
+      collect(node);
+    }
+
+    return List<String>.unmodifiable(components);
+  }
+
+  static bool _componentMultisetsMatch(
+    List<String> first,
+    List<String> second,
+  ) {
+    if (first.length != second.length) return false;
+
+    Map<String, int> countsFor(List<String> values) {
+      final counts = <String, int>{};
+      for (final value in values) {
+        final canonical = _canonicalComponent(value);
+        counts[canonical] = (counts[canonical] ?? 0) + 1;
+      }
+      return counts;
+    }
+
+    final firstCounts = countsFor(first);
+    final secondCounts = countsFor(second);
+    if (firstCounts.length != secondCounts.length) return false;
+
+    for (final entry in firstCounts.entries) {
+      if (secondCounts[entry.key] != entry.value) return false;
+    }
+
+    return true;
   }
 
   static Iterable<String> _extractKanji(String text) sync* {
@@ -551,22 +629,26 @@ class KanjiFusionRoundGenerator {
     required KanjiFusionDifficulty difficulty,
     required KanjiFusionRadicalMode radicalMode,
   }) {
+    final component = _canonicalComponent(exactComponent);
     final shouldCreateForm = difficulty == KanjiFusionDifficulty.normal &&
         radicalMode == KanjiFusionRadicalMode.create;
 
     if (!shouldCreateForm) {
       return _FusionChoiceSpec(
-        label: exactComponent,
-        forms: <String>[exactComponent],
+        label: component,
+        forms: <String>[component],
       );
     }
 
-    final base = _baseComponentFor(exactComponent);
+    final base = _baseComponentFor(component);
+    final forms = (_radicalFormFamilies[base] ?? <String>[component])
+        .map(_canonicalComponent)
+        .toSet()
+        .toList(growable: false);
+
     return _FusionChoiceSpec(
       label: base,
-      forms: List<String>.from(
-        _radicalFormFamilies[base] ?? <String>[exactComponent],
-      ),
+      forms: forms,
     );
   }
 
@@ -575,10 +657,15 @@ class KanjiFusionRoundGenerator {
   }
 
   static String _baseComponentFor(String component) {
+    final canonical = _canonicalComponent(component);
     for (final entry in _radicalFormFamilies.entries) {
-      if (entry.value.contains(component)) return entry.key;
+      if (entry.value.contains(canonical)) return entry.key;
     }
-    return component;
+    return canonical;
+  }
+
+  static String _canonicalComponent(String component) {
+    return _canonicalComponentAliases[component] ?? component;
   }
 
   static _FusionStructure? _customStructure(
@@ -1065,6 +1152,7 @@ class KanjiFusionRoundGenerator {
   static _FusionStructure _parseStructure(String ids) {
     final parser = _IdsStructureParser(
       nestedIds: _nestedComponentIds,
+      componentAliases: _canonicalComponentAliases,
     );
     parser.parseIds(ids, 0.05, 0.05, 0.90, 0.90);
     return _FusionStructure(
@@ -1076,10 +1164,14 @@ class KanjiFusionRoundGenerator {
 
 class _IdsStructureParser {
   final Map<String, String> nestedIds;
+  final Map<String, String> componentAliases;
   final List<KanjiFusionSlot> slots = [];
   final List<KanjiFusionGroup> groups = [];
 
-  _IdsStructureParser({required this.nestedIds});
+  _IdsStructureParser({
+    required this.nestedIds,
+    required this.componentAliases,
+  });
 
   void parseIds(
     String ids,
@@ -1239,11 +1331,12 @@ class _IdsStructureParser {
         return;
     }
 
-    final nestedIdsForToken = nestedIds[token];
+    final component = componentAliases[token] ?? token;
+    final nestedIdsForToken = nestedIds[component] ?? nestedIds[token];
     if (nestedIdsForToken != null) {
       groups.add(
         KanjiFusionGroup(
-          component: token,
+          component: component,
           left: left,
           top: top,
           width: width,
@@ -1267,7 +1360,7 @@ class _IdsStructureParser {
 
     slots.add(
       KanjiFusionSlot(
-        component: token,
+        component: component,
         left: left,
         top: top,
         width: width,

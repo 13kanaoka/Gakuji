@@ -307,7 +307,12 @@ class _SettingsPageState extends State<SettingsPage> {
             Expanded(
               child: GakujiFadedScroll(
                 child: ListView(
-                  padding: const EdgeInsets.fromLTRB(28, 20, 28, 36),
+                  padding: const EdgeInsets.fromLTRB(
+                    GakujiSpacing.roomyContentHorizontal,
+                    20,
+                    GakujiSpacing.roomyContentHorizontal,
+                    36,
+                  ),
                   children: [
                     _profileCard(),
                     const SizedBox(height: 28),

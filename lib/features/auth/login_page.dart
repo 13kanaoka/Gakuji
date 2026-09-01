@@ -395,7 +395,7 @@ class _LoginPageState extends State<LoginPage>
     return SizedBox(
       width: double.infinity,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.symmetric(horizontal: GakujiSpacing.roomyContentHorizontal),
         child: _buildPanel(view),
       ),
     );

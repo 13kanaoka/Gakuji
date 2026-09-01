@@ -185,7 +185,7 @@ class _AccountInformationPageState extends State<AccountInformationPage> {
               onRefresh: _loadProfile,
               child: ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(28, 36, 28, 32),
+                      padding: const EdgeInsets.fromLTRB(GakujiSpacing.roomyContentHorizontal, 36, GakujiSpacing.roomyContentHorizontal, 32),
                       children: [
                         Text(
                           'Sign-in Details',
@@ -750,7 +750,7 @@ class _SecurityFormScaffold extends StatelessWidget {
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(28, 38, 28, 32),
+              padding: const EdgeInsets.fromLTRB(GakujiSpacing.roomyContentHorizontal, 38, GakujiSpacing.roomyContentHorizontal, 32),
               children: [
                 Text(
                   heading,

@@ -514,7 +514,7 @@ class _ReviewCalendarPageState extends State<ReviewCalendarPage> {
               onTap: enabled ? onTap : null,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+                padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 8, GakujiSpacing.contentHorizontal, 8),
                 decoration: BoxDecoration(
                   color: GakujiColors.sectionHeader,
                   border: Border(
@@ -555,7 +555,7 @@ class _ReviewCalendarPageState extends State<ReviewCalendarPage> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+            padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 12, GakujiSpacing.contentHorizontal, 0),
             child: Column(
               children: rows.map((row) {
                 return _summaryRow(

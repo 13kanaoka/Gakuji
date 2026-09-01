@@ -7,8 +7,11 @@ import 'package:gakuji/domain/deck.dart';
 import 'package:gakuji/features/games/models/imposter_round.dart';
 import 'package:gakuji/domain/term.dart';
 import 'package:gakuji/data/sync/gakuji_local_preferences.dart';
+import 'package:gakuji/data/sync/gakuji_session_storage.dart';
 import 'package:gakuji/features/games/services/imposter_round_generator.dart';
 import 'package:gakuji/core/theme/gakuji_styles.dart';
+import 'package:gakuji/core/widgets/gakuji_options_sheet.dart';
+import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
 
 enum CrosscheckMode { normal, rush, endless }
 
@@ -29,8 +32,11 @@ class ImposterDetectivePage extends StatefulWidget {
 }
 
 class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
-  static const Duration _rushRoundDuration = Duration(seconds: 5);
+  static const Duration _rushStartingRoundDuration = Duration(seconds: 5);
+  static const Duration _rushMinimumRoundDuration = Duration(milliseconds: 1500);
+  static const Duration _rushSpeedUpPerCorrect = Duration(milliseconds: 150);
   static const Duration _rushTickInterval = Duration(milliseconds: 50);
+  static const int _sessionSnapshotVersion = 1;
 
   // Crosscheck verdict palette: soft, but stronger than the old washed-out fills.
   static const Color _incorrectRed = Color(0xFFF29A9A);
@@ -42,6 +48,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
 
   final ImposterRoundGenerator _generator = ImposterRoundGenerator();
   final math.Random _random = math.Random();
+  final Map<CrosscheckMode, String> _sessionTermSignatureCache =
+      <CrosscheckMode, String>{};
 
   ImposterRound? currentRound;
   ImposterRound? correctionRound;
@@ -62,9 +70,13 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
 
   Timer? _rushTimer;
   DateTime? _rushDeadline;
-  int _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
+  int _rushRoundDurationMilliseconds =
+      _rushStartingRoundDuration.inMilliseconds;
+  int _rushRemainingMilliseconds =
+      _rushStartingRoundDuration.inMilliseconds;
   bool _rushCheckReading = true;
   bool _rushCheckDefinition = true;
+  bool _checkPartOfSpeech = false;
 
   final Map<CrosscheckMode, int> highScores = {
     CrosscheckMode.normal: 0,
@@ -99,9 +111,24 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }
 
   double get _rushProgress {
-    return (_rushRemainingMilliseconds / _rushRoundDuration.inMilliseconds)
+    if (_rushRoundDurationMilliseconds <= 0) return 0;
+
+    return (_rushRemainingMilliseconds / _rushRoundDurationMilliseconds)
         .clamp(0.0, 1.0)
         .toDouble();
+  }
+
+  int _rushDurationMillisecondsForScore(int score) {
+    final start = _rushStartingRoundDuration.inMilliseconds;
+    final minimum = _rushMinimumRoundDuration.inMilliseconds;
+    final reduction = _rushSpeedUpPerCorrect.inMilliseconds * score;
+    return (start - reduction).clamp(minimum, start).toInt();
+  }
+
+  void _resetRushRoundTimerForCurrentScore() {
+    _rushRoundDurationMilliseconds =
+        _rushDurationMillisecondsForScore(correctCount);
+    _rushRemainingMilliseconds = _rushRoundDurationMilliseconds;
   }
 
 
@@ -121,10 +148,14 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     gameTerms = List<Term>.from(widget.terms)..shuffle();
     unawaited(_loadHighScores());
     unawaited(_loadRushSettings());
+    unawaited(_loadPartOfSpeechSetting());
   }
 
   @override
   void dispose() {
+    if (_shouldPersistSelectedSession) {
+      unawaited(_saveSessionSnapshot());
+    }
     _cancelRushTimer();
     super.dispose();
   }
@@ -177,6 +208,25 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     ]);
   }
 
+  Future<void> _loadPartOfSpeechSetting() async {
+    final savedPartOfSpeech = await GakujiLocalPreferences.loadBool(
+      'crosscheck_check_part_of_speech_v1',
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _checkPartOfSpeech = savedPartOfSpeech ?? false;
+    });
+  }
+
+  Future<void> _persistPartOfSpeechSetting() async {
+    await GakujiLocalPreferences.saveBool(
+      'crosscheck_check_part_of_speech_v1',
+      _checkPartOfSpeech,
+    );
+  }
+
   String _highScoreKey(CrosscheckMode mode) {
     return 'crosscheck_high_score_v1_${widget.deck.id}_${mode.name}';
   }
@@ -199,11 +249,339 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     unawaited(_persistHighScore(mode, correctCount));
   }
 
-  void startGame(CrosscheckMode mode) {
-    if (gameTerms.isEmpty) return;
+  List<Term> _termsForMode(CrosscheckMode mode) {
+    if (mode == CrosscheckMode.rush) {
+      return List<Term>.from(widget.terms);
+    }
+
+    return widget.terms
+        .where(_hasPreferredKanjiWriting)
+        .toList(growable: false);
+  }
+
+  bool _hasPreferredKanjiWriting(Term term) {
+    final preferred = term.preferredSpelling.trim();
+    if (preferred.isEmpty) return false;
+
+    return RegExp(
+      r'[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF々〆ヵヶ]',
+    ).hasMatch(preferred);
+  }
+
+  bool _supportsSessionSave(CrosscheckMode? mode) {
+    return mode == CrosscheckMode.normal || mode == CrosscheckMode.endless;
+  }
+
+  bool get _shouldPersistSelectedSession {
+    return _supportsSessionSave(selectedMode) &&
+        gameStarted &&
+        !gameOver &&
+        currentRound != null &&
+        gameTerms.isNotEmpty;
+  }
+
+  String? _sessionTypeForMode(CrosscheckMode mode) {
+    switch (mode) {
+      case CrosscheckMode.normal:
+        return 'crosscheck_normal';
+      case CrosscheckMode.endless:
+        return 'crosscheck_endless';
+      case CrosscheckMode.rush:
+        return null;
+    }
+  }
+
+  String _sessionTermSignature(CrosscheckMode mode) {
+    return _sessionTermSignatureCache.putIfAbsent(mode, () {
+      final modeTerms = _termsForMode(mode);
+      var hash = 0x811C9DC5;
+
+      for (final term in modeTerms) {
+        for (final value in <String>[
+          term.id,
+          term.preferredSpelling,
+          term.kanji,
+          term.reading,
+          term.meaning,
+          term.cardMeaning,
+          term.partOfSpeech,
+        ]) {
+          for (final codeUnit in value.codeUnits) {
+            hash ^= codeUnit;
+            hash = (hash * 0x01000193) & 0xFFFFFFFF;
+          }
+          hash ^= 0xFE;
+          hash = (hash * 0x01000193) & 0xFFFFFFFF;
+        }
+        hash ^= 0xFF;
+        hash = (hash * 0x01000193) & 0xFFFFFFFF;
+      }
+
+      return '${modeTerms.length}:${hash.toRadixString(16)}';
+    });
+  }
+
+  bool _restoreCachedSession(CrosscheckMode mode) {
+    final sessionType = _sessionTypeForMode(mode);
+    if (sessionType == null ||
+        !GakujiSessionStorage.hasCached(
+          sessionType: sessionType,
+          deckId: widget.deck.id,
+        )) {
+      return false;
+    }
+
+    final snapshot = GakujiSessionStorage.peek(
+      sessionType: sessionType,
+      deckId: widget.deck.id,
+    );
+    if (snapshot == null) return false;
+
+    return _restoreSessionSnapshot(mode, snapshot);
+  }
+
+  Future<Map<String, dynamic>?> _loadSessionSnapshot(
+    CrosscheckMode mode,
+  ) {
+    final sessionType = _sessionTypeForMode(mode);
+    if (sessionType == null) return Future<Map<String, dynamic>?>.value();
+
+    return GakujiSessionStorage.load(
+      sessionType: sessionType,
+      deckId: widget.deck.id,
+    );
+  }
+
+  bool _restoreSessionSnapshot(
+    CrosscheckMode mode,
+    Map<String, dynamic> snapshot,
+  ) {
+    if (_asInt(snapshot['version']) != _sessionSnapshotVersion ||
+        snapshot['mode']?.toString() != mode.name ||
+        snapshot['termSignature']?.toString() != _sessionTermSignature(mode)) {
+      return false;
+    }
+
+    final modeTerms = _termsForMode(mode);
+    if (modeTerms.isEmpty) return false;
+
+    final termsById = <String, Term>{
+      for (final term in modeTerms) term.id: term,
+    };
+    final savedGameTermIds = _stringList(snapshot['gameTermIds']);
+    if (savedGameTermIds.length != modeTerms.length ||
+        savedGameTermIds.toSet().length != savedGameTermIds.length) {
+      return false;
+    }
+
+    final restoredGameTerms = savedGameTermIds
+        .map((id) => termsById[id])
+        .whereType<Term>()
+        .toList(growable: false);
+    if (restoredGameTerms.length != savedGameTermIds.length) return false;
+
+    final restoredIndex = _asInt(snapshot['currentIndex']);
+    if (restoredIndex == null ||
+        restoredIndex < 0 ||
+        restoredIndex >= restoredGameTerms.length) {
+      return false;
+    }
+
+    final restoredCurrentRound = _roundFromSnapshot(
+      snapshot['currentRound'],
+      termsById,
+    );
+    if (restoredCurrentRound == null ||
+        restoredCurrentRound.visitor.id != restoredGameTerms[restoredIndex].id) {
+      return false;
+    }
+
+    final restoredShowingCorrection = snapshot['showingCorrection'] == true;
+    final restoredCorrectionRound = restoredShowingCorrection
+        ? _roundFromSnapshot(snapshot['correctionRound'], termsById)
+        : null;
+    final restoredCorrectionUserApproved =
+        snapshot['correctionUserApproved'] is bool
+            ? snapshot['correctionUserApproved'] as bool
+            : null;
+
+    if (restoredShowingCorrection &&
+        (restoredCorrectionRound == null ||
+            restoredCorrectionUserApproved == null ||
+            restoredCorrectionRound.visitor.id != restoredCurrentRound.visitor.id)) {
+      return false;
+    }
+
+    final restoredMistakeCount = _asInt(snapshot['mistakeCount']) ?? 0;
+    if (restoredMistakeCount < 0 ||
+        restoredMistakeCount > 3 ||
+        (restoredMistakeCount == 3 && !restoredShowingCorrection)) {
+      return false;
+    }
 
     _cancelRushTimer();
-    gameTerms.shuffle();
+
+    setState(() {
+      gameTerms
+        ..clear()
+        ..addAll(restoredGameTerms);
+      selectedMode = mode;
+      gameStarted = true;
+      gameOver = false;
+      showingCorrection = restoredShowingCorrection;
+      currentIndex = restoredIndex;
+      roundsPlayed =
+          math.max(0, _asInt(snapshot['roundsPlayed']) ?? 0).toInt();
+      correctCount =
+          math.max(0, _asInt(snapshot['correctCount']) ?? 0).toInt();
+      mistakeCount = restoredMistakeCount;
+      streak = math.max(0, _asInt(snapshot['streak']) ?? 0).toInt();
+      bestStreak = math
+          .max(
+            streak,
+            math.max(0, _asInt(snapshot['bestStreak']) ?? 0),
+          )
+          .toInt();
+      currentRound = restoredCurrentRound;
+      correctionRound = restoredCorrectionRound;
+      correctionUserApproved = restoredShowingCorrection
+          ? restoredCorrectionUserApproved
+          : null;
+      _rushRoundDurationMilliseconds =
+          _rushStartingRoundDuration.inMilliseconds;
+      _rushRemainingMilliseconds = _rushRoundDurationMilliseconds;
+    });
+
+    return true;
+  }
+
+  Map<String, dynamic> _roundToSnapshot(ImposterRound round) {
+    return <String, dynamic>{
+      'visitorId': round.visitor.id,
+      'reading': round.file.reading,
+      'definition': round.file.definition,
+      'partOfSpeech': round.file.partOfSpeech,
+      'isValid': round.isValid,
+    };
+  }
+
+  ImposterRound? _roundFromSnapshot(
+    dynamic raw,
+    Map<String, Term> termsById,
+  ) {
+    if (raw is! Map) return null;
+
+    final visitorId = raw['visitorId']?.toString() ?? '';
+    final visitor = termsById[visitorId];
+    if (visitor == null) return null;
+
+    final isValid = raw['isValid'];
+    if (isValid is! bool) return null;
+
+    return ImposterRound(
+      visitor: visitor,
+      file: IdentityFile(
+        reading: raw['reading']?.toString() ?? '—',
+        definition: raw['definition']?.toString() ?? '—',
+        partOfSpeech: raw['partOfSpeech']?.toString() ?? '—',
+      ),
+      isValid: isValid,
+    );
+  }
+
+  Future<void> _saveSessionSnapshot() {
+    final mode = selectedMode;
+    if (!_shouldPersistSelectedSession || mode == null) {
+      return Future<void>.value();
+    }
+
+    final sessionType = _sessionTypeForMode(mode);
+    final round = currentRound;
+    if (sessionType == null || round == null) return Future<void>.value();
+
+    return GakujiSessionStorage.save(
+      sessionType: sessionType,
+      deckId: widget.deck.id,
+      snapshot: <String, dynamic>{
+        'version': _sessionSnapshotVersion,
+        'mode': mode.name,
+        'termSignature': _sessionTermSignature(mode),
+        'gameTermIds': gameTerms.map((term) => term.id).toList(growable: false),
+        'currentIndex': currentIndex,
+        'roundsPlayed': roundsPlayed,
+        'correctCount': correctCount,
+        'mistakeCount': mistakeCount,
+        'streak': streak,
+        'bestStreak': bestStreak,
+        'showingCorrection': showingCorrection,
+        'currentRound': _roundToSnapshot(round),
+        if (showingCorrection && correctionRound != null)
+          'correctionRound': _roundToSnapshot(correctionRound!),
+        if (showingCorrection && correctionUserApproved != null)
+          'correctionUserApproved': correctionUserApproved,
+      },
+    );
+  }
+
+  Future<void> _clearSessionSnapshot(CrosscheckMode mode) {
+    final sessionType = _sessionTypeForMode(mode);
+    if (sessionType == null) return Future<void>.value();
+
+    return GakujiSessionStorage.clear(
+      sessionType: sessionType,
+      deckId: widget.deck.id,
+    );
+  }
+
+  static int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  static List<String> _stringList(dynamic value) {
+    if (value is! List) return <String>[];
+    return value.map((item) => item.toString()).toList(growable: false);
+  }
+
+  Future<void> startGame(CrosscheckMode mode) async {
+    final modeTerms = _termsForMode(mode);
+    if (modeTerms.isEmpty) return;
+
+    _cancelRushTimer();
+
+    if (_supportsSessionSave(mode)) {
+      if (_restoreCachedSession(mode)) return;
+
+      final savedSnapshot = await _loadSessionSnapshot(mode);
+      if (!mounted) return;
+
+      if (savedSnapshot != null &&
+          _restoreSessionSnapshot(mode, savedSnapshot)) {
+        return;
+      }
+
+      if (savedSnapshot != null) {
+        await _clearSessionSnapshot(mode);
+        if (!mounted) return;
+      }
+    }
+
+    _startFreshGame(mode, modeTerms: modeTerms);
+  }
+
+  void _startFreshGame(
+    CrosscheckMode mode, {
+    List<Term>? modeTerms,
+  }) {
+    final freshTerms = modeTerms ?? _termsForMode(mode);
+    if (freshTerms.isEmpty) return;
+
+    _cancelRushTimer();
+    gameTerms
+      ..clear()
+      ..addAll(freshTerms)
+      ..shuffle();
 
     setState(() {
       selectedMode = mode;
@@ -218,12 +596,16 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       mistakeCount = 0;
       streak = 0;
       bestStreak = 0;
-      _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
+      _rushRoundDurationMilliseconds =
+          _rushStartingRoundDuration.inMilliseconds;
+      _rushRemainingMilliseconds = _rushRoundDurationMilliseconds;
       currentRound = _generateRoundForCurrentIndex();
     });
 
     if (mode == CrosscheckMode.rush) {
       _startRushTimer(reset: true);
+    } else {
+      unawaited(_saveSessionSnapshot());
     }
   }
 
@@ -233,7 +615,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     if (!_rushTimerShouldRun) return;
 
     if (reset) {
-      _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
+      _resetRushRoundTimerForCurrentScore();
     }
 
     if (_rushRemainingMilliseconds <= 0) {
@@ -284,7 +666,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
 
     setState(() {
       _rushRemainingMilliseconds = remaining
-          .clamp(0, _rushRoundDuration.inMilliseconds)
+          .clamp(0, _rushRoundDurationMilliseconds)
           .toInt();
     });
   }
@@ -433,6 +815,15 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
 
       _recordHighScoreIfNeeded();
 
+      final mode = selectedMode;
+      if (_supportsSessionSave(mode) && mode != null) {
+        if (gameOver) {
+          unawaited(_clearSessionSnapshot(mode));
+        } else {
+          unawaited(_saveSessionSnapshot());
+        }
+      }
+
       if (_rushTimerShouldRun) {
         _startRushTimer(reset: true);
       }
@@ -449,6 +840,10 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       correctionRound = round;
       correctionUserApproved = approved;
     });
+
+    if (_shouldPersistSelectedSession) {
+      unawaited(_saveSessionSnapshot());
+    }
   }
 
   void continueAfterCorrection() {
@@ -460,6 +855,15 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       correctionUserApproved = null;
       _advanceToNextRound();
     });
+
+    final mode = selectedMode;
+    if (_supportsSessionSave(mode) && mode != null) {
+      if (gameOver) {
+        unawaited(_clearSessionSnapshot(mode));
+      } else {
+        unawaited(_saveSessionSnapshot());
+      }
+    }
   }
 
   void _advanceToNextRound() {
@@ -486,11 +890,23 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     currentRound = _generateRoundForCurrentIndex();
   }
 
-  void restartGame() {
-    startGame(selectedMode ?? CrosscheckMode.normal);
+  Future<void> restartGame() async {
+    final mode = selectedMode ?? CrosscheckMode.normal;
+    _cancelRushTimer();
+
+    if (_supportsSessionSave(mode)) {
+      await _clearSessionSnapshot(mode);
+      if (!mounted) return;
+    }
+
+    _startFreshGame(mode);
   }
 
   void _returnToModeSelection() {
+    if (_shouldPersistSelectedSession) {
+      unawaited(_saveSessionSnapshot());
+    }
+
     _cancelRushTimer();
 
     setState(() {
@@ -506,7 +922,9 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       mistakeCount = 0;
       streak = 0;
       bestStreak = 0;
-      _rushRemainingMilliseconds = _rushRoundDuration.inMilliseconds;
+      _rushRoundDurationMilliseconds =
+          _rushStartingRoundDuration.inMilliseconds;
+      _rushRemainingMilliseconds = _rushRoundDurationMilliseconds;
     });
   }
 
@@ -531,7 +949,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           children: [
             _simpleTopBar(
               context: context,
-              icon: Icons.arrow_back_ios_new_rounded,
+              icon: Icons.close_rounded,
             ),
             Expanded(
               child: LayoutBuilder(
@@ -569,7 +987,8 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
                           _modeCard(
                             mode: CrosscheckMode.rush,
                             title: 'Rush',
-                            description: '5 seconds • $_rushFieldLabel • Sudden death',
+                            description:
+                                '5 → 1.5 seconds • $_rushFieldLabel • Sudden death',
                           ),
                           const SizedBox(height: 18),
                           _modeCard(
@@ -605,7 +1024,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     required String title,
     required String description,
   }) {
-    final enabled = gameTerms.isNotEmpty;
+    final enabled = _termsForMode(mode).isNotEmpty;
     final best = highScores[mode] ?? 0;
 
     return Opacity(
@@ -618,7 +1037,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           borderRadius: BorderRadius.circular(22),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
-            onTap: enabled ? () => startGame(mode) : null,
+            onTap: enabled ? () => unawaited(startGame(mode)) : null,
             splashColor: Colors.white.withValues(alpha: 0.12),
             highlightColor: Colors.white.withValues(alpha: 0.06),
             child: Padding(
@@ -806,7 +1225,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
           children: [
             _simpleTopBar(
               context: context,
-              icon: Icons.arrow_back_ios_new_rounded,
+              icon: Icons.close_rounded,
             ),
             Expanded(
               child: Padding(
@@ -1027,40 +1446,26 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
   }
 
   Widget _gameTopBar(BuildContext context) {
-    return SizedBox(
-      height: 72,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-        child: Row(
-          children: [
-            _topIconButton(
-              icon: Icons.arrow_back_ios_new_rounded,
-              onTap: _returnToModeSelection,
-            ),
-            Expanded(
-              child: Center(
-                child: isLoopingMode
-                    ? const SizedBox.shrink()
-                    : Text(
-                        '${currentIndex + 1}/${gameTerms.length}',
-                        textScaler: TextScaler.noScaling,
-                        style: TextStyle(
-                          fontSize: 20,
-                          height: 1,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.2,
-                          color: GakujiColors.darkGray,
-                        ),
-                      ),
+    return GakujiTopBar(
+      leftIcon: Icons.close_rounded,
+      onLeftTap: _returnToModeSelection,
+      leftIconColor: GakujiColors.darkGray,
+      titleWidget: isLoopingMode
+          ? const SizedBox.shrink()
+          : Text(
+              '${currentIndex + 1}/${gameTerms.length}',
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                fontSize: 20,
+                height: 1,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.2,
+                color: GakujiColors.darkGray,
               ),
             ),
-            _topIconButton(
-              icon: Icons.menu_rounded,
-              onTap: () => _showOptions(context),
-            ),
-          ],
-        ),
-      ),
+      rightIcon: Icons.menu_rounded,
+      onRightTap: () => _showOptions(context),
+      rightIconColor: GakujiColors.darkGray,
     );
   }
 
@@ -1068,45 +1473,10 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     required BuildContext context,
     required IconData icon,
   }) {
-    return SizedBox(
-      height: 72,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
-        child: Row(
-          children: [
-            _topIconButton(
-              icon: icon,
-              onTap: () => Navigator.pop(context),
-            ),
-            const Spacer(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _topIconButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        splashColor: deckPrimaryColor.withValues(alpha: 0.08),
-        highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(
-            icon,
-            size: icon == Icons.arrow_back_ios_new_rounded ? 25 : 28,
-            color: GakujiColors.darkGray,
-          ),
-        ),
-      ),
+    return GakujiTopBar(
+      leftIcon: icon,
+      onLeftTap: () => Navigator.pop(context),
+      leftIconColor: GakujiColors.darkGray,
     );
   }
 
@@ -1213,7 +1583,7 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
       );
     }
 
-    if (!isRushMode) {
+    if (!isRushMode && _checkPartOfSpeech) {
       addField(
         'Part of Speech',
         round.file.partOfSpeech,
@@ -1377,182 +1747,129 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     );
   }
 
-  Widget _rushToggleRow({
-    required String label,
-    required bool value,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: GakujiColors.warmCard,
-      borderRadius: BorderRadius.circular(GakujiRadius.small),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        splashColor: deckPrimaryColor.withValues(alpha: 0.08),
-        highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  textScaler: TextScaler.noScaling,
-                  style: GakujiText.medium.copyWith(
-                    color: GakujiColors.darkGray,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Container(
-                width: 48,
-                height: 28,
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  color: value ? deckPrimaryColor : GakujiColors.softBorder,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Align(
-                  alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    width: 22,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      color: GakujiColors.warmCard,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _showOptions(BuildContext context) async {
     final pausedRush = _rushTimerShouldRun;
     if (pausedRush) {
       _pauseRushTimer();
     }
 
-    var checkReading = _rushCheckReading;
-    var checkDefinition = _rushCheckDefinition;
-
-    await showModalBottomSheet<void>(
+    await showGakujiOptionsSheet(
       context: context,
-      backgroundColor: GakujiColors.warmBackground,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(28),
-        ),
-      ),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (sheetContext, setSheetState) {
-            void applyRushSettings() {
-              setState(() {
-                _rushCheckReading = checkReading;
-                _rushCheckDefinition = checkDefinition;
+      title: 'Crosscheck Options',
+      sectionsBuilder: (sheetContext) => [
+        if (isRushMode)
+          GakujiOptionsSheetSection(
+            title: 'Fields',
+            items: [
+              GakujiOptionsSheetItem(
+                textIcon: '読',
+                label: 'Reading',
+                subtitle: _rushCheckReading
+                    ? 'Included in Rush rounds'
+                    : 'Not included in Rush rounds',
+                iconColor: _rushCheckReading
+                    ? deckPrimaryColor
+                    : GakujiColors.mediumGray,
+                onTap: () {
+                  if (_rushCheckReading && !_rushCheckDefinition) return;
 
-                if (isRushMode && currentRound != null) {
-                  currentRound = _generateRoundForCurrentIndex();
-                  _rushRemainingMilliseconds =
-                      _rushRoundDuration.inMilliseconds;
-                }
-              });
+                  setState(() {
+                    _rushCheckReading = !_rushCheckReading;
 
-              unawaited(_persistRushSettings());
-            }
+                    if (currentRound != null) {
+                      currentRound = _generateRoundForCurrentIndex();
+                      _resetRushRoundTimerForCurrentScore();
+                    }
+                  });
 
-            return SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 14, 22, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 42,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: GakujiColors.softBorder,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    if (isRushMode) ...[
-                      Text(
-                        'Rush Fields',
-                        textScaler: TextScaler.noScaling,
-                        style: GakujiText.small.copyWith(
-                          color: GakujiColors.mediumGray,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      _rushToggleRow(
-                        label: 'Reading',
-                        value: checkReading,
-                        onTap: () {
-                          if (checkReading && !checkDefinition) return;
-                          setSheetState(() {
-                            checkReading = !checkReading;
-                          });
-                          applyRushSettings();
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      _rushToggleRow(
-                        label: 'Definition',
-                        value: checkDefinition,
-                        onTap: () {
-                          if (checkDefinition && !checkReading) return;
-                          setSheetState(() {
-                            checkDefinition = !checkDefinition;
-                          });
-                          applyRushSettings();
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    _optionRow(
-                      icon: Icons.refresh_rounded,
-                      label: 'Restart Session',
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        restartGame();
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    _optionRow(
-                      icon: Icons.grid_view_rounded,
-                      label: 'Return to Modes',
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        _returnToModeSelection();
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    _optionRow(
-                      icon: Icons.close_rounded,
-                      label: 'Exit Crosscheck',
-                      onTap: () {
-                        Navigator.pop(sheetContext);
-                        Navigator.pop(context);
-                      },
-                    ),
-                  ],
-                ),
+                  unawaited(_persistRushSettings());
+                },
               ),
-            );
-          },
-        );
-      },
+              GakujiOptionsSheetItem(
+                textIcon: '意',
+                label: 'Definition',
+                subtitle: _rushCheckDefinition
+                    ? 'Included in Rush rounds'
+                    : 'Not included in Rush rounds',
+                iconColor: _rushCheckDefinition
+                    ? deckPrimaryColor
+                    : GakujiColors.mediumGray,
+                onTap: () {
+                  if (_rushCheckDefinition && !_rushCheckReading) return;
+
+                  setState(() {
+                    _rushCheckDefinition = !_rushCheckDefinition;
+
+                    if (currentRound != null) {
+                      currentRound = _generateRoundForCurrentIndex();
+                      _resetRushRoundTimerForCurrentScore();
+                    }
+                  });
+
+                  unawaited(_persistRushSettings());
+                },
+              ),
+            ],
+          ),
+        if (!isRushMode)
+          GakujiOptionsSheetSection(
+            title: 'Fields',
+            items: [
+              GakujiOptionsSheetItem(
+                textIcon: '品',
+                label: 'Part of Speech',
+                subtitle: _checkPartOfSpeech
+                    ? 'Included in rounds'
+                    : 'Not included in rounds',
+                iconColor: _checkPartOfSpeech
+                    ? deckPrimaryColor
+                    : GakujiColors.mediumGray,
+                onTap: () {
+                  setState(() {
+                    _checkPartOfSpeech = !_checkPartOfSpeech;
+                  });
+
+                  unawaited(_persistPartOfSpeechSetting());
+                },
+              ),
+            ],
+          ),
+        GakujiOptionsSheetSection(
+          title: 'Session',
+          items: [
+            GakujiOptionsSheetItem(
+              icon: Icons.refresh_rounded,
+              label: 'Restart Session',
+              iconColor: GakujiColors.mediumGray,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                unawaited(restartGame());
+              },
+            ),
+            GakujiOptionsSheetItem(
+              icon: Icons.grid_view_rounded,
+              label: 'Return to Modes',
+              iconColor: GakujiColors.mediumGray,
+              onTap: () {
+                Navigator.of(sheetContext).pop();
+                _returnToModeSelection();
+              },
+            ),
+            GakujiOptionsSheetItem(
+              icon: Icons.close_rounded,
+              label: 'Exit Crosscheck',
+              iconColor: GakujiColors.mediumGray,
+              onTap: () {
+                if (_shouldPersistSelectedSession) {
+                  unawaited(_saveSessionSnapshot());
+                }
+                Navigator.of(sheetContext).pop();
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        ),
+      ],
     );
 
     if (!mounted) return;
@@ -1560,43 +1877,6 @@ class _ImposterDetectivePageState extends State<ImposterDetectivePage> {
     if (pausedRush && _rushTimerShouldRun && _rushTimer == null) {
       _startRushTimer(reset: false);
     }
-  }
-
-  Widget _optionRow({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      height: 52,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(GakujiRadius.small),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          splashColor: deckPrimaryColor.withValues(alpha: 0.08),
-          highlightColor: deckPrimaryColor.withValues(alpha: 0.04),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 25,
-                color: GakujiColors.mediumGray,
-              ),
-              const SizedBox(width: 14),
-              Text(
-                label,
-                textScaler: TextScaler.noScaling,
-                style: GakujiText.small.copyWith(
-                  color: GakujiColors.darkGray,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   IdentityFile _correctIdentityFile(Term term) {

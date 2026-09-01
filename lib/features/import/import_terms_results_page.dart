@@ -34,7 +34,7 @@ class ImportTermsResultsPage extends StatelessWidget {
                 child: GakujiFadedScroll(
                   topFadeEnd: 0.06,
                   child: ListView(
-                    padding: const EdgeInsets.fromLTRB(24, 26, 24, 28),
+                    padding: const EdgeInsets.fromLTRB(GakujiSpacing.roomyContentHorizontal, 26, GakujiSpacing.roomyContentHorizontal, 28),
                     children: [
                       _successHeader(),
                       const SizedBox(height: 24),
@@ -286,7 +286,7 @@ class ImportTermsResultsPage extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(22, 12, 22, 14),
+        padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 12, GakujiSpacing.contentHorizontal, 14),
         decoration: BoxDecoration(
           color: GakujiColors.warmBackground,
           border: Border(

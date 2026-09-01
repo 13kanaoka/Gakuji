@@ -27,6 +27,8 @@ class GakujiColors {
   static const Color learning = Color(0xFFD66F6B);
 
   static const Color pinRed = Color(0xFFFF4B4B);
+  static const Color correctGreen = Color(0xFFC5E7A5);
+  static const Color correctGreenOutline = Color(0xFF8DBB66);
   static const Color watermarkBlue = Color(0x1A4D7EF7);
 
   static Color defaultDeckColorForType(DeckType type) {
@@ -220,6 +222,9 @@ extension GakujiThemeContext on BuildContext {
 
 class GakujiSpacing {
   static const double pageHorizontal = 24;
+  static const double contentHorizontal = 16;
+  static const double roomyContentHorizontal = 20;
+  static const double denseContentHorizontal = 12;
   static const double pageBottom = 90;
 
   static const double sectionGap = 28;

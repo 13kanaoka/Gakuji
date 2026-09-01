@@ -746,8 +746,8 @@ class _WordFusionGamePageState extends State<WordFusionGamePage> {
 
   Widget _topBar() {
     return GakujiTopBar(
-      leftIcon: GakujiTopBar.backIcon,
-      leftIconSize: GakujiTopBar.backIconSize,
+      leftIcon: Icons.close_rounded,
+      leftIconSize: GakujiTopBar.iconSize,
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: () => Navigator.pop(context),
       title: '${currentRoundIndex + 1}/${rounds.length}',
@@ -1143,16 +1143,16 @@ class _WordFusionGamePageState extends State<WordFusionGamePage> {
           label: 'Your Word',
           child: _answerSlots(
             interactive: false,
-            outlineColor: _accentColor,
+            outlineColor: GakujiColors.correctGreenOutline,
             compact: true,
           ),
-          outlineColor: _accentColor,
+          outlineColor: GakujiColors.correctGreenOutline,
         ),
         const SizedBox(height: 15),
         _statusPill(
           label: 'Successful fusion',
-          color: _accentColor,
-          fill: _accentColor.withValues(alpha: 0.10),
+          color: GakujiColors.correctGreenOutline,
+          fill: GakujiColors.correctGreen.withValues(alpha: 0.28),
         ),
         const SizedBox(height: 25),
         Divider(color: GakujiColors.warmDivider),
@@ -1161,7 +1161,7 @@ class _WordFusionGamePageState extends State<WordFusionGamePage> {
           'Correct!',
           textScaler: TextScaler.noScaling,
           style: GakujiText.medium.copyWith(
-            color: _accentColor,
+            color: GakujiColors.correctGreenOutline,
           ),
         ),
         const SizedBox(height: 10),
@@ -1197,10 +1197,10 @@ class _WordFusionGamePageState extends State<WordFusionGamePage> {
                 child: _answerSlots(
                   interactive: false,
                   displayKanji: correctKanji,
-                  outlineColor: _accentColor,
+                  outlineColor: GakujiColors.correctGreenOutline,
                   compact: true,
                 ),
-                outlineColor: _accentColor,
+                outlineColor: GakujiColors.correctGreenOutline,
               ),
             ),
           ],
@@ -1338,8 +1338,8 @@ class _WordFusionGamePageState extends State<WordFusionGamePage> {
         child: Column(
           children: [
             GakujiTopBar(
-              leftIcon: GakujiTopBar.backIcon,
-              leftIconSize: GakujiTopBar.backIconSize,
+              leftIcon: Icons.close_rounded,
+              leftIconSize: GakujiTopBar.iconSize,
               leftIconColor: GakujiColors.darkGray,
               onLeftTap: () => Navigator.pop(context),
             ),
@@ -1516,8 +1516,8 @@ class _WordFusionGamePageState extends State<WordFusionGamePage> {
         child: Column(
           children: [
             GakujiTopBar(
-              leftIcon: GakujiTopBar.backIcon,
-              leftIconSize: GakujiTopBar.backIconSize,
+              leftIcon: Icons.close_rounded,
+              leftIconSize: GakujiTopBar.iconSize,
               leftIconColor: GakujiColors.darkGray,
               onLeftTap: () => Navigator.pop(context),
             ),
