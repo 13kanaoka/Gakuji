@@ -411,19 +411,15 @@ class _DictionaryPageState extends State<DictionaryPage> {
   void switchInputMode(DictionaryInputMode mode) {
     if (mode == inputMode) return;
 
-    if (mode == DictionaryInputMode.writing) {
-      // Capture the fully-open device keyboard before dismissing it. The
-      // writing surface will reuse this exact height instead of estimating it.
+  if (mode == DictionaryInputMode.writing) {
       final keyboardHeight = MediaQuery.viewInsetsOf(context).bottom;
       if (keyboardHeight > 0) {
         _lastKeyboardHeight = keyboardHeight;
+        // Anchoring is only meaningful while the OS keyboard is on screen.
+        // Otherwise the accessory row is at its fallback offset near the bottom
+        // edge and would collapse the writing panel to a sliver.
+        _captureInputAccessoryAnchor();
       }
-
-      // Preserve the accessory row's actual laid-out screen position before
-      // the OS keyboard disappears. The custom handwriting panel is then
-      // positioned underneath that anchor, so switching input modes cannot
-      // make the buttons jump vertically.
-      _captureInputAccessoryAnchor();
       FocusScope.of(context).unfocus();
     }
 
