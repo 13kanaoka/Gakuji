@@ -43,6 +43,11 @@ class _DictionaryPageState extends State<DictionaryPage> {
   static Color get panelGray => GakujiColors.warmCard;
   static Color get panelBorderGray => GakujiColors.warmDivider;
 
+  // Fraction of screen height used for the handwriting panel, tuned to sit at
+  // roughly the same height as the iOS Japanese keyboard. Nudge this to resize
+  // the box (bigger = taller).
+  static const double _writingPanelHeightFraction = 0.37;
+
   final TextEditingController searchController = TextEditingController();
   final FocusNode searchFocusNode = FocusNode();
   final ScrollController recentSearchScrollController = ScrollController();
@@ -144,29 +149,16 @@ class _DictionaryPageState extends State<DictionaryPage> {
     });
   }
 
-  double _writingPanelHeight(
-    BuildContext context, {
-    required double keyboardHeight,
-  }) {
-    // Once the real accessory-bar position has been captured, derive the
-    // writing panel from that screen position instead of assuming the system
-    // keyboard and the Flutter panel share the same height coordinate system.
-    if (_lastAccessoryBottomOffset > 8.0) {
-      return _lastAccessoryBottomOffset - 8.0;
-    }
-
-    if (_lastKeyboardHeight > 0) {
-      return _lastKeyboardHeight;
-    }
-
-    if (keyboardHeight > 0) {
-      return keyboardHeight;
-    }
-
-    // This is only a pre-keyboard fallback. In normal use the writing button is
-    // reached from the open keyboard, so the real position is captured first.
-    final rawHeight = MediaQuery.sizeOf(context).height * 0.42;
-    return rawHeight.clamp(300.0, 410.0).toDouble();
+  double _writingPanelHeight(BuildContext context) {
+    // Derive the panel purely from screen size so it opens at the same height
+    // every time. The old path reused a one-shot snapshot of the iOS keyboard
+    // height (which varied with the predictive-text strip and with keyboard
+    // animation state) and never re-measured it, so a single imperfect capture
+    // skewed every later open.
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return (screenHeight * _writingPanelHeightFraction)
+        .clamp(280.0, 380.0)
+        .toDouble();
   }
 
   void _captureInputAccessoryAnchor() {
@@ -615,10 +607,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
     final query = searchText.trim();
     final wordsToShow = query.isEmpty ? recentSearches : searchResults;
     final keyboardHeight = MediaQuery.viewInsetsOf(context).bottom;
-    final writingPanelHeight = _writingPanelHeight(
-      context,
-      keyboardHeight: keyboardHeight,
-    );
+    final writingPanelHeight = _writingPanelHeight(context);
     final bottomResultsPadding = inputMode == DictionaryInputMode.writing
         ? writingPanelHeight + 92
         : shouldShowInputAccessoryBar
@@ -1138,9 +1127,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
     // the bottom coordinate used by this Flutter Stack. In writing mode, use
     // the actual accessory-row position captured before the keyboard closed.
     final double bottomOffset = inputMode == DictionaryInputMode.writing
-        ? _lastAccessoryBottomOffset > 0
-            ? _lastAccessoryBottomOffset
-            : writingPanelHeight + 8.0
+        // Keep the action row 8px above the (now taller) writing panel so it
+        // never overlaps the candidate strip.
+        ? writingPanelHeight + 8.0
         : keyboardHeight > 0
             ? keyboardHeight + 8.0
             : _lastAccessoryBottomOffset > 0
