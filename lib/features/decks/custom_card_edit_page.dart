@@ -467,7 +467,7 @@ class _CustomCardEditPageState extends State<CustomCardEditPage> {
         SnackBar(
           behavior: SnackBarBehavior.floating,
           duration: const Duration(milliseconds: 1400),
-          backgroundColor: Colors.black.withOpacity(0.86),
+          backgroundColor: Colors.black.withValues(alpha: 0.86),
           content: Text(
             message,
             textScaler: TextScaler.noScaling,
@@ -481,8 +481,16 @@ class _CustomCardEditPageState extends State<CustomCardEditPage> {
   Widget build(BuildContext context) {
     final showSave = hasChanges && !isLoadingPhoto;
 
-    return WillPopScope(
-      onWillPop: _handleBack,
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+
+        final canPop = await _handleBack();
+        if (!context.mounted || !canPop) return;
+
+        Navigator.pop(context, result);
+      },
       child: Scaffold(
         backgroundColor: GakujiColors.warmBackground,
         resizeToAvoidBottomInset: true,
@@ -770,7 +778,7 @@ class _CustomCardEditPageState extends State<CustomCardEditPage> {
     final color = destructive ? GakujiColors.pinRed : GakujiColors.reading;
 
     return Material(
-      color: GakujiColors.warmCard.withOpacity(0.94),
+      color: GakujiColors.warmCard.withValues(alpha: 0.94),
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         onTap: onTap,

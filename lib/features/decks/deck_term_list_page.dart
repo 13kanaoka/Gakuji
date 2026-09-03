@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -185,13 +184,13 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
   }
 
   String _escapeCsvField(String value) {
-    final escaped = value.replaceAll('\"', '\"\"');
+    final escaped = value.replaceAll('"', '""');
     final needsQuotes = escaped.contains(',') ||
         escaped.contains('\n') ||
         escaped.contains('\r') ||
-        escaped.contains('\"');
+        escaped.contains('"');
 
-    return needsQuotes ? '\"$escaped\"' : escaped;
+    return needsQuotes ? '"$escaped"' : escaped;
   }
 
   String _deckCsvFileName() {
@@ -218,7 +217,7 @@ class _DeckTermListPageState extends State<DeckTermListPage> {
         barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
         barrierColor: Colors.black.withValues(alpha: 0.42),
         transitionDuration: const Duration(milliseconds: 180),
-        pageBuilder: (dialogContext, _, __) {
+        pageBuilder: (dialogContext, _, _) {
           return SafeArea(
             child: _DeckCodeDialog(deck: widget.deck),
           );
