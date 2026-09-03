@@ -713,7 +713,7 @@ class _KanaPageState extends State<KanaPage> {
                     ),
                     const SizedBox(height: 24),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: GakujiSpacing.contentHorizontal),
                       child: _KanaScriptSwitcher(
                         showKatakana: showKatakana,
                         onHiraganaTap: () => _setScript(false),
@@ -744,7 +744,7 @@ class _KanaPageState extends State<KanaPage> {
                                   const SizedBox(height: 15),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
+                                      horizontal: GakujiSpacing.contentHorizontal,
                                     ),
                                     child: _KanaChart(
                                       rows: basicRows,
@@ -760,7 +760,7 @@ class _KanaPageState extends State<KanaPage> {
                                   const SizedBox(height: 15),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
+                                      horizontal: GakujiSpacing.contentHorizontal,
                                     ),
                                     child: _KanaChart(
                                       rows: dakuonRows,
@@ -774,7 +774,7 @@ class _KanaPageState extends State<KanaPage> {
                                   const SizedBox(height: 15),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 20,
+                                      horizontal: GakujiSpacing.contentHorizontal,
                                     ),
                                     child: _KanaChart(
                                       rows: yoonRows,
@@ -1005,7 +1005,12 @@ class _KanaSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 0),
+      padding: const EdgeInsets.fromLTRB(
+        GakujiSpacing.contentHorizontal,
+        8,
+        GakujiSpacing.contentHorizontal,
+        0,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

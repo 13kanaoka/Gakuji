@@ -100,5 +100,78 @@ service cloud.firestore {
       // names are reused by overwriting them during a valid claim transaction.
       allow delete: if false;
     }
+
+    // Deck sharing is snapshot-by-copy, not collaborative editing. A registered
+    // user may create and manage only their own immutable share snapshot. Any
+    // registered user who knows an exact share code may read that finished
+    // snapshot and import it as a fully independent deck copy. Listing shares
+    // is never allowed.
+    function isValidDeckShareCode(shareCode) {
+      return shareCode.matches('^[A-HJ-NP-Z2-9]{12}$');
+    }
+
+    function isDeckShareOwner(shareCode) {
+      return isRegisteredUser()
+        && get(/databases/$(database)/documents/deckShares/$(shareCode)).data.ownerUid == request.auth.uid;
+    }
+
+    match /deckShares/{shareCode} {
+      // Exact-code lookup is required both to avoid code collisions when
+      // sharing and to import a snapshot. Collection browsing remains blocked.
+      allow get: if isRegisteredUser() && isValidDeckShareCode(shareCode);
+      allow list: if false;
+
+      // New clients create the parent first with ready=false, upload chunks,
+      // then finalize it. This lets chunk rules verify the owner safely.
+      allow create: if isRegisteredUser()
+        && isValidDeckShareCode(shareCode)
+        && request.resource.data.keys().hasAll([
+          'ownerUid',
+          'sharerUid',
+          'ready'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.sharerUid == request.auth.uid
+        && request.resource.data.ready == false;
+
+      // Recipients are read-only. The owner may only finalize the snapshot or
+      // refresh its activity timestamps; share contents remain immutable.
+      allow update: if isRegisteredUser()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'ready',
+          'lastActiveAt',
+          'expiresAt'
+        ])
+        && (
+          request.resource.data.ready == resource.data.ready
+          || (resource.data.ready == false && request.resource.data.ready == true)
+        );
+      allow delete: if isRegisteredUser()
+        && resource.data.ownerUid == request.auth.uid;
+
+      match /termChunks/{chunkId} {
+        // Chunks are readable only after the parent snapshot is complete.
+        allow get: if isRegisteredUser()
+          && isValidDeckShareCode(shareCode)
+          && get(/databases/$(database)/documents/deckShares/$(shareCode)).data.ready == true;
+        allow list: if false;
+
+        // The parent exists before chunks are uploaded, so a client cannot
+        // write chunks beneath somebody else's share code.
+        allow create: if isDeckShareOwner(shareCode)
+          && request.resource.data.ownerUid == request.auth.uid
+          && request.resource.data.revision ==
+              get(/databases/$(database)/documents/deckShares/$(shareCode)).data.revision;
+
+        allow update: if isDeckShareOwner(shareCode)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'lastActiveAt',
+            'expiresAt'
+          ]);
+        allow delete: if isDeckShareOwner(shareCode);
+      }
+    }
+
   }
 }

@@ -64,7 +64,7 @@ class _ReviewLimitsPageState extends State<ReviewLimitsPage> {
                     )
                   : GakujiFadedScroll(
                       child: ListView(
-                        padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+                        padding: const EdgeInsets.fromLTRB(GakujiSpacing.roomyContentHorizontal, 20, GakujiSpacing.roomyContentHorizontal, 28),
                         children: [
                           _limitCard(
                             title: 'New Limit',

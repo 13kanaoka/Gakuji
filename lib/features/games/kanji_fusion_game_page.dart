@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'package:gakuji/features/games/models/kanji_fusion_round.dart';
 import 'package:gakuji/domain/term.dart';
+import 'package:gakuji/data/dictionary/dictionary_service.dart';
 import 'package:gakuji/data/sync/gakuji_local_preferences.dart';
 import 'package:gakuji/features/games/services/kanji_fusion_round_generator.dart';
 import 'package:gakuji/core/widgets/gakuji_domino.dart';
@@ -68,6 +69,9 @@ class _PlacedFusionBlock {
 
 class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   List<KanjiFusionRound> rounds = const <KanjiFusionRound>[];
+  Map<String, Term> _kanjiEntriesByCharacter = const <String, Term>{};
+  Map<String, List<KanjiComponentNode>> _componentTreesByCharacter =
+      const <String, List<KanjiComponentNode>>{};
 
   KanjiFusionDifficulty selectedDifficulty = KanjiFusionDifficulty.normal;
   KanjiFusionRadicalMode selectedRadicalMode =
@@ -170,9 +174,53 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
   void initState() {
     super.initState();
     _loadHighScore();
+    unawaited(_initializeSession());
+  }
+
+  Future<void> _initializeSession() async {
+    final characters = _deckKanjiCharacters();
+    final entriesFuture = DictionaryService.getKanjiEntriesByCharacters(
+      characters,
+    );
+    final treesFuture = DictionaryService.getKanjiComponentTreesByCharacters(
+      characters,
+    );
+
+    final entries = await entriesFuture;
+    final trees = await treesFuture;
+
+    if (!mounted) return;
+
+    _kanjiEntriesByCharacter = entries;
+    _componentTreesByCharacter = trees;
+
     if (!_restoreCachedSession()) {
-      _loadOrCreateSession();
+      await _loadOrCreateSession();
     }
+  }
+
+  Set<String> _deckKanjiCharacters() {
+    final characters = <String>{};
+
+    for (final term in widget.terms) {
+      final preferred = term.preferredSpelling.trim();
+      final spelling = preferred.isNotEmpty ? preferred : term.kanji.trim();
+
+      for (final rune in spelling.runes) {
+        if (_isKanjiRune(rune)) {
+          characters.add(String.fromCharCode(rune));
+        }
+      }
+    }
+
+    return characters;
+  }
+
+  static bool _isKanjiRune(int rune) {
+    return (rune >= 0x3400 && rune <= 0x4DBF) ||
+        (rune >= 0x4E00 && rune <= 0x9FFF) ||
+        (rune >= 0xF900 && rune <= 0xFAFF) ||
+        (rune >= 0x20000 && rune <= 0x2FA1F);
   }
 
   List<String> get _sessionTermIds {
@@ -185,6 +233,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       for (final value in <String>[
         term.id,
         term.kanji,
+        term.preferredSpelling,
         term.reading,
         term.meaning,
         term.cardMeaning,
@@ -199,7 +248,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       hash ^= 0xFF;
       hash = (hash * 0x01000193) & 0xFFFFFFFF;
     }
-    return '${widget.terms.length}:${hash.toRadixString(16)}';
+    return 'fusion_kanji_v3:${widget.terms.length}:${hash.toRadixString(16)}';
   }
 
   int _newSessionSeed() {
@@ -215,6 +264,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       widget.terms,
       difficulty: difficulty,
       radicalMode: radicalMode,
+      kanjiEntriesByCharacter: _kanjiEntriesByCharacter,
+      componentTreesByCharacter: _componentTreesByCharacter,
       random: math.Random(seed),
     );
   }
@@ -471,7 +522,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       sessionType: _roundsSessionType,
       deckId: _sessionDeckId,
       snapshot: <String, dynamic>{
-        'version': 1,
+        'version': 2,
         'termSignature': _sessionTermSignature,
         'seed': sessionSeed,
         'difficulty': selectedDifficulty.name,
@@ -536,7 +587,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     required KanjiFusionDifficulty expectedDifficulty,
     required KanjiFusionRadicalMode expectedRadicalMode,
   }) {
-    if (snapshot == null || _asInt(snapshot['version']) != 1) return null;
+    if (snapshot == null || _asInt(snapshot['version']) != 2) return null;
     if (snapshot['termSignature']?.toString() != _sessionTermSignature ||
         _asInt(snapshot['seed']) != expectedSeed ||
         snapshot['difficulty']?.toString() != expectedDifficulty.name ||
@@ -549,6 +600,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
     final termsById = <String, Term>{
       for (final term in widget.terms) term.id: term,
+      for (final term in _kanjiEntriesByCharacter.values) term.id: term,
     };
     final restored = <KanjiFusionRound>[];
 
@@ -1559,8 +1611,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
 
   Widget _topBar() {
     return GakujiTopBar(
-      leftIcon: GakujiTopBar.backIcon,
-      leftIconSize: GakujiTopBar.backIconSize,
+      leftIcon: Icons.close_rounded,
+      leftIconSize: GakujiTopBar.iconSize,
       leftIconColor: GakujiColors.darkGray,
       onLeftTap: () => Navigator.pop(context),
       title: '${currentRoundIndex + 1}/${rounds.length}',
@@ -1618,8 +1670,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
       key: key,
       children: [
         Expanded(
-          child: SingleChildScrollView(
-            physics: const NeverScrollableScrollPhysics(),
+          child: Padding(
             padding: EdgeInsets.fromLTRB(
               24,
               8,
@@ -1634,7 +1685,9 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                 SizedBox(height: 14),
                 _answerSlots(),
                 SizedBox(height: 18),
-                _componentGrid(),
+                Expanded(
+                  child: _componentGrid(),
+                ),
               ],
             ),
           ),
@@ -1684,7 +1737,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                   textScaler: TextScaler.noScaling,
                   style: GakujiText.medium.copyWith(
                     color: lastAnswerCorrect
-                        ? _accentColor
+                        ? GakujiColors.correctGreenOutline
                         : GakujiColors.mediumGray,
                   ),
                 ),
@@ -1778,7 +1831,10 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     );
   }
 
-  TextStyle _definitionStyleForWidth(double maxWidth) {
+  TextStyle _definitionStyleForWidth(
+    double maxWidth,
+    String definition,
+  ) {
     final baseStyle = GakujiText.gameDefinition;
     final baseFontSize = baseStyle.fontSize ?? 16;
     const minimumFontSize = 11.0;
@@ -1787,7 +1843,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     while (fontSize > minimumFontSize) {
       final painter = TextPainter(
         text: TextSpan(
-          text: currentRound.definition,
+          text: definition,
           style: baseStyle.copyWith(fontSize: fontSize),
         ),
         textDirection: TextDirection.ltr,
@@ -1803,27 +1859,107 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     return baseStyle.copyWith(fontSize: fontSize);
   }
 
+  String _fusionDefinitionText() {
+    final definition = currentRound.definition.trim();
+    if (definition.isEmpty) return definition;
+
+    final slashParts = definition
+        .split(RegExp(r'\s*/\s*'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+
+    return slashParts.isEmpty ? definition : slashParts.first;
+  }
+
+  List<InlineSpan> _fusionReadingSpans() {
+    final term = currentRound.term;
+    final onyomi = term.onyomi
+        .map((reading) => reading.trim())
+        .where((reading) => reading.isNotEmpty)
+        .toList(growable: false);
+    final kunyomi = term.kunyomi
+        .map((reading) => reading.trim())
+        .where((reading) => reading.isNotEmpty)
+        .toList(growable: false);
+
+    final baseStyle = GakujiText.gameReading;
+    final okuriganaStyle = baseStyle.copyWith(
+      color: GakujiColors.mediumGray,
+    );
+    final spans = <InlineSpan>[];
+
+    if (onyomi.isNotEmpty) {
+      spans.add(TextSpan(text: onyomi.first, style: baseStyle));
+    }
+
+    if (kunyomi.isNotEmpty) {
+      if (spans.isNotEmpty) {
+        spans.add(TextSpan(text: ' ・ ', style: okuriganaStyle));
+      }
+
+      final reading = kunyomi.first;
+      final dotIndex = reading.indexOf('.');
+      if (dotIndex <= 0 || dotIndex >= reading.length - 1) {
+        spans.add(
+          TextSpan(
+            text: reading.replaceAll('.', ''),
+            style: baseStyle,
+          ),
+        );
+      } else {
+        spans.add(
+          TextSpan(
+            text: reading.substring(0, dotIndex),
+            style: baseStyle,
+          ),
+        );
+        spans.add(
+          TextSpan(
+            text: reading.substring(dotIndex + 1).replaceAll('.', ''),
+            style: okuriganaStyle,
+          ),
+        );
+      }
+    }
+
+    if (spans.isEmpty) {
+      spans.add(
+        TextSpan(
+          text: currentRound.reading.replaceAll('.', ''),
+          style: baseStyle,
+        ),
+      );
+    }
+
+    return spans;
+  }
+
   Widget _prompt() {
+    final definition = _fusionDefinitionText();
+
     return Column(
       children: [
-        Text(
-          currentRound.reading,
+        Text.rich(
+          TextSpan(children: _fusionReadingSpans()),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           textScaler: TextScaler.noScaling,
-          style: GakujiText.gameReading,
         ),
         const SizedBox(height: 8),
         LayoutBuilder(
           builder: (context, constraints) {
             return Text(
-              currentRound.definition,
+              definition,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               textScaler: TextScaler.noScaling,
-              style: _definitionStyleForWidth(constraints.maxWidth),
+              style: _definitionStyleForWidth(
+                constraints.maxWidth,
+                definition,
+              ),
             );
           },
         ),
@@ -1842,13 +1978,13 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
     }
   }
 
-  Color get _blockFillColor => Colors.white;
+  Color get _blockFillColor => GakujiColors.whiteCard;
 
-  Color get _blockTextColor => const Color(0xFF666666);
+  Color get _blockTextColor => GakujiColors.darkGray;
 
-  Color get _blockOutlineColor => const Color(0xFFB8B8B8);
+  Color get _blockOutlineColor => GakujiColors.softBorder;
 
-  Color get _blockSelectionColor => const Color(0xFF7A7A7A);
+  Color get _blockSelectionColor => GakujiColors.mediumGray;
 
   bool get _compactChoiceTiles =>
       currentRound.componentChoices.length > 15;
@@ -2431,8 +2567,20 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
           rows.add(List<int>.generate(end - start, (index) => start + index));
         }
 
-        return SizedBox(
+        final gridHeight = rows.isEmpty
+            ? 0.0
+            : (GakujiDomino.height * rows.length) +
+                (verticalGap * (rows.length - 1));
+        final availableHeight = constraints.maxHeight;
+        final scale = gridHeight > 0 &&
+                availableHeight.isFinite &&
+                gridHeight > availableHeight
+            ? availableHeight / gridHeight
+            : 1.0;
+
+        final grid = SizedBox(
           width: gridWidth,
+          height: gridHeight,
           child: Column(
             children: List.generate(rows.length, (rowIndex) {
               return Padding(
@@ -2445,6 +2593,26 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                 ),
               );
             }),
+          ),
+        );
+
+        if (scale >= 1.0) {
+          return Align(
+            alignment: Alignment.topCenter,
+            child: grid,
+          );
+        }
+
+        return Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            width: gridWidth * scale,
+            height: gridHeight * scale,
+            child: Transform.scale(
+              scale: scale,
+              alignment: Alignment.topLeft,
+              child: grid,
+            ),
           ),
         );
       },
@@ -2650,7 +2818,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
               width: comparisonCardWidth,
               child: _fusionComparisonCard(
                 title: 'Your Fusion',
-                accentColor: _accentColor,
+                accentColor: GakujiColors.correctGreenOutline,
                 child: _placedFusionPreview(
                   previewSize: 112,
                   maxFontSize: 22,
@@ -2664,10 +2832,10 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                 vertical: 8,
               ),
               decoration: BoxDecoration(
-                color: _accentColor.withValues(alpha: 0.12),
+                color: GakujiColors.correctGreen.withValues(alpha: 0.28),
                 borderRadius: BorderRadius.circular(GakujiRadius.pill),
                 border: Border.all(
-                  color: _accentColor,
+                  color: GakujiColors.correctGreenOutline,
                   width: 1.5,
                 ),
               ),
@@ -2677,7 +2845,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: _accentColor,
+                  color: GakujiColors.correctGreenOutline,
                 ),
               ),
             ),
@@ -2706,7 +2874,7 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
             Expanded(
               child: _fusionComparisonCard(
                 title: 'Correct Fusion',
-                accentColor: _accentColor.withValues(alpha: 0.82),
+                accentColor: GakujiColors.correctGreenOutline,
                 child: _correctFusionPreview(
                   previewSize: 112,
                   maxFontSize: 22,
@@ -2996,8 +3164,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         child: Column(
           children: [
             GakujiTopBar(
-              leftIcon: GakujiTopBar.backIcon,
-              leftIconSize: GakujiTopBar.backIconSize,
+              leftIcon: Icons.close_rounded,
+              leftIconSize: GakujiTopBar.iconSize,
               leftIconColor: GakujiColors.darkGray,
               onLeftTap: () => Navigator.pop(context),
             ),
@@ -3174,8 +3342,8 @@ class _KanjiFusionGamePageState extends State<KanjiFusionGamePage> {
         child: Column(
           children: [
             GakujiTopBar(
-              leftIcon: GakujiTopBar.backIcon,
-              leftIconSize: GakujiTopBar.backIconSize,
+              leftIcon: Icons.close_rounded,
+              leftIconSize: GakujiTopBar.iconSize,
               leftIconColor: GakujiColors.darkGray,
               onLeftTap: () => Navigator.pop(context),
             ),

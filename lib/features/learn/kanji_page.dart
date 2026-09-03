@@ -22,8 +22,8 @@ class KanjiPage extends StatelessWidget {
             child: Column(
               children: [
                 GakujiTopBar(
-                  leftIcon: GakujiTopBar.backIcon,
-                  leftIconSize: GakujiTopBar.backIconSize,
+                  leftIcon: Icons.close_rounded,
+                  leftIconSize: GakujiTopBar.iconSize,
                   leftIconColor: GakujiColors.darkGray,
                   onLeftTap: () => Navigator.of(context).pop(),
                   title: 'Kanji',

@@ -220,7 +220,7 @@ class ReviewCalendarTermListPage extends StatelessWidget {
         _sectionHeader(group.label, visibleTerms.length),
         const SizedBox(height: 8),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: const EdgeInsets.symmetric(horizontal: GakujiSpacing.contentHorizontal),
           child: Column(
             children: List.generate(visibleTerms.length, (index) {
               final term = visibleTerms[index];
@@ -266,7 +266,7 @@ class ReviewCalendarTermListPage extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+      padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 8, GakujiSpacing.contentHorizontal, 8),
       decoration: BoxDecoration(
         color: GakujiColors.sectionHeader,
         border: Border(

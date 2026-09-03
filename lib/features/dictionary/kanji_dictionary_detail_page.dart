@@ -626,6 +626,7 @@ class _KanjiDictionaryDetailPageState
                         textAlign: TextAlign.center,
                         textScaler: TextScaler.noScaling,
                         style: GakujiText.dictionaryTopBarTitle.copyWith(
+                          fontSize: 19,
                           color: darkText,
                         ),
                       ),

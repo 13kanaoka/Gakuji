@@ -148,7 +148,7 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
     final english = widget.example.english.trim();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 18, 22, 27),
+      padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 18, GakujiSpacing.contentHorizontal, 27),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -403,7 +403,7 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
         _sectionHeader('Breakdown'),
         if (_termsLoading)
           Padding(
-            padding: EdgeInsets.fromLTRB(22, 18, 22, 20),
+            padding: EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 18, GakujiSpacing.contentHorizontal, 20),
             child: Row(
               children: [
                 SizedBox(
@@ -428,7 +428,7 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
           )
         else if (includedTokens.isEmpty)
           Padding(
-            padding: EdgeInsets.fromLTRB(22, 17, 22, 20),
+            padding: EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 17, GakujiSpacing.contentHorizontal, 20),
             child: Text(
               'Dictionary terms are not available for this sentence yet.',
               textScaler: TextScaler.noScaling,
@@ -453,7 +453,7 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
                 GakujiTermRow(
                   term: term,
                   meaningMaxLines: 2,
-                  padding: const EdgeInsets.fromLTRB(22, 11, 15, 12),
+                  padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 11, 15, 12),
                   backgroundColor: GakujiColors.warmBackground,
                   trailing: isLoading
                       ? const SizedBox(
@@ -507,7 +507,7 @@ class _SentenceDetailPageState extends State<SentenceDetailPage> {
   Widget _sectionHeader(String title) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 8, 22, 8),
+      padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 8, GakujiSpacing.contentHorizontal, 8),
       decoration: BoxDecoration(
         color: GakujiColors.warmCard,
         border: Border(

@@ -269,7 +269,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 14),
+                  padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 18, GakujiSpacing.contentHorizontal, 14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -301,7 +301,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
                 ),
                 Flexible(
                   child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(22, 4, 22, 28),
+                    padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 4, GakujiSpacing.contentHorizontal, 28),
                     itemCount: row.candidates.length,
                     separatorBuilder: (context, index) {
                       return const Divider(
@@ -486,7 +486,7 @@ class _ImportTermsPreviewPageState extends State<ImportTermsPreviewPage> {
                   child: GakujiFadedScroll(
                     topFadeEnd: 0.06,
                     child: ListView(
-                      padding: const EdgeInsets.fromLTRB(22, 22, 22, 112),
+                      padding: const EdgeInsets.fromLTRB(GakujiSpacing.contentHorizontal, 22, GakujiSpacing.contentHorizontal, 112),
                       children: [
                         _destinationSection(),
                         const SizedBox(height: 22),

@@ -27,6 +27,7 @@ import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
 import 'package:gakuji/features/review/widgets/review_schedule_card.dart';
 import 'package:gakuji/features/decks/deck_edit_page.dart';
 import 'package:gakuji/features/decks/deck_term_list_page.dart';
+import 'package:gakuji/features/decks/custom_card_edit_page.dart';
 import 'package:gakuji/features/review/review_study_page.dart';
 import 'package:gakuji/features/review/review_calendar_page.dart';
 import 'package:gakuji/features/study/study_page.dart';
@@ -597,6 +598,19 @@ class _DeckPageState extends State<DeckPage> {
     await refreshDeckAfterChanges();
   }
 
+  Future<void> openCustomCardEditor() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      GakujiPageRoute(
+        builder: (context) => CustomCardEditPage(deck: widget.deck),
+      ),
+    );
+
+    if (!mounted || changed != true) return;
+
+    await refreshDeckAfterChanges();
+  }
+
   Future<void> confirmDeleteDeck() async {
     final shouldDelete = await showDialog<bool>(
       context: context,
@@ -900,6 +914,7 @@ class _DeckPageState extends State<DeckPage> {
     await Navigator.push(
       context,
       GakujiPageRoute(
+        enableSwipeBack: false,
         builder: (_) =>
             ImposterDetectivePage(deck: widget.deck, terms: gameTerms),
       ),
@@ -922,6 +937,7 @@ class _DeckPageState extends State<DeckPage> {
     await Navigator.push(
       context,
       GakujiPageRoute(
+        enableSwipeBack: false,
         builder: (_) => KanjiFusionGamePage(
           terms: gameTerms,
           deckId: widget.deck.id,
@@ -950,6 +966,7 @@ class _DeckPageState extends State<DeckPage> {
     await Navigator.push(
       context,
       GakujiPageRoute(
+        enableSwipeBack: false,
         builder: (_) => WordFusionGamePage(
           terms: gameTerms,
           deckId: widget.deck.id,
@@ -1013,9 +1030,9 @@ class _DeckPageState extends State<DeckPage> {
                           child: SingleChildScrollView(
                             controller: pageScrollController,
                             padding: const EdgeInsets.fromLTRB(
-                              18,
+                              GakujiSpacing.contentHorizontal,
                               0,
-                              18,
+                              GakujiSpacing.contentHorizontal,
                               GakujiSpacing.pageBottom,
                             ),
                             child: Column(
@@ -1911,6 +1928,12 @@ class _DeckPageState extends State<DeckPage> {
           icon: Icons.description_outlined,
           label: 'View Term List',
           onTap: openTermList,
+        ),
+        const SizedBox(height: GakujiSpacing.buttonGap),
+        _deckInfoButton(
+          icon: Icons.note_add_rounded,
+          label: 'Create Custom Card',
+          onTap: openCustomCardEditor,
         ),
         const SizedBox(height: GakujiSpacing.buttonGap),
         _deckInfoButton(

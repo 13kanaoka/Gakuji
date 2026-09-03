@@ -3,12 +3,187 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
+import 'package:gakuji/data/dictionary/dictionary_service.dart';
 import 'package:gakuji/data/seed/deck_seed.dart';
 import 'package:gakuji/data/sync/gakuji_user_data_store.dart';
 import 'package:gakuji/domain/deck.dart';
 import 'package:gakuji/domain/term.dart';
 import 'package:gakuji/features/auth/services/account_username_service.dart';
+
+enum DeckShareStage {
+  preparing,
+  sharing,
+}
+
+typedef DeckShareStageCallback = void Function(DeckShareStage stage);
+
+class _PreparedDeckShare {
+  final List<Map<String, dynamic>>? inlineRecords;
+  final List<List<Map<String, dynamic>>> chunks;
+  final String snapshotHash;
+  final int termCount;
+
+  const _PreparedDeckShare({
+    required this.inlineRecords,
+    required this.chunks,
+    required this.snapshotHash,
+    required this.termCount,
+  });
+}
+
+class _ShareHashAccumulator {
+  int _fnv = 2166136261 & 0x7fffffff;
+  int _djb = 5381;
+  int _byteLength = 0;
+
+  void addText(String value) {
+    addBytes(utf8.encode(value));
+  }
+
+  void addBytes(List<int> bytes) {
+    for (final byte in bytes) {
+      _fnv = ((_fnv ^ byte) * 16777619) & 0x7fffffff;
+      _djb = ((_djb * 33) ^ byte) & 0x7fffffff;
+    }
+    _byteLength += bytes.length;
+  }
+
+  String finish() {
+    return '${_fnv.toRadixString(16).padLeft(8, '0')}-'
+        '${_djb.toRadixString(16).padLeft(8, '0')}-$_byteLength';
+  }
+}
+
+_PreparedDeckShare _prepareDeckShare(Deck deck) {
+  final records = <Map<String, dynamic>>[];
+  final encodedRecordBytes = <List<int>>[];
+  final hash = _ShareHashAccumulator();
+  var totalRecordBytes = 0;
+
+  // Dictionary-backed cards share only Gakuji-native identity plus the tiny
+  // amount of deck state needed to reconstruct them. User-authored custom cards
+  // carry their own compact lexical fields because they have no dictionary ID.
+  hash
+    ..addText('{"colorValue":')
+    ..addText(jsonEncode(deck.colorValue))
+    ..addText(',"name":')
+    ..addText(jsonEncode(deck.name))
+    ..addText(',"records":[');
+
+  var customShareIndex = 0;
+
+  for (var index = 0; index < deck.terms.length; index++) {
+    final term = deck.terms[index];
+    late final Map<String, dynamic> record;
+
+    if (term.isCustom) {
+      customShareIndex += 1;
+      record = <String, dynamic>{
+        'custom': true,
+        // This ID exists only inside this immutable share snapshot. The
+        // recipient receives a fresh deck-local term ID on import.
+        'customId': 'c${customShareIndex.toString().padLeft(4, '0')}',
+        'writing': term.preferredSpelling.trim().isNotEmpty
+            ? term.preferredSpelling.trim()
+            : term.kanji.trim(),
+        if (term.reading.trim().isNotEmpty) 'reading': term.reading.trim(),
+        'meaning': term.meaning.trim(),
+        if (term.partOfSpeech.trim().isNotEmpty &&
+            term.partOfSpeech.trim() != 'custom')
+          'partOfSpeech': term.partOfSpeech.trim(),
+        if (term.note?.trim().isNotEmpty == true) 'note': term.note!.trim(),
+        if (deck.type == DeckType.hybrid)
+          'hybridCardMode': deck.cardModeFor(term).name,
+      };
+    } else {
+      final sourceId = (term.sourceId ?? term.id).trim();
+      final fallbackTerm = term.kanji.trim().isNotEmpty
+          ? term.kanji.trim()
+          : term.preferredSpelling.trim();
+      record = <String, dynamic>{
+        'sourceId': sourceId,
+        if (fallbackTerm.isNotEmpty) 'fallbackTerm': fallbackTerm,
+        if (term.reading.trim().isNotEmpty)
+          'fallbackReading': term.reading.trim(),
+        if (deck.type == DeckType.hybrid)
+          'hybridCardMode': deck.cardModeFor(term).name,
+      };
+    }
+
+    final canonicalRecordBytes = utf8.encode(
+      jsonEncode(_canonicalizeShareValue(record)),
+    );
+
+    records.add(record);
+    encodedRecordBytes.add(canonicalRecordBytes);
+    totalRecordBytes += canonicalRecordBytes.length;
+
+    if (index > 0) hash.addText(',');
+    hash.addBytes(canonicalRecordBytes);
+  }
+
+  hash
+    ..addText('],"type":')
+    ..addText(jsonEncode(deck.type.name))
+    ..addText('}');
+
+  // Most decks now fit directly on the share document, turning sharing into
+  // just a parent create + ready update. Larger decks still fall back to the
+  // existing chunk collection without changing the public share-code model.
+  if (totalRecordBytes <= DeckCodeService._maxInlineRecordBytes) {
+    return _PreparedDeckShare(
+      inlineRecords: records,
+      chunks: const <List<Map<String, dynamic>>>[],
+      snapshotHash: hash.finish(),
+      termCount: records.length,
+    );
+  }
+
+  final chunks = <List<Map<String, dynamic>>>[];
+  var currentChunk = <Map<String, dynamic>>[];
+  var currentBytes = 0;
+
+  for (var index = 0; index < records.length; index++) {
+    final recordBytes = encodedRecordBytes[index].length;
+    if (currentChunk.isNotEmpty &&
+        currentBytes + recordBytes > DeckCodeService._maxChunkBytes) {
+      chunks.add(currentChunk);
+      currentChunk = <Map<String, dynamic>>[];
+      currentBytes = 0;
+    }
+
+    currentChunk.add(records[index]);
+    currentBytes += recordBytes;
+  }
+
+  if (currentChunk.isNotEmpty) {
+    chunks.add(currentChunk);
+  }
+
+  return _PreparedDeckShare(
+    inlineRecords: null,
+    chunks: chunks,
+    snapshotHash: hash.finish(),
+    termCount: records.length,
+  );
+}
+
+dynamic _canonicalizeShareValue(dynamic value) {
+  if (value is Map) {
+    final entries = value.entries
+        .map((entry) => MapEntry(entry.key.toString(), entry.value))
+        .toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return <String, dynamic>{
+      for (final entry in entries)
+        entry.key: _canonicalizeShareValue(entry.value),
+    };
+  }
+  if (value is List) {
+    return value.map(_canonicalizeShareValue).toList();
+  }
+  return value;
+}
 
 class DeckCodeException implements Exception {
   final String message;
@@ -22,8 +197,10 @@ class DeckCodeException implements Exception {
 class DeckCodeService {
   static const String _collectionName = 'deckShares';
   static const String _chunkCollectionName = 'termChunks';
-  static const int _schemaVersion = 2;
+  static const int _schemaVersion = 4;
   static const int _maxChunkBytes = 450000;
+  static const int _maxInlineRecordBytes = 450000;
+  static const int _chunkWritesPerBatch = 8;
   static const int _shareCodeLength = 12;
   static const Duration _shareLifetime = Duration(days: 90);
   static const String _shareCodeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -34,12 +211,16 @@ class DeckCodeService {
     return FirebaseFirestore.instance.collection(_collectionName);
   }
 
-  /// Publishes an immutable snapshot of [deck].
+  /// Shares an immutable snapshot copy of [deck].
   ///
-  /// If the deck still matches its most recently published/imported snapshot,
-  /// the existing code is reused. Once shareable deck content changes, a new
+  /// If the deck still matches its most recently shared/imported snapshot, the
+  /// existing code is reused. Once shareable deck content changes, a new
   /// snapshot and code are created while the previous code remains unchanged.
-  static Future<String> publishDeck(Deck deck) async {
+  /// Recipients always import the snapshot as an independent deck copy.
+  static Future<String> shareDeck(
+    Deck deck, {
+    DeckShareStageCallback? onStage,
+  }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       throw const DeckCodeException(
@@ -48,11 +229,11 @@ class DeckCodeService {
     }
 
     try {
-      final records = _buildShareRecords(deck);
-      final snapshotHash = _buildSnapshotHash(
-        deck: deck,
-        records: records,
-      );
+      onStage?.call(DeckShareStage.preparing);
+      await Future<void>.delayed(Duration.zero);
+      final prepared = _prepareDeckShare(deck);
+      final snapshotHash = prepared.snapshotHash;
+      onStage?.call(DeckShareStage.sharing);
       final storedCode = normalizeCode(deck.shareCode ?? '');
       final storedHash = deck.shareSnapshotHash?.trim();
 
@@ -87,7 +268,7 @@ class DeckCodeService {
           (storedHash == null ||
               storedHash.isEmpty ||
               storedHash != snapshotHash);
-      final adaptedBy = _publicationAdapterCredits(
+      final adaptedBy = _shareAdapterCredits(
         deck.adaptedBy,
         currentUserUid: user.uid,
         currentUsername: currentUsername,
@@ -96,29 +277,17 @@ class DeckCodeService {
       final shareReference = await _newShareReference();
       final revision = DateTime.now().microsecondsSinceEpoch.toString();
       final expiresAt = _nextExpiryTimestamp();
-      final chunks = _buildTermChunks(records);
+      final chunks = prepared.chunks;
       final chunkCollection = shareReference.collection(_chunkCollectionName);
 
-      for (var index = 0; index < chunks.length; index++) {
-        final chunkId = _chunkDocumentId(revision, index);
-        await chunkCollection.doc(chunkId).set({
-          'schemaVersion': _schemaVersion,
-          'ownerUid': user.uid,
-          'sourceDeckId': deck.id,
-          'revision': revision,
-          'index': index,
-          'records': chunks[index],
-          'createdAt': FieldValue.serverTimestamp(),
-          'lastActiveAt': FieldValue.serverTimestamp(),
-          'expiresAt': expiresAt,
-        });
-      }
-
+      // Create the parent share first so Firestore rules can verify ownership
+      // before accepting any term chunks. The share stays unavailable until all
+      // chunks are present and the owner marks it ready.
       await shareReference.set({
         'schemaVersion': _schemaVersion,
         'ownerUid': user.uid,
-        'publisherUid': user.uid,
-        'publisherUsername': currentUsername,
+        'sharerUid': user.uid,
+        'sharerUsername': currentUsername,
         'sourceDeckId': deck.id,
         'creatorUid': creatorUid,
         'creatorUsername': creatorUsername,
@@ -126,14 +295,64 @@ class DeckCodeService {
         'name': deck.name,
         'type': deck.type.name,
         'colorValue': deck.colorValue,
-        'termCount': records.length,
+        'termCount': prepared.termCount,
         'chunkCount': chunks.length,
+        if (prepared.inlineRecords != null) 'records': prepared.inlineRecords,
         'revision': revision,
         'snapshotHash': snapshotHash,
+        'ready': false,
         'createdAt': FieldValue.serverTimestamp(),
         'lastActiveAt': FieldValue.serverTimestamp(),
         'expiresAt': expiresAt,
       });
+
+      try {
+        final firestore = FirebaseFirestore.instance;
+        var batch = firestore.batch();
+        var pendingWrites = 0;
+
+        Future<void> flushChunkBatch() async {
+          if (pendingWrites == 0) return;
+          await batch.commit();
+          batch = firestore.batch();
+          pendingWrites = 0;
+        }
+
+        for (var index = 0; index < chunks.length; index++) {
+          final chunkId = _chunkDocumentId(revision, index);
+          batch.set(chunkCollection.doc(chunkId), {
+            'schemaVersion': _schemaVersion,
+            'ownerUid': user.uid,
+            'sourceDeckId': deck.id,
+            'revision': revision,
+            'index': index,
+            'records': chunks[index],
+            'createdAt': FieldValue.serverTimestamp(),
+            'lastActiveAt': FieldValue.serverTimestamp(),
+            'expiresAt': expiresAt,
+          });
+          pendingWrites++;
+
+          if (pendingWrites >= _chunkWritesPerBatch) {
+            await flushChunkBatch();
+          }
+        }
+
+        await flushChunkBatch();
+
+        await shareReference.update({
+          'ready': true,
+          'lastActiveAt': FieldValue.serverTimestamp(),
+          'expiresAt': expiresAt,
+        });
+      } catch (_) {
+        await _deleteIncompleteShareBestEffort(
+          reference: shareReference,
+          revision: revision,
+          chunkCount: chunks.length,
+        );
+        rethrow;
+      }
 
       deck.adaptedBy
         ..clear()
@@ -141,8 +360,10 @@ class DeckCodeService {
       deck.shareCode = shareReference.id;
       deck.shareSnapshotHash = snapshotHash;
 
+      // The share is already safely finalized in Firestore. Persist the local
+      // share-code metadata through the normal debounced save instead of making
+      // the user wait for a full local workspace flush before showing the code.
       GakujiUserDataStore.scheduleSave();
-      await GakujiUserDataStore.flushPendingSave();
 
       return formatCode(shareReference.id);
     } on DeckCodeException {
@@ -183,6 +404,12 @@ class DeckCodeService {
         throw const DeckCodeException('Deck code not found.');
       }
 
+      if (data['ready'] == false) {
+        throw const DeckCodeException(
+          'This shared deck is incomplete and could not be imported.',
+        );
+      }
+
       if (_isExpired(data)) {
         throw const DeckCodeException(
           'This deck code has expired.',
@@ -204,34 +431,44 @@ class DeckCodeService {
         );
       }
 
-      final chunkCollection = shareReference.collection(_chunkCollectionName);
-      final snapshots = await Future.wait(
-        List.generate(chunkCount, (index) {
-          return chunkCollection
-              .doc(_chunkDocumentId(revision, index))
-              .get();
-        }),
-      );
-
       final records = <Map<String, dynamic>>[];
-      for (final snapshot in snapshots) {
-        final chunkData = snapshot.data();
-        if (!snapshot.exists || chunkData == null) {
-          throw const DeckCodeException(
-            'This shared deck is incomplete and could not be imported.',
-          );
-        }
+      final inlineRecords = data['records'];
 
-        final rawRecords = chunkData['records'];
-        if (rawRecords is! List) {
-          throw const DeckCodeException(
-            'This shared deck is incomplete and could not be imported.',
-          );
-        }
-
-        for (final rawRecord in rawRecords) {
+      if (inlineRecords is List) {
+        for (final rawRecord in inlineRecords) {
           if (rawRecord is Map) {
             records.add(Map<String, dynamic>.from(rawRecord));
+          }
+        }
+      } else if (chunkCount > 0) {
+        final chunkCollection = shareReference.collection(_chunkCollectionName);
+        final snapshots = await Future.wait(
+          List.generate(chunkCount, (index) {
+            return chunkCollection
+                .doc(_chunkDocumentId(revision, index))
+                .get();
+          }),
+        );
+
+        for (final snapshot in snapshots) {
+          final chunkData = snapshot.data();
+          if (!snapshot.exists || chunkData == null) {
+            throw const DeckCodeException(
+              'This shared deck is incomplete and could not be imported.',
+            );
+          }
+
+          final rawRecords = chunkData['records'];
+          if (rawRecords is! List) {
+            throw const DeckCodeException(
+              'This shared deck is incomplete and could not be imported.',
+            );
+          }
+
+          for (final rawRecord in rawRecords) {
+            if (rawRecord is Map) {
+              records.add(Map<String, dynamic>.from(rawRecord));
+            }
           }
         }
       }
@@ -243,16 +480,18 @@ class DeckCodeService {
         );
       }
 
-      final importedDeck = _buildImportedDeck(
-        metadata: data,
-        records: records,
-      );
+      final importedDeck = schemaVersion >= 3
+          ? await _buildImportedDeckFromReferences(
+              metadata: data,
+              records: records,
+            )
+          : _buildImportedDeckLegacy(
+              metadata: data,
+              records: records,
+            );
       final snapshotHash =
           _nullableTrimmedString(data['snapshotHash']) ??
-              _buildSnapshotHash(
-                deck: importedDeck,
-                records: _buildShareRecords(importedDeck),
-              );
+              _buildSnapshotHash(importedDeck);
       importedDeck.shareCode = normalizedCode;
       importedDeck.shareSnapshotHash = snapshotHash;
 
@@ -356,96 +595,11 @@ class DeckCodeService {
     );
   }
 
-  static List<Map<String, dynamic>> _buildShareRecords(Deck deck) {
-    final records = <Map<String, dynamic>>[];
-
-    for (final term in deck.terms) {
-      final sourceId = term.sourceId ?? term.id;
-      final termJson = Map<String, dynamic>.from(term.toJson())
-        ..['id'] = sourceId
-        ..['sourceId'] = sourceId
-        ..remove('note')
-        ..['marked'] = false;
-
-      records.add({
-        'term': termJson,
-        if (deck.type == DeckType.hybrid)
-          'hybridCardMode': deck.cardModeFor(term).name,
-      });
-    }
-
-    return records;
+  static String _buildSnapshotHash(Deck deck) {
+    return _prepareDeckShare(deck).snapshotHash;
   }
 
-  static List<List<Map<String, dynamic>>> _buildTermChunks(
-    List<Map<String, dynamic>> records,
-  ) {
-    final chunks = <List<Map<String, dynamic>>>[];
-    var currentChunk = <Map<String, dynamic>>[];
-    var currentBytes = 0;
-
-    for (final record in records) {
-      final recordBytes = utf8.encode(jsonEncode(record)).length;
-
-      if (currentChunk.isNotEmpty &&
-          currentBytes + recordBytes > _maxChunkBytes) {
-        chunks.add(currentChunk);
-        currentChunk = <Map<String, dynamic>>[];
-        currentBytes = 0;
-      }
-
-      currentChunk.add(record);
-      currentBytes += recordBytes;
-    }
-
-    if (currentChunk.isNotEmpty) {
-      chunks.add(currentChunk);
-    }
-
-    return chunks;
-  }
-
-  static String _buildSnapshotHash({
-    required Deck deck,
-    required List<Map<String, dynamic>> records,
-  }) {
-    final payload = <String, dynamic>{
-      'name': deck.name,
-      'type': deck.type.name,
-      'colorValue': deck.colorValue,
-      'records': records,
-    };
-    final bytes = utf8.encode(jsonEncode(_canonicalize(payload)));
-    var fnv = 2166136261 & 0x7fffffff;
-    var djb = 5381;
-
-    for (final byte in bytes) {
-      fnv = ((fnv ^ byte) * 16777619) & 0x7fffffff;
-      djb = ((djb * 33) ^ byte) & 0x7fffffff;
-    }
-
-    return '${fnv.toRadixString(16).padLeft(8, '0')}-'
-        '${djb.toRadixString(16).padLeft(8, '0')}-${bytes.length}';
-  }
-
-  static dynamic _canonicalize(dynamic value) {
-    if (value is Map) {
-      final entries = value.entries
-          .map((entry) => MapEntry(entry.key.toString(), entry.value))
-          .toList()
-        ..sort((a, b) => a.key.compareTo(b.key));
-      return <String, dynamic>{
-        for (final entry in entries)
-          entry.key: _canonicalize(entry.value),
-      };
-    }
-    if (value is List) {
-      return value.map(_canonicalize).toList();
-    }
-    return value;
-  }
-
-  static List<DeckAdapterCredit> _publicationAdapterCredits(
+  static List<DeckAdapterCredit> _shareAdapterCredits(
     List<DeckAdapterCredit> existing, {
     required String currentUserUid,
     required String? currentUsername,
@@ -487,7 +641,180 @@ class DeckCodeService {
     return result;
   }
 
-  static Deck _buildImportedDeck({
+  static Future<Deck> _buildImportedDeckFromReferences({
+    required Map<String, dynamic> metadata,
+    required List<Map<String, dynamic>> records,
+  }) async {
+    final newDeckId = DateTime.now().microsecondsSinceEpoch.toString();
+    final type = _deckTypeFromText(metadata['type']?.toString());
+    final sourceIds = records
+        .where((record) => record['custom'] != true)
+        .map((record) => _nullableTrimmedString(record['sourceId']))
+        .whereType<String>()
+        .toList(growable: false);
+    final dictionaryTermsById = await DictionaryService.getTermsByIdsAsync(
+      sourceIds,
+    );
+
+    final missingFallbackQueries = <String>{};
+    for (final record in records) {
+      if (record['custom'] == true) continue;
+
+      final sourceId = _nullableTrimmedString(record['sourceId']);
+      if (sourceId != null && dictionaryTermsById.containsKey(sourceId)) {
+        continue;
+      }
+
+      final fallbackTerm = _nullableTrimmedString(record['fallbackTerm']);
+      final fallbackReading =
+          _nullableTrimmedString(record['fallbackReading']);
+      if (fallbackTerm != null) missingFallbackQueries.add(fallbackTerm);
+      if (fallbackReading != null) missingFallbackQueries.add(fallbackReading);
+    }
+
+    final fallbackMatches = missingFallbackQueries.isEmpty
+        ? const <String, List<Term>>{}
+        : await DictionaryService.findExactJapaneseBatch(
+            missingFallbackQueries,
+            perQueryLimit: 12,
+          );
+
+    final importedTerms = <Term>[];
+    final hybridCardModes = <String, HybridCardMode>{};
+
+    for (var index = 0; index < records.length; index++) {
+      final record = records[index];
+
+      if (record['custom'] == true) {
+        final writing = _nullableTrimmedString(record['writing']);
+        final meaning = _nullableTrimmedString(record['meaning']);
+
+        if (writing == null || meaning == null) {
+          throw const DeckCodeException(
+            'This shared deck contains an unreadable custom card.',
+          );
+        }
+
+        final reading = _nullableTrimmedString(record['reading']) ?? '';
+        final partOfSpeech =
+            _nullableTrimmedString(record['partOfSpeech']) ?? 'custom';
+        final note = _nullableTrimmedString(record['note']);
+        final importedTerm = Term(
+          id: '${newDeckId}_custom_$index',
+          sourceId: null,
+          isCustom: true,
+          kanji: writing,
+          reading: reading,
+          meaning: meaning,
+          preferredSpelling: writing,
+          hasDictionarySpellingMetadata: false,
+          alternativeKanji: const <String>[],
+          partOfSpeech: partOfSpeech,
+          definitions: <String>[meaning],
+          isCommon: false,
+          note: note,
+          kanjiMeaning: meaning,
+          marked: false,
+        );
+        importedTerms.add(importedTerm);
+
+        if (type == DeckType.hybrid) {
+          hybridCardModes[importedTerm.id] = hybridCardModeFromStorage(
+            record['hybridCardMode']?.toString(),
+          );
+        }
+        continue;
+      }
+
+      final sourceId = _nullableTrimmedString(record['sourceId']);
+      final fallbackTerm = _nullableTrimmedString(record['fallbackTerm']);
+      final fallbackReading =
+          _nullableTrimmedString(record['fallbackReading']);
+
+      Term? dictionaryTerm;
+      if (sourceId != null) {
+        dictionaryTerm = dictionaryTermsById[sourceId];
+      }
+      dictionaryTerm ??= _resolveFallbackDictionaryTerm(
+        fallbackMatches: fallbackMatches,
+        fallbackTerm: fallbackTerm,
+        fallbackReading: fallbackReading,
+      );
+
+      if (dictionaryTerm == null) {
+        throw const DeckCodeException(
+          'One or more terms in this shared deck are not available in this version of Gakuji.',
+        );
+      }
+
+      final canonicalSourceId = dictionaryTerm.sourceId ?? dictionaryTerm.id;
+      final importedTerm = Term.deckCopyFrom(
+        dictionaryTerm,
+        id: '${newDeckId}_${canonicalSourceId}_$index',
+        marked: false,
+      );
+      importedTerms.add(importedTerm);
+
+      if (type == DeckType.hybrid) {
+        hybridCardModes[importedTerm.id] = hybridCardModeFromStorage(
+          record['hybridCardMode']?.toString(),
+        );
+      }
+    }
+
+    return Deck(
+      id: newDeckId,
+      name: metadata['name']?.toString().trim().isNotEmpty == true
+          ? metadata['name'].toString().trim()
+          : 'Imported Deck',
+      type: type,
+      creatorUid: _sharedCreatorUid(metadata),
+      creatorUsername: _nullableTrimmedString(metadata['creatorUsername']),
+      adaptedBy: _adapterCreditsFromMetadata(metadata['adaptedBy']),
+      colorValue: _nullableInt(metadata['colorValue']),
+      terms: importedTerms,
+      hybridCardModes: hybridCardModes,
+      reviewEnabled: false,
+      activeStudyMode: StudyMode.study,
+      reviewEnabledAt: null,
+      lastStudyIndex: 0,
+      isShuffled: false,
+    );
+  }
+
+  static Term? _resolveFallbackDictionaryTerm({
+    required Map<String, List<Term>> fallbackMatches,
+    required String? fallbackTerm,
+    required String? fallbackReading,
+  }) {
+    final candidates = <String, Term>{};
+
+    if (fallbackTerm != null) {
+      for (final term in fallbackMatches[fallbackTerm] ?? const <Term>[]) {
+        candidates.putIfAbsent(term.id, () => term);
+      }
+    }
+    if (fallbackReading != null) {
+      for (final term in fallbackMatches[fallbackReading] ?? const <Term>[]) {
+        candidates.putIfAbsent(term.id, () => term);
+      }
+    }
+
+    for (final candidate in candidates.values) {
+      final spellingMatches = fallbackTerm == null ||
+          candidate.kanji == fallbackTerm ||
+          candidate.preferredSpelling == fallbackTerm ||
+          candidate.alternativeKanji.contains(fallbackTerm);
+      final readingMatches =
+          fallbackReading == null || candidate.reading == fallbackReading;
+
+      if (spellingMatches && readingMatches) return candidate;
+    }
+
+    return null;
+  }
+
+  static Deck _buildImportedDeckLegacy({
     required Map<String, dynamic> metadata,
     required List<Map<String, dynamic>> records,
   }) {
@@ -605,6 +932,13 @@ class DeckCodeService {
     required DocumentReference<Map<String, dynamic>> reference,
     required Map<String, dynamic> metadata,
   }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    final ownerUid = _nullableTrimmedString(metadata['ownerUid']);
+
+    // A shared deck is a read-only transfer snapshot for recipients. Only the
+    // owner of that snapshot may refresh or otherwise mutate it.
+    if (user == null || ownerUid == null || ownerUid != user.uid) return;
+
     try {
       final expiresAt = _nextExpiryTimestamp();
       await reference.update({
@@ -645,6 +979,43 @@ class DeckCodeService {
     } catch (_) {
       // Activity is a heartbeat only. Importing, sharing, and opening the local
       // deck must not fail because a heartbeat could not be written.
+    }
+  }
+
+  static Future<void> _deleteIncompleteShareBestEffort({
+    required DocumentReference<Map<String, dynamic>> reference,
+    required String revision,
+    required int chunkCount,
+  }) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      var batch = firestore.batch();
+      var operationCount = 0;
+
+      Future<void> flush() async {
+        if (operationCount == 0) return;
+        await batch.commit();
+        batch = firestore.batch();
+        operationCount = 0;
+      }
+
+      for (var index = 0; index < chunkCount; index++) {
+        batch.delete(
+          reference
+              .collection(_chunkCollectionName)
+              .doc(_chunkDocumentId(revision, index)),
+        );
+        operationCount++;
+        if (operationCount >= 400) {
+          await flush();
+        }
+      }
+
+      await flush();
+      await reference.delete();
+    } catch (_) {
+      // A failed cleanup must not hide the original sharing error. Orphaned
+      // incomplete shares remain unreadable because their ready flag is false.
     }
   }
 
@@ -731,7 +1102,7 @@ class DeckCodeService {
     switch (error.code) {
       case 'permission-denied':
         return sharing
-            ? 'Gakuji could not publish this deck for sharing.'
+            ? 'Gakuji could not share this deck.'
             : 'Gakuji could not access that shared deck.';
       case 'unavailable':
       case 'network-request-failed':

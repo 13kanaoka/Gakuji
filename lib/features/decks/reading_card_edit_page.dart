@@ -923,7 +923,12 @@ class _ReadingCardEditPageState extends State<ReadingCardEditPage> {
                         ),
                       )
                     : Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 18),
+                        padding: const EdgeInsets.fromLTRB(
+                          GakujiSpacing.roomyContentHorizontal,
+                          12,
+                          GakujiSpacing.roomyContentHorizontal,
+                          18,
+                        ),
                         child: _cardPreview(),
                       ),
               ),

@@ -9,16 +9,29 @@ String gakujiDeckHeroTag(String deckId) => 'gakuji-deck-$deckId';
 
 String gakujiLearningHeroTag(String pageId) => 'gakuji-learning-$pageId';
 
-Route<T> gakujiLearningRoute<T>({required Widget page}) {
-  return gakujiDeckRoute<T>(page: page);
+Route<T> gakujiLearningRoute<T>({
+  required Widget page,
+  bool enableSwipeBack = true,
+}) {
+  return gakujiDeckRoute<T>(
+    page: page,
+    enableSwipeBack: enableSwipeBack,
+  );
 }
 
-Route<T> gakujiDeckRoute<T>({required Widget page}) {
+Route<T> gakujiDeckRoute<T>({
+  required Widget page,
+  bool enableSwipeBack = true,
+}) {
   return PageRouteBuilder<T>(
     opaque: false,
     transitionDuration: gakujiDeckOpenDuration,
     reverseTransitionDuration: gakujiDeckCloseDuration,
     pageBuilder: (context, animation, secondaryAnimation) {
+      if (!enableSwipeBack) {
+        return page;
+      }
+
       return GakujiSwipeBackScope(
         side: GakujiPageSide.right,
         child: page,

@@ -318,7 +318,7 @@ class _UsernameSettingsPageState extends State<UsernameSettingsPage> {
           _header(),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(28, 38, 28, 36),
+              padding: const EdgeInsets.fromLTRB(GakujiSpacing.roomyContentHorizontal, 38, GakujiSpacing.roomyContentHorizontal, 36),
               children: [
                 Text(
                   widget.requiredSetup ? 'Choose your username' : 'Username',

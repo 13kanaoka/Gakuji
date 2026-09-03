@@ -28,9 +28,9 @@ class LearningPage extends StatelessWidget {
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(
-                  18,
+                  GakujiSpacing.contentHorizontal,
                   0,
-                  18,
+                  GakujiSpacing.contentHorizontal,
                   GakujiSpacing.pageBottom,
                 ),
                 child: Column(
@@ -50,6 +50,7 @@ class LearningPage extends StatelessWidget {
                             Navigator.of(context).push(
                               gakujiLearningRoute<void>(
                                 page: const KanaPage(),
+                                enableSwipeBack: false,
                               ),
                             );
                           },
@@ -72,6 +73,7 @@ class LearningPage extends StatelessWidget {
                             Navigator.of(context).push(
                               gakujiLearningRoute<void>(
                                 page: const KanjiPage(),
+                                enableSwipeBack: false,
                               ),
                             );
                           },

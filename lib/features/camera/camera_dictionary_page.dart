@@ -1221,7 +1221,7 @@ class _CameraDictionaryPageState extends State<CameraDictionaryPage>
             Align(
               alignment: Alignment.centerLeft,
               child: _topIconButton(
-                icon: Icons.arrow_back_ios_new_rounded,
+                icon: Icons.close_rounded,
                 onTap: () => Navigator.of(context).pop(),
               ),
             ),

@@ -14,10 +14,12 @@ import 'package:gakuji/data/sync/gakuji_user_data_store.dart';
 import 'package:gakuji/data/sync/gakuji_user_repository.dart';
 import 'package:gakuji/data/decks/term_favorite_service.dart';
 import 'package:gakuji/core/widgets/gakuji_search_bar.dart';
+import 'package:gakuji/core/widgets/gakuji_compact_menu.dart';
 import 'package:gakuji/core/theme/gakuji_styles.dart';
 import 'package:gakuji/core/widgets/gakuji_term_row.dart';
 import 'package:gakuji/core/widgets/gakuji_top_bar.dart';
 import 'package:gakuji/features/decks/reading_card_edit_page.dart';
+import 'package:gakuji/features/decks/custom_card_edit_page.dart';
 
 enum _HybridCardEditView {
   reading,
@@ -51,7 +53,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
   static const Duration _deleteSlideDuration = Duration(milliseconds: 240);
   static const Duration _headerCollapseDuration = Duration(milliseconds: 400);
 
-  bool showMenu = false;
   bool showStarredOnly = false;
   bool deckInfoCollapsed = false;
   _HybridCardEditView hybridCardEditView = _HybridCardEditView.reading;
@@ -503,29 +504,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
       children: [
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: openDeckColorPicker,
-          child: SizedBox(
-            width: GakujiTopBar.buttonSize,
-            height: GakujiTopBar.buttonSize,
-            child: Center(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                width: 27,
-                height: 27,
-                decoration: BoxDecoration(
-                  color: deckColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: GakujiColors.softBorder,
-                    width: 1.5,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
           onTap: () {
             setTermFilter(starredOnly: !showStarredOnly);
           },
@@ -543,6 +521,37 @@ class _DeckEditPageState extends State<DeckEditPage> {
             ),
           ),
         ),
+        GakujiCompactMenuButton(
+          icon: Icons.menu_rounded,
+          iconSize: GakujiTopBar.iconSize,
+          iconColor: GakujiColors.darkGray,
+          alignment: GakujiCompactMenuAlignment.topRight,
+          onBeforeOpen: () {
+            FocusScope.of(context).unfocus();
+            closeRevealedTerm();
+          },
+          items: [
+            GakujiCompactMenuItem(
+              label: 'Deck Color',
+              leading: Container(
+                width: 17,
+                height: 17,
+                decoration: BoxDecoration(
+                  color: deckColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              onTap: () => unawaited(openDeckColorPicker()),
+            ),
+            GakujiCompactMenuItem(
+              icon: Icons.delete_outline_rounded,
+              label: 'Delete Terms',
+              iconColor: GakujiColors.pinRed,
+              textColor: GakujiColors.pinRed,
+              onTap: enterDeleteSelectionMode,
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -556,14 +565,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
 
     setState(() {
       deckInfoCollapsed = shouldCollapse;
-    });
-  }
-
-  void closeMenu() {
-    if (!showMenu) return;
-
-    setState(() {
-      showMenu = false;
     });
   }
 
@@ -586,12 +587,51 @@ class _DeckEditPageState extends State<DeckEditPage> {
     });
   }
 
+  void enterDeleteSelectionMode() {
+    if (deletingTermIds.isNotEmpty) return;
+
+    setState(() {
+      selectionMode = true;
+      selectedTerms.clear();
+      revealedTermId = null;
+      draggingTermId = null;
+      dragDistance = 0;
+    });
+  }
+
+  Future<void> openCustomCardEditor(Term term) async {
+    if (deletingTermIds.isNotEmpty) return;
+
+    FocusScope.of(context).unfocus();
+    closeRevealedTerm();
+
+    final changed = await Navigator.push<bool>(
+      context,
+      GakujiPageRoute(
+        builder: (context) => CustomCardEditPage(
+          deck: widget.deck,
+          term: term,
+        ),
+      ),
+    );
+
+    if (!mounted || changed != true) return;
+
+    setState(() {
+      searchController.clear();
+      searchQuery = '';
+      showStarredOnly = false;
+      deckInfoCollapsed = false;
+    });
+
+    await syncDeckAfterCardChanges();
+  }
+
   void setTermFilter({
     required bool starredOnly,
   }) {
     setState(() {
       showStarredOnly = starredOnly;
-      showMenu = false;
       revealedTermId = null;
       draggingTermId = null;
       dragDistance = 0;
@@ -606,7 +646,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
 
     setState(() {
       hybridCardEditView = view;
-      showMenu = false;
       revealedTermId = null;
       draggingTermId = null;
       dragDistance = 0;
@@ -624,7 +663,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
     if (deletingTermIds.contains(term.id)) return;
 
     setState(() {
-      showMenu = false;
       revealedTermId = null;
       draggingTermId = null;
       dragDistance = 0;
@@ -756,7 +794,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
     if (deletingTermIds.contains(term.id)) return;
 
     setState(() {
-      showMenu = false;
       revealedTermId = null;
       draggingTermId = null;
       dragDistance = 0;
@@ -790,7 +827,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
       revealedTermId = null;
       draggingTermId = null;
       dragDistance = 0;
-      showMenu = false;
     });
 
     unawaited(syncDeckAfterCardChanges());
@@ -805,8 +841,12 @@ class _DeckEditPageState extends State<DeckEditPage> {
     }
 
     FocusScope.of(context).unfocus();
-    closeMenu();
     closeRevealedTerm();
+
+    if (term.isCustom) {
+      unawaited(openCustomCardEditor(term));
+      return;
+    }
 
     if (!supportsReadingCardEdit) {
       showReadingOnlyMessage();
@@ -828,7 +868,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
     if (selectionMode || deletingTermIds.contains(term.id)) return;
 
     setState(() {
-      showMenu = false;
 
       if (revealedTermId != null && revealedTermId != term.id) {
         revealedTermId = null;
@@ -961,7 +1000,6 @@ class _DeckEditPageState extends State<DeckEditPage> {
         behavior: HitTestBehavior.translucent,
         onTap: () {
           FocusScope.of(context).unfocus();
-          closeMenu();
           closeRevealedTerm();
           clearSelection();
         },
@@ -990,7 +1028,12 @@ class _DeckEditPageState extends State<DeckEditPage> {
                   ),
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 12, 22, 0),
+                      padding: const EdgeInsets.fromLTRB(
+                        GakujiSpacing.contentHorizontal,
+                        12,
+                        GakujiSpacing.contentHorizontal,
+                        0,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -1013,9 +1056,9 @@ class _DeckEditPageState extends State<DeckEditPage> {
                                 _HybridCardEditView.writing,
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            SizedBox(height: visibleCards.isEmpty ? 16 : 0),
                           ] else ...[
-                            const SizedBox(height: 20),
+                            SizedBox(height: visibleCards.isEmpty ? 20 : 4),
                           ],
                           Expanded(
                             child: visibleCards.isEmpty
@@ -1155,7 +1198,7 @@ class _DeckEditPageState extends State<DeckEditPage> {
         controller: cardsScrollController,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.only(
-          top: 14,
+          top: 22,
           bottom: 140,
         ),
         itemCount: visibleCards.length,

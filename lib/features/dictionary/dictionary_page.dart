@@ -18,6 +18,8 @@ import 'package:gakuji/core/widgets/low_latency_writing_canvas.dart';
 import 'package:gakuji/features/camera/camera_dictionary_page.dart';
 import 'package:gakuji/features/dictionary/dictionary_detail_page.dart';
 import 'package:gakuji/features/dictionary/kanji_dictionary_detail_page.dart';
+import 'package:gakuji/features/dictionary/sentence_detail_page.dart';
+import 'package:gakuji/features/dictionary/services/japanese_text_analysis_service.dart';
 import 'package:gakuji/features/settings/settings_page.dart';
 import 'package:gakuji/core/widgets/gakuji_search_bar.dart';
 
@@ -51,6 +53,12 @@ class _DictionaryPageState extends State<DictionaryPage> {
   final TextEditingController searchController = TextEditingController();
   final FocusNode searchFocusNode = FocusNode();
   final ScrollController recentSearchScrollController = ScrollController();
+  late final ScrollController searchResultsScrollController;
+
+  static String _sessionSearchText = '';
+  static List<Term> _sessionSearchResults = const <Term>[];
+  static double _sessionSearchResultsOffset = 0;
+  static bool _sessionSearchWasInProgress = false;
   final GlobalKey _inputStackKey = GlobalKey();
   final GlobalKey _inputAccessoryBarKey = GlobalKey();
 
@@ -65,6 +73,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
   final List<List<WritingPoint>> handwritingStrokes = [];
   final List<String> handwritingCandidates = [];
   List<Term> searchResults = [];
+  DictionaryExample? sentenceSearchExample;
   final Map<String, int> recentSearchTimestamps = {};
 
   bool isRecognizingHandwriting = false;
@@ -92,14 +101,37 @@ class _DictionaryPageState extends State<DictionaryPage> {
   void initState() {
     super.initState();
 
+    searchText = _sessionSearchText;
+    searchResults = List<Term>.from(_sessionSearchResults);
+    searchController.text = searchText;
+    searchResultsScrollController = ScrollController(
+      initialScrollOffset: _sessionSearchResultsOffset,
+    );
+
     searchFocusNode.addListener(_handleSearchFocusChange);
 
     _loadRecentSearchTimestamps();
     loadDictionary();
+
+    if (searchText.trim().isNotEmpty &&
+        _sessionSearchWasInProgress &&
+        searchResults.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        scheduleDictionarySearch(searchText);
+      });
+    }
   }
 
   @override
   void dispose() {
+    _sessionSearchText = searchText;
+    _sessionSearchResults = List<Term>.unmodifiable(searchResults);
+    _sessionSearchResultsOffset = searchResultsScrollController.hasClients
+        ? searchResultsScrollController.offset
+        : _sessionSearchResultsOffset;
+    _sessionSearchWasInProgress = isSearchingDictionary;
+
     searchDebounce?.cancel();
     handwritingRecognitionDebounce?.cancel();
     _setInputActive(false, rebuild: false);
@@ -107,6 +139,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
     searchFocusNode.dispose();
     searchController.dispose();
     recentSearchScrollController.dispose();
+    searchResultsScrollController.dispose();
 
     super.dispose();
   }
@@ -245,6 +278,13 @@ class _DictionaryPageState extends State<DictionaryPage> {
     String value, {
     bool clearHandwritingResult = true,
   }) {
+    if (value != searchText) {
+      _sessionSearchResultsOffset = 0;
+      if (searchResultsScrollController.hasClients) {
+        searchResultsScrollController.jumpTo(0);
+      }
+    }
+
     setState(() {
       searchText = value;
 
@@ -264,16 +304,21 @@ class _DictionaryPageState extends State<DictionaryPage> {
     searchRequestNumber++;
 
     if (query.isEmpty) {
+      _sessionSearchWasInProgress = false;
       setState(() {
         searchResults = [];
+        sentenceSearchExample = null;
         isSearchingDictionary = false;
       });
 
       return;
     }
 
+    _sessionSearchWasInProgress = true;
+
     setState(() {
       searchResults = [];
+      sentenceSearchExample = null;
       isSearchingDictionary = true;
     });
 
@@ -294,27 +339,67 @@ class _DictionaryPageState extends State<DictionaryPage> {
     required String query,
     required int requestNumber,
   }) async {
-    final results = await DictionaryService.search(query);
+    final directResults = await DictionaryService.search(query);
+    var deinflectedMatches = const <Term>[];
+    JapaneseTextAnalysisResult? textAnalysis;
+
+    if (_containsJapaneseText(query)) {
+      final hasExactDictionaryMatch =
+          _hasExactDictionaryMatch(directResults, query);
+
+      if (!hasExactDictionaryMatch) {
+        deinflectedMatches =
+            await JapaneseTextAnalysisService.findDeinflectedMatches(query);
+      }
+
+      if (directResults.isEmpty && deinflectedMatches.isEmpty) {
+        textAnalysis = await JapaneseTextAnalysisService.analyze(query);
+      }
+    }
 
     if (!mounted) return;
     if (requestNumber != searchRequestNumber) return;
     if (query != searchText.trim()) return;
 
+    final analyzedMatches = textAnalysis?.isolatedMatches ?? const <Term>[];
+    final sentenceMatches = textAnalysis?.sentenceMatches ?? const <Term>[];
+
     setState(() {
-      searchResults = results;
+      // Typed/pasted multi-word searches should behave like normal dictionary
+      // searches: show every matched lexical entry directly in the result list.
+      // Camera mode can continue using sentenceExample for its breakdown view.
+      sentenceSearchExample = null;
+      searchResults = deinflectedMatches.isNotEmpty
+          ? deinflectedMatches
+          : directResults.isNotEmpty
+              ? directResults
+              : analyzedMatches.isNotEmpty
+                  ? analyzedMatches
+                  : sentenceMatches;
       isSearchingDictionary = false;
     });
+
+    _sessionSearchWasInProgress = false;
   }
 
   void clearSearchState() {
     searchDebounce?.cancel();
     searchRequestNumber++;
+    _sessionSearchText = '';
+    _sessionSearchResults = const <Term>[];
+    _sessionSearchResultsOffset = 0;
+    _sessionSearchWasInProgress = false;
+
+    if (searchResultsScrollController.hasClients) {
+      searchResultsScrollController.jumpTo(0);
+    }
 
     setState(() {
       searchController.clear();
       searchText = '';
       handwritingResult = '';
       searchResults = [];
+      sentenceSearchExample = null;
       isSearchingDictionary = false;
     });
   }
@@ -400,6 +485,65 @@ class _DictionaryPageState extends State<DictionaryPage> {
     }
   }
 
+  Future<void> openSentenceSearchBreakdown(DictionaryExample example) async {
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      inputMode = DictionaryInputMode.keyboard;
+      searchHasFocus = false;
+    });
+
+    _setInputActive(false);
+
+    await Navigator.of(context).push(
+      GakujiPageRoute(
+        builder: (_) => SentenceDetailPage(
+          example: example,
+          senseLabel: '',
+          onTokenTap: _openSentenceSearchToken,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      inputMode = DictionaryInputMode.keyboard;
+      searchHasFocus = false;
+    });
+
+    _setInputActive(false);
+  }
+
+  Future<void> _openSentenceSearchToken(
+    BuildContext pageContext,
+    DictionaryExampleToken token,
+  ) async {
+    final termId = token.termId?.trim() ?? '';
+
+    if (termId.isEmpty) return;
+
+    try {
+      final term = await DictionaryService.getTermByIdAsync(termId);
+
+      if (!pageContext.mounted) return;
+
+      await Navigator.of(pageContext).push(
+        GakujiPageRoute(
+          builder: (_) => DictionaryDetailPage(word: term),
+        ),
+      );
+    } catch (_) {
+      if (!pageContext.mounted) return;
+
+      ScaffoldMessenger.of(pageContext).showSnackBar(
+        const SnackBar(
+          content: Text('Dictionary entry unavailable.'),
+        ),
+      );
+    }
+  }
+
   void switchInputMode(DictionaryInputMode mode) {
     if (mode == inputMode) return;
 
@@ -462,6 +606,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
       searchController.clear();
       searchText = '';
       searchResults = [];
+      sentenceSearchExample = null;
       isSearchingDictionary = false;
       isRecognizingHandwriting = false;
     });
@@ -640,8 +785,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
                       ),
                       Positioned(
                         top: 8,
-                        left: 14,
-                        right: 14,
+                        left: GakujiSpacing.denseContentHorizontal,
+                        right: GakujiSpacing.denseContentHorizontal,
                         child: _keyboardSearchBar(),
                       ),
                     ],
@@ -742,28 +887,28 @@ class _DictionaryPageState extends State<DictionaryPage> {
       );
     }
 
-    if (query.isNotEmpty && isSearchingDictionary && searchResults.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 74),
-        child: Center(
-          child: Text(
-            'Searching...',
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.body.copyWith(color: Colors.grey),
-          ),
+    if (query.isNotEmpty &&
+        isSearchingDictionary &&
+        searchResults.isEmpty) {
+      return Align(
+        alignment: const Alignment(0, -0.5),
+        child: Text(
+          'Searching...',
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.body.copyWith(color: Colors.grey),
         ),
       );
     }
 
-    if (query.isNotEmpty && !isSearchingDictionary && searchResults.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 74),
-        child: Center(
-          child: Text(
-            'No results found',
-            textScaler: TextScaler.noScaling,
-            style: GakujiText.body.copyWith(color: Colors.grey),
-          ),
+    if (query.isNotEmpty &&
+        !isSearchingDictionary &&
+        searchResults.isEmpty) {
+      return Align(
+        alignment: const Alignment(0, -0.5),
+        child: Text(
+          'No results found',
+          textScaler: TextScaler.noScaling,
+          style: GakujiText.body.copyWith(color: Colors.grey),
         ),
       );
     }
@@ -780,11 +925,16 @@ class _DictionaryPageState extends State<DictionaryPage> {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 70, 14, 0),
+      padding: const EdgeInsets.fromLTRB(
+        GakujiSpacing.denseContentHorizontal,
+        50,
+        GakujiSpacing.denseContentHorizontal,
+        0,
+      ),
       child: _dictionaryResultList(
         query: query,
         wordsToShow: wordsToShow,
-        topPadding: 14,
+        topPadding: 22,
         bottomResultsPadding: bottomResultsPadding,
       ),
     );
@@ -813,7 +963,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
         final word = entry.value[index];
         children.add(
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(
+              horizontal: GakujiSpacing.denseContentHorizontal,
+            ),
             child: _dictionaryTermRow(word),
           ),
         );
@@ -823,8 +975,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
             Divider(
               height: 1,
               thickness: 1,
-              indent: 14,
-              endIndent: 14,
+              indent: GakujiSpacing.denseContentHorizontal,
+              endIndent: GakujiSpacing.denseContentHorizontal,
               color: GakujiColors.softBorder,
             ),
           );
@@ -1043,6 +1195,33 @@ class _DictionaryPageState extends State<DictionaryPage> {
     return value.replaceAll(RegExp(r'\s+'), '').trim();
   }
 
+  bool _containsJapaneseText(String value) {
+    return RegExp(
+      r'[\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF々〆ヶ]',
+    ).hasMatch(value);
+  }
+
+  bool _hasExactDictionaryMatch(List<Term> results, String rawQuery) {
+    final query = _normalizedDictionaryLookup(rawQuery);
+
+    if (query.isEmpty) return false;
+
+    for (final term in results) {
+      if (_normalizedDictionaryLookup(term.kanji) == query ||
+          _normalizedDictionaryLookup(term.reading) == query) {
+        return true;
+      }
+
+      for (final form in term.allWrittenForms) {
+        if (_normalizedDictionaryLookup(form) == query) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   Widget _dictionaryResultList({
     required String query,
     required List<Term> wordsToShow,
@@ -1078,6 +1257,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
           ).createShader(bounds);
         },
         child: ListView.separated(
+          controller: searchResultsScrollController,
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: EdgeInsets.only(
             top: topPadding,

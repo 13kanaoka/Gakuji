@@ -230,7 +230,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
     return Padding(
-      padding: EdgeInsets.fromLTRB(28, 0, 28, 28 + bottomInset),
+      padding: EdgeInsets.fromLTRB(GakujiSpacing.roomyContentHorizontal, 0, GakujiSpacing.roomyContentHorizontal, 28 + bottomInset),
       child: Column(
         children: [
           const SizedBox(height: 78),
@@ -278,7 +278,7 @@ class _ImportTermsPageState extends State<ImportTermsPage> {
     return GakujiFadedScroll(
       topFadeEnd: 0.06,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
+        padding: const EdgeInsets.fromLTRB(GakujiSpacing.roomyContentHorizontal, 24, GakujiSpacing.roomyContentHorizontal, 36),
         children: [
           _selectedFileCard(document!),
           if (importFile!.hasMultipleDocuments) ...[
