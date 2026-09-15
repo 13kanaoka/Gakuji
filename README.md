@@ -39,8 +39,8 @@ We built this app to help learners practice writing kanji in a structured, consi
 1) Install Flutter SDK [here](https://docs.flutter.dev/install) (if you don't already have it)  
 2) Clone the repository and install dependencies:  
 ```  
-git clone git@github.com:13kanaoka/Gakuji.git
-cd Gakuji
+git clone git@github.com:13kanaoka/Manamoji.git
+cd Manamoji
 flutter pub get
 ```   
 3) Download `dictionary.db` from the [Releases page](https://github.com/13kanaoka/Gakuji/releases/tag/assets-dictionary) and place it at:  
